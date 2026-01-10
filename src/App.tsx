@@ -27,6 +27,7 @@ const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const SubscriptionSuccess = lazy(() => import("./pages/SubscriptionSuccess"));
 const Admin = lazy(() => import("./pages/Admin"));
 const AdminLogin = lazy(() => import("./pages/AdminLogin"));
+const AdminSetup = lazy(() => import("./pages/AdminSetup"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -76,6 +77,7 @@ const App = () => (
                   <Route path="/subscription/success" element={<SubscriptionSuccess />} />
                   <Route path="/admin" element={<Admin />} />
                   <Route path="/admin/login" element={<AdminLogin />} />
+                  <Route path="/admin/setup" element={<AdminSetup />} />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/layout/Header";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Shield, Loader2, AlertCircle } from "lucide-react";
+import { Shield, Loader2, AlertCircle, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 
@@ -20,13 +20,25 @@ const AdminLogin = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [checkingAdmin, setCheckingAdmin] = useState(false);
+  const [setupAvailable, setSetupAvailable] = useState(false);
 
   // Check if already logged in as admin
   useEffect(() => {
     if (user && !authLoading) {
       checkAdminAndRedirect();
+    } else if (!authLoading) {
+      checkSetupAvailable();
     }
   }, [user, authLoading]);
+
+  const checkSetupAvailable = async () => {
+    try {
+      const { data } = await supabase.functions.invoke("check-admin-exists");
+      setSetupAvailable(data?.setup_available ?? false);
+    } catch {
+      // Ignore errors
+    }
+  };
 
   const checkAdminAndRedirect = async () => {
     if (!user) return;
@@ -159,8 +171,18 @@ const AdminLogin = () => {
                   </Button>
                 </form>
 
-                <div className="mt-6 pt-6 border-t border-border text-center">
-                  <p className="text-sm text-muted-foreground">
+                <div className="mt-6 pt-6 border-t border-border space-y-4">
+                  {setupAvailable && (
+                    <Button
+                      variant="outline"
+                      className="w-full border-accent/50 text-accent hover:bg-accent/10"
+                      onClick={() => navigate("/admin/setup")}
+                    >
+                      <Settings className="w-4 h-4 mr-2" />
+                      First-Time Admin Setup
+                    </Button>
+                  )}
+                  <p className="text-sm text-muted-foreground text-center">
                     Not an admin?{" "}
                     <Button
                       variant="link"
