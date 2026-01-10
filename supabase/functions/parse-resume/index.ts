@@ -15,23 +15,20 @@ function chunkText(text: string, chunkSize: number = 500, overlap: number = 100)
   let startWord = 0;
   
   while (startWord < words.length) {
-    // Get approximately chunkSize tokens worth of words (estimate ~1.3 words per token)
     const wordsPerChunk = Math.floor(chunkSize * 1.3);
     const endWord = Math.min(startWord + wordsPerChunk, words.length);
     
     const chunkWords = words.slice(startWord, endWord);
     const content = chunkWords.join(' ').trim();
     
-    if (content.length > 50) { // Only add meaningful chunks
+    if (content.length > 50) {
       chunks.push({ content, index });
       index++;
     }
     
-    // Move forward with overlap
     const overlapWords = Math.floor(overlap * 1.3);
     startWord = endWord - overlapWords;
     
-    // Prevent infinite loop
     if (startWord >= endWord - 1) {
       startWord = endWord;
     }
@@ -69,7 +66,7 @@ function detectChunkType(content: string): string {
   return 'general';
 }
 
-// Estimate token count (rough approximation)
+// Estimate token count
 function estimateTokens(text: string): number {
   return Math.ceil(text.split(/\s+/).length / 1.3);
 }
@@ -99,12 +96,10 @@ serve(async (req) => {
       );
     }
 
-    // Create Supabase client
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get user from auth header
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
@@ -120,49 +115,26 @@ serve(async (req) => {
     const fileBuffer = await file.arrayBuffer();
     let textContent = "";
 
-// Handle different file types
+    // Handle different file types
     if (fileType === "text/plain") {
       textContent = new TextDecoder().decode(fileBuffer);
-    } else if (fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
-      // Extract text from DOCX (it's a ZIP containing XML)
-      // Import JSZip for DOCX parsing
-      const JSZip = (await import("https://esm.sh/jszip@3.10.1")).default;
-      
-      try {
-        const zip = await JSZip.loadAsync(fileBuffer);
-        const documentXml = await zip.file("word/document.xml")?.async("string");
-        
-        if (!documentXml) {
-          throw new Error("Invalid DOCX file - no document.xml found");
-        }
-        
-        // Extract text from XML by removing tags and cleaning up
-        textContent = documentXml
-          .replace(/<w:p[^>]*>/g, '\n') // Paragraph breaks
-          .replace(/<w:br[^>]*>/g, '\n') // Line breaks
-          .replace(/<w:tab[^>]*>/g, '\t') // Tabs
-          .replace(/<[^>]+>/g, '') // Remove all XML tags
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
-          .replace(/&amp;/g, '&')
-          .replace(/&quot;/g, '"')
-          .replace(/&apos;/g, "'")
-          .replace(/\n{3,}/g, '\n\n') // Reduce multiple newlines
-          .trim();
-        
-        console.log("Successfully extracted text from DOCX");
-      } catch (docxError) {
-        console.error("DOCX parsing error:", docxError);
-        throw new Error("Failed to parse DOCX file. Please try a PDF or TXT file.");
-      }
-    } else if (fileType === "application/pdf") {
-      // Use AI to extract text from PDF (vision model can read PDFs)
+    } else if (fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || fileType === "application/pdf") {
+      // Use AI to extract text from PDF or DOCX
       const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
       if (!LOVABLE_API_KEY) {
         throw new Error("LOVABLE_API_KEY is not configured");
       }
 
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)));
+      // Convert to base64 in chunks to avoid memory issues
+      const bytes = new Uint8Array(fileBuffer);
+      let base64 = "";
+      const chunkSize = 32768; // 32KB chunks
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.slice(i, i + chunkSize);
+        base64 += btoa(String.fromCharCode(...chunk));
+      }
+
+      const mimeType = fileType === "application/pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
       
       const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
@@ -183,7 +155,7 @@ serve(async (req) => {
                 {
                   type: "image_url",
                   image_url: {
-                    url: `data:application/pdf;base64,${base64}`,
+                    url: `data:${mimeType};base64,${base64}`,
                   },
                 },
               ],
@@ -193,12 +165,14 @@ serve(async (req) => {
       });
 
       if (!response.ok) {
-        console.error("PDF parsing error:", await response.text());
-        throw new Error("Failed to parse PDF. Please try a DOCX or TXT file.");
+        const errorText = await response.text();
+        console.error("Document parsing error:", errorText);
+        throw new Error("Failed to parse document. Please try a different file format.");
       }
 
       const data = await response.json();
       textContent = data.choices?.[0]?.message?.content || "";
+      console.log(`Successfully extracted text from ${fileType === "application/pdf" ? "PDF" : "DOCX"}`);
     } else {
       return new Response(
         JSON.stringify({ error: "Unsupported file type. Please upload PDF, DOCX, or TXT." }),
@@ -219,10 +193,10 @@ serve(async (req) => {
       console.error("Storage upload error:", uploadError);
     }
 
-    // Chunk the resume content (500 tokens, 100 overlap as per PRD)
+    // Chunk the resume content
     const chunks = chunkText(textContent, 500, 100);
     
-    // Delete existing chunks for this user (if re-uploading)
+    // Delete existing chunks for this application
     if (applicationId) {
       await supabase
         .from("resume_chunks")
