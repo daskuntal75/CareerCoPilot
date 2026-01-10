@@ -1,9 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronRight, Bug, Database, FileText, Target, Link2, Check, X } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
+import { ChevronDown, ChevronRight, Bug, Database, FileText, Target, Link2, Check, X, CheckCheck, XCircle, Filter } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface ResumeChunk {
   id: string;
@@ -41,7 +43,106 @@ const RAGDebugPanel = ({ applicationId }: RAGDebugPanelProps) => {
   const [requirements, setRequirements] = useState<JobRequirement[]>([]);
   const [matches, setMatches] = useState<RequirementMatch[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isBulkUpdating, setIsBulkUpdating] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [similarityThreshold, setSimilarityThreshold] = useState(0.6);
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Filter matches by similarity threshold
+  const filteredMatches = useMemo(() => {
+    return matches.filter(m => Number(m.similarity_score) >= similarityThreshold);
+  }, [matches, similarityThreshold]);
+
+  // Get counts for bulk actions
+  const pendingMatches = useMemo(() => {
+    return filteredMatches.filter(m => m.is_verified === null);
+  }, [filteredMatches]);
+
+  const bulkVerifyMatches = async () => {
+    if (pendingMatches.length === 0) return;
+    
+    setIsBulkUpdating(true);
+    try {
+      const matchIds = pendingMatches.map(m => m.id);
+      const { error } = await supabase
+        .from("requirement_matches")
+        .update({ is_verified: true })
+        .in("id", matchIds);
+
+      if (error) throw error;
+
+      // Update local state
+      setMatches(prev => prev.map(m => 
+        matchIds.includes(m.id) ? { ...m, is_verified: true } : m
+      ));
+      
+      toast.success(`Verified ${matchIds.length} matches above ${(similarityThreshold * 100).toFixed(0)}% threshold`);
+    } catch (error) {
+      console.error("Error bulk verifying matches:", error);
+      toast.error("Failed to bulk verify matches");
+    } finally {
+      setIsBulkUpdating(false);
+    }
+  };
+
+  const bulkRejectMatches = async () => {
+    const belowThresholdMatches = matches.filter(m => 
+      Number(m.similarity_score) < similarityThreshold && m.is_verified === null
+    );
+    
+    if (belowThresholdMatches.length === 0) {
+      toast.info("No pending matches below threshold to reject");
+      return;
+    }
+    
+    setIsBulkUpdating(true);
+    try {
+      const matchIds = belowThresholdMatches.map(m => m.id);
+      const { error } = await supabase
+        .from("requirement_matches")
+        .update({ is_verified: false })
+        .in("id", matchIds);
+
+      if (error) throw error;
+
+      // Update local state
+      setMatches(prev => prev.map(m => 
+        matchIds.includes(m.id) ? { ...m, is_verified: false } : m
+      ));
+      
+      toast.success(`Rejected ${matchIds.length} matches below ${(similarityThreshold * 100).toFixed(0)}% threshold`);
+    } catch (error) {
+      console.error("Error bulk rejecting matches:", error);
+      toast.error("Failed to bulk reject matches");
+    } finally {
+      setIsBulkUpdating(false);
+    }
+  };
+
+  const resetAllMatches = async () => {
+    if (matches.length === 0) return;
+    
+    setIsBulkUpdating(true);
+    try {
+      const matchIds = matches.map(m => m.id);
+      const { error } = await supabase
+        .from("requirement_matches")
+        .update({ is_verified: null })
+        .in("id", matchIds);
+
+      if (error) throw error;
+
+      // Update local state
+      setMatches(prev => prev.map(m => ({ ...m, is_verified: null })));
+      
+      toast.success(`Reset verification status for ${matchIds.length} matches`);
+    } catch (error) {
+      console.error("Error resetting matches:", error);
+      toast.error("Failed to reset matches");
+    } finally {
+      setIsBulkUpdating(false);
+    }
+  };
 
   useEffect(() => {
     if (isOpen && applicationId) {
@@ -189,9 +290,103 @@ const RAGDebugPanel = ({ applicationId }: RAGDebugPanelProps) => {
                 )}
               >
                 <Link2 className="w-4 h-4 inline mr-1" />
-                Matches ({matches.length})
+                Matches ({filteredMatches.length}/{matches.length})
               </button>
             </div>
+
+            {/* Bulk Actions Bar - Only show on matches tab */}
+            {activeTab === "matches" && matches.length > 0 && (
+              <div className="border-b border-border bg-secondary/30 px-4 py-2 space-y-2">
+                {/* Filter Toggle */}
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => setShowFilters(!showFilters)}
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Filter className="w-3 h-3" />
+                    {showFilters ? "Hide Filters" : "Show Filters"}
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {pendingMatches.length} pending above threshold
+                    </span>
+                  </div>
+                </div>
+
+                {/* Filters */}
+                <AnimatePresence>
+                  {showFilters && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="pt-2 space-y-3">
+                        {/* Similarity Threshold Slider */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-medium text-foreground">
+                              Similarity Threshold
+                            </label>
+                            <span className="text-xs font-mono bg-primary/10 text-primary px-2 py-0.5 rounded">
+                              ≥ {(similarityThreshold * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                          <Slider
+                            value={[similarityThreshold]}
+                            onValueChange={([value]) => setSimilarityThreshold(value)}
+                            min={0}
+                            max={1}
+                            step={0.05}
+                            className="w-full"
+                          />
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>0%</span>
+                            <span>50%</span>
+                            <span>100%</span>
+                          </div>
+                        </div>
+
+                        {/* Bulk Action Buttons */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs bg-success/10 border-success/30 text-success hover:bg-success/20"
+                            onClick={bulkVerifyMatches}
+                            disabled={isBulkUpdating || pendingMatches.length === 0}
+                          >
+                            <CheckCheck className="w-3 h-3 mr-1" />
+                            Verify All ≥{(similarityThreshold * 100).toFixed(0)}%
+                            {pendingMatches.length > 0 && ` (${pendingMatches.length})`}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs bg-destructive/10 border-destructive/30 text-destructive hover:bg-destructive/20"
+                            onClick={bulkRejectMatches}
+                            disabled={isBulkUpdating}
+                          >
+                            <XCircle className="w-3 h-3 mr-1" />
+                            Reject All &lt;{(similarityThreshold * 100).toFixed(0)}%
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 text-xs text-muted-foreground"
+                            onClick={resetAllMatches}
+                            disabled={isBulkUpdating}
+                          >
+                            Reset All
+                          </Button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
 
             {/* Content */}
             <div className="overflow-y-auto max-h-[380px] p-4">
@@ -289,10 +484,12 @@ const RAGDebugPanel = ({ applicationId }: RAGDebugPanelProps) => {
                   {/* Matches Tab */}
                   {activeTab === "matches" && (
                     <div className="space-y-2">
-                      {matches.length === 0 ? (
-                        <p className="text-muted-foreground text-center py-4">No matches found</p>
+                      {filteredMatches.length === 0 ? (
+                        <p className="text-muted-foreground text-center py-4">
+                          {matches.length === 0 ? "No matches found" : `No matches above ${(similarityThreshold * 100).toFixed(0)}% threshold`}
+                        </p>
                       ) : (
-                        matches.map((match) => {
+                        filteredMatches.map((match) => {
                           const req = getRequirementById(match.requirement_id);
                           const chunk = getChunkById(match.chunk_id);
                           return (
