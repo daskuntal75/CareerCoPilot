@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import JSZip from "https://esm.sh/jszip@3.10.1";
+import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -150,20 +151,15 @@ serve(async (req) => {
         throw new Error("Failed to parse DOCX file. Please ensure it's a valid Word document.");
       }
     } else if (fileType === "application/pdf") {
-      // Use AI to extract text from PDF only
+      // Use AI to extract text from PDF
       const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
       if (!LOVABLE_API_KEY) {
         throw new Error("LOVABLE_API_KEY is not configured");
       }
 
-      // Convert to base64 in chunks to avoid memory issues
+      // Use proper base64 encoding
       const bytes = new Uint8Array(fileBuffer);
-      let base64 = "";
-      const chunkSize = 32768; // 32KB chunks
-      for (let i = 0; i < bytes.length; i += chunkSize) {
-        const chunk = bytes.slice(i, i + chunkSize);
-        base64 += btoa(String.fromCharCode(...chunk));
-      }
+      const base64 = base64Encode(bytes.buffer);
       
       const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
