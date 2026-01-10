@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import JSZip from "https://esm.sh/jszip@3.10.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -118,8 +119,38 @@ serve(async (req) => {
     // Handle different file types
     if (fileType === "text/plain") {
       textContent = new TextDecoder().decode(fileBuffer);
-    } else if (fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || fileType === "application/pdf") {
-      // Use AI to extract text from PDF or DOCX
+    } else if (fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+      // Extract text from DOCX using JSZip (DOCX is a ZIP archive with XML)
+      try {
+        const zip = await JSZip.loadAsync(fileBuffer);
+        const documentXml = await zip.file("word/document.xml")?.async("string");
+        
+        if (!documentXml) {
+          throw new Error("Could not find document.xml in DOCX file");
+        }
+        
+        // Extract text content from XML, handling paragraphs and text runs
+        // Remove XML tags but preserve paragraph breaks
+        textContent = documentXml
+          .replace(/<w:p[^>]*>/g, "\n") // Paragraph start -> newline
+          .replace(/<w:br[^>]*>/g, "\n") // Line breaks
+          .replace(/<w:tab[^>]*>/g, "\t") // Tabs
+          .replace(/<[^>]+>/g, "") // Remove all other XML tags
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&amp;/g, "&")
+          .replace(/&quot;/g, '"')
+          .replace(/&apos;/g, "'")
+          .replace(/\n\s*\n\s*\n/g, "\n\n") // Normalize multiple newlines
+          .trim();
+        
+        console.log("Successfully extracted text from DOCX using JSZip");
+      } catch (zipError) {
+        console.error("JSZip extraction error:", zipError);
+        throw new Error("Failed to parse DOCX file. Please ensure it's a valid Word document.");
+      }
+    } else if (fileType === "application/pdf") {
+      // Use AI to extract text from PDF only
       const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
       if (!LOVABLE_API_KEY) {
         throw new Error("LOVABLE_API_KEY is not configured");
@@ -133,8 +164,6 @@ serve(async (req) => {
         const chunk = bytes.slice(i, i + chunkSize);
         base64 += btoa(String.fromCharCode(...chunk));
       }
-
-      const mimeType = fileType === "application/pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
       
       const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
@@ -155,7 +184,7 @@ serve(async (req) => {
                 {
                   type: "image_url",
                   image_url: {
-                    url: `data:${mimeType};base64,${base64}`,
+                    url: `data:application/pdf;base64,${base64}`,
                   },
                 },
               ],
@@ -166,13 +195,13 @@ serve(async (req) => {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("Document parsing error:", errorText);
-        throw new Error("Failed to parse document. Please try a different file format.");
+        console.error("PDF parsing error:", errorText);
+        throw new Error("Failed to parse PDF. Please try a different file.");
       }
 
       const data = await response.json();
       textContent = data.choices?.[0]?.message?.content || "";
-      console.log(`Successfully extracted text from ${fileType === "application/pdf" ? "PDF" : "DOCX"}`);
+      console.log("Successfully extracted text from PDF using AI");
     } else {
       return new Response(
         JSON.stringify({ error: "Unsupported file type. Please upload PDF, DOCX, or TXT." }),
