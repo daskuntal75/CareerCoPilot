@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronRight, Bug, Database, FileText, Target, Link2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Bug, Database, FileText, Target, Link2, Check, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 
@@ -110,6 +110,24 @@ const RAGDebugPanel = ({ applicationId }: RAGDebugPanelProps) => {
     if (score >= 0.8) return "text-success bg-success/10";
     if (score >= 0.6) return "text-warning bg-warning/10";
     return "text-destructive bg-destructive/10";
+  };
+
+  const updateMatchVerification = async (matchId: string, isVerified: boolean) => {
+    try {
+      const { error } = await supabase
+        .from("requirement_matches")
+        .update({ is_verified: isVerified })
+        .eq("id", matchId);
+
+      if (error) throw error;
+
+      // Update local state
+      setMatches(prev => prev.map(m => 
+        m.id === matchId ? { ...m, is_verified: isVerified } : m
+      ));
+    } catch (error) {
+      console.error("Error updating match verification:", error);
+    }
   };
 
   if (!applicationId) return null;
@@ -297,9 +315,14 @@ const RAGDebugPanel = ({ applicationId }: RAGDebugPanelProps) => {
                                 <span className="text-sm text-foreground flex-1 truncate">
                                   Req #{req?.requirement_index !== undefined ? req.requirement_index + 1 : "?"} → Chunk #{chunk?.chunk_index ?? "?"}
                                 </span>
-                                {match.is_verified && (
+                                {match.is_verified === true && (
                                   <span className="text-xs bg-success/10 text-success px-2 py-0.5 rounded">
-                                    Verified
+                                    ✓ Verified
+                                  </span>
+                                )}
+                                {match.is_verified === false && (
+                                  <span className="text-xs bg-destructive/10 text-destructive px-2 py-0.5 rounded">
+                                    ✗ Rejected
                                   </span>
                                 )}
                               </button>
@@ -332,6 +355,55 @@ const RAGDebugPanel = ({ applicationId }: RAGDebugPanelProps) => {
                                           </p>
                                         </div>
                                       )}
+                                      
+                                      {/* Verification Controls */}
+                                      <div className="flex items-center gap-2 pt-2 border-t border-border">
+                                        <span className="text-xs text-muted-foreground">Verification:</span>
+                                        <Button
+                                          size="sm"
+                                          variant={match.is_verified === true ? "default" : "outline"}
+                                          className={cn(
+                                            "h-7 text-xs",
+                                            match.is_verified === true && "bg-success hover:bg-success/90"
+                                          )}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            updateMatchVerification(match.id, true);
+                                          }}
+                                        >
+                                          <Check className="w-3 h-3 mr-1" />
+                                          Verify
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant={match.is_verified === false ? "default" : "outline"}
+                                          className={cn(
+                                            "h-7 text-xs",
+                                            match.is_verified === false && "bg-destructive hover:bg-destructive/90"
+                                          )}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            updateMatchVerification(match.id, false);
+                                          }}
+                                        >
+                                          <X className="w-3 h-3 mr-1" />
+                                          Reject
+                                        </Button>
+                                        {match.is_verified !== null && (
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-7 text-xs text-muted-foreground"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              // Reset to null/unreviewed state
+                                              updateMatchVerification(match.id, null as unknown as boolean);
+                                            }}
+                                          >
+                                            Reset
+                                          </Button>
+                                        )}
+                                      </div>
                                     </div>
                                   </motion.div>
                                 )}
