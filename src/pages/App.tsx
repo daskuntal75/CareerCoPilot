@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAnalytics } from "@/hooks/useAnalytics";
 
 export type AppStep = "job" | "analysis" | "editor" | "interview";
 
@@ -41,6 +42,7 @@ const AppPage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { detailedResume, isProfileComplete, isLoading: isProfileLoading } = useUserProfile();
+  const { trackPageView, trackApplicationEvent, trackCoverLetterEvent, trackInterviewPrepEvent } = useAnalytics();
   
   const [currentStep, setCurrentStep] = useState<AppStep>("job");
   const [jobData, setJobData] = useState<JobData | null>(null);
@@ -53,8 +55,9 @@ const AppPage = () => {
   const [generationStage, setGenerationStage] = useState<GenerationStage>("analyzing");
   const [generationType, setGenerationType] = useState<"cover-letter" | "interview-prep">("cover-letter");
 
-  // Load existing application if ID provided
+  // Load existing application if ID provided and track page view
   useEffect(() => {
+    trackPageView("application", { application_id: id, step: currentStep });
     if (id && user) {
       loadApplication(id);
     }
@@ -184,6 +187,14 @@ const AppPage = () => {
       
       setAnalysisData(analysis);
       setCurrentStep("analysis");
+      
+      // Track analytics
+      trackApplicationEvent("analyzed", {
+        company: data.company,
+        job_title: data.title,
+        fit_score: analysis.fitScore,
+        fit_level: analysis.fitLevel,
+      });
 
       if (user) {
         await saveApplication({
@@ -198,6 +209,7 @@ const AppPage = () => {
     } catch (error) {
       console.error("Error analyzing job fit:", error);
       toast.error("Failed to analyze job fit. Please try again.");
+      trackApplicationEvent("analysis_failed", { error: String(error) });
     } finally {
       setIsLoading(false);
     }
@@ -238,6 +250,13 @@ const AppPage = () => {
       
       setCoverLetter(response.data.coverLetter);
       setCurrentStep("editor");
+      
+      // Track analytics
+      trackCoverLetterEvent("generated", {
+        company: jobData.company,
+        job_title: jobData.title,
+        application_id: applicationId,
+      });
 
       if (user) {
         await saveApplication({
@@ -247,6 +266,7 @@ const AppPage = () => {
     } catch (error) {
       console.error("Error generating cover letter:", error);
       toast.error("Failed to generate cover letter. Please try again.");
+      trackCoverLetterEvent("generation_failed", { error: String(error) });
     } finally {
       setIsLoading(false);
     }
@@ -292,9 +312,18 @@ const AppPage = () => {
           await saveApplication({ interview_prep: updatedPrep });
         }
         toast.success(`${sectionToRegenerate} regenerated successfully`);
+        trackInterviewPrepEvent("section_regenerated", { section: sectionToRegenerate });
       } else {
         setInterviewPrep(response.data);
         setCurrentStep("interview");
+        
+        // Track analytics
+        trackInterviewPrepEvent("generated", {
+          company: jobData.company,
+          job_title: jobData.title,
+          application_id: applicationId,
+        });
+        
         if (user) {
           await saveApplication({ interview_prep: response.data });
         }
@@ -302,6 +331,7 @@ const AppPage = () => {
     } catch (error) {
       console.error("Error generating interview prep:", error);
       toast.error("Failed to generate interview prep. Please try again.");
+      trackInterviewPrepEvent("generation_failed", { error: String(error) });
     } finally {
       setIsLoading(false);
     }

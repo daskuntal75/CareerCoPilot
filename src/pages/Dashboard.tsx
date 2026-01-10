@@ -19,6 +19,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { useAnalytics } from "@/hooks/useAnalytics";
+import { useNotifications } from "@/hooks/useNotifications";
 
 interface Application {
   id: string;
@@ -44,6 +46,8 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
+  const { trackPageView, trackApplicationEvent } = useAnalytics();
+  const { notifyStatusChange } = useNotifications();
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -54,6 +58,7 @@ const Dashboard = () => {
   useEffect(() => {
     if (user) {
       fetchApplications();
+      trackPageView("dashboard", { application_count: applications.length });
     }
   }, [user]);
 
@@ -75,6 +80,7 @@ const Dashboard = () => {
   };
 
   const deleteApplication = async (id: string) => {
+    const app = applications.find(a => a.id === id);
     try {
       const { error } = await supabase
         .from("applications")
@@ -84,6 +90,11 @@ const Dashboard = () => {
       if (error) throw error;
       setApplications(prev => prev.filter(app => app.id !== id));
       toast.success("Application deleted");
+      trackApplicationEvent("deleted", { 
+        application_id: id,
+        company: app?.company,
+        job_title: app?.job_title,
+      });
     } catch (error) {
       console.error("Error deleting application:", error);
       toast.error("Failed to delete application");
@@ -91,6 +102,9 @@ const Dashboard = () => {
   };
 
   const updateStatus = async (id: string, status: string) => {
+    const app = applications.find(a => a.id === id);
+    const oldStatus = app?.status;
+    
     try {
       const updateData: any = { status };
       if (status === "applied") {
@@ -104,9 +118,23 @@ const Dashboard = () => {
 
       if (error) throw error;
       setApplications(prev => 
-        prev.map(app => app.id === id ? { ...app, status } : app)
+        prev.map(a => a.id === id ? { ...a, status } : a)
       );
       toast.success("Status updated");
+      
+      // Track analytics
+      trackApplicationEvent("status_changed", {
+        application_id: id,
+        old_status: oldStatus,
+        new_status: status,
+        company: app?.company,
+        job_title: app?.job_title,
+      });
+      
+      // Send email notification for status changes
+      if (app && oldStatus !== status) {
+        notifyStatusChange(id, app.company, app.job_title, oldStatus || "draft", status);
+      }
     } catch (error) {
       console.error("Error updating status:", error);
       toast.error("Failed to update status");
