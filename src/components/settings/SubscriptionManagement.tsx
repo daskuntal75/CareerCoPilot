@@ -1,19 +1,42 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CreditCard, Loader2, ExternalLink, RefreshCw, Crown, Sparkles, Zap } from "lucide-react";
+import { CreditCard, Loader2, ExternalLink, RefreshCw, Crown, Sparkles, Zap, TestTube } from "lucide-react";
 import { toast } from "sonner";
 
 const SubscriptionManagement = () => {
   const { subscription, refreshSubscription } = useAuth();
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
+  const [stripeEnabled, setStripeEnabled] = useState(false);
+
+  useEffect(() => {
+    checkSettings();
+  }, []);
+
+  const checkSettings = async () => {
+    try {
+      const { data } = await supabase.functions.invoke("check-demo-mode");
+      if (data) {
+        setDemoMode(data.demo_mode ?? false);
+        setStripeEnabled(data.stripe_enabled ?? false);
+      }
+    } catch (error) {
+      console.error("Error checking settings:", error);
+    }
+  };
 
   const handleManageSubscription = async () => {
+    if (!stripeEnabled) {
+      toast.info("Billing portal is not available in demo mode");
+      return;
+    }
+
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("customer-portal");
@@ -80,10 +103,21 @@ const SubscriptionManagement = () => {
                 <Badge variant={getTierBadgeVariant()}>
                   {subscription.subscribed ? "Active" : "Free"}
                 </Badge>
+                {demoMode && !stripeEnabled && subscription.subscribed && (
+                  <Badge variant="outline" className="border-amber-500 text-amber-500">
+                    <TestTube className="w-3 h-3 mr-1" />
+                    Demo
+                  </Badge>
+                )}
               </div>
-              {subscription.subscription_end && (
+              {subscription.subscription_end && !demoMode && (
                 <p className="text-sm text-muted-foreground">
                   Renews on {new Date(subscription.subscription_end).toLocaleDateString()}
+                </p>
+              )}
+              {demoMode && !stripeEnabled && (
+                <p className="text-sm text-amber-600 dark:text-amber-400">
+                  Demo mode - Pro features unlocked
                 </p>
               )}
             </div>
@@ -100,7 +134,7 @@ const SubscriptionManagement = () => {
 
         {/* Actions */}
         <div className="flex flex-col sm:flex-row gap-3">
-          {subscription.subscribed ? (
+          {subscription.subscribed && stripeEnabled ? (
             <Button
               variant="outline"
               onClick={handleManageSubscription}
@@ -114,6 +148,12 @@ const SubscriptionManagement = () => {
               )}
               Manage Billing
             </Button>
+          ) : subscription.subscribed && !stripeEnabled ? (
+            <div className="flex-1 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-center">
+              <p className="text-sm text-amber-700 dark:text-amber-300">
+                Demo mode active - billing management unavailable
+              </p>
+            </div>
           ) : (
             <Button asChild className="flex-1">
               <Link to="/pricing">
@@ -123,7 +163,6 @@ const SubscriptionManagement = () => {
             </Button>
           )}
         </div>
-
         {/* Feature highlights */}
         {!subscription.subscribed && (
           <div className="pt-4 border-t border-border">

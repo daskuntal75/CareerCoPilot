@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -14,7 +14,9 @@ import {
   RefreshCw,
   BarChart3,
   Briefcase,
-  DollarSign
+  DollarSign,
+  Settings,
+  LogIn
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,6 +36,7 @@ import {
 } from "recharts";
 import UserManagement from "@/components/admin/UserManagement";
 import RevenueAnalytics from "@/components/admin/RevenueAnalytics";
+import AdminSettings from "@/components/admin/AdminSettings";
 
 interface UserSummary {
   total_users: number;
@@ -159,12 +162,20 @@ const Admin = () => {
           <div className="text-center">
             <Shield className="w-16 h-16 text-destructive mx-auto mb-4" />
             <h1 className="text-2xl font-bold text-foreground mb-2">Access Denied</h1>
-            <p className="text-muted-foreground mb-4">
+            <p className="text-muted-foreground mb-6">
               You don't have permission to access the admin dashboard.
             </p>
-            <Button onClick={() => navigate("/dashboard")}>
-              Return to Dashboard
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button onClick={() => navigate("/dashboard")}>
+                Return to Dashboard
+              </Button>
+              <Button variant="outline" asChild>
+                <Link to="/admin/login">
+                  <LogIn className="w-4 h-4 mr-2" />
+                  Admin Login
+                </Link>
+              </Button>
+            </div>
           </div>
         </main>
         <Footer />
@@ -311,6 +322,10 @@ const Admin = () => {
                   <DollarSign className="w-4 h-4" />
                   Revenue
                 </TabsTrigger>
+                <TabsTrigger value="settings" className="flex items-center gap-2">
+                  <Settings className="w-4 h-4" />
+                  Settings
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="users">
@@ -433,6 +448,10 @@ const Admin = () => {
 
               <TabsContent value="revenue">
                 <RevenueAnalytics refreshTrigger={refreshTrigger} />
+              </TabsContent>
+
+              <TabsContent value="settings">
+                <AdminSettings />
               </TabsContent>
             </Tabs>
           </motion.div>

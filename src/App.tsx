@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { AppSettingsProvider } from "@/contexts/AppSettingsContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 // Eager load critical pages
@@ -25,6 +26,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const SubscriptionSuccess = lazy(() => import("./pages/SubscriptionSuccess"));
 const Admin = lazy(() => import("./pages/Admin"));
+const AdminLogin = lazy(() => import("./pages/AdminLogin"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -51,33 +53,36 @@ const App = () => (
   <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/app" element={<AppPage />} />
-                <Route path="/app/:id" element={<AppPage />} />
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/auth/callback" element={<AuthCallback />} />
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/profile" element={<ProfileSetup />} />
-                <Route path="/analytics" element={<Analytics />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/privacy" element={<Privacy />} />
-                <Route path="/terms" element={<Terms />} />
-                <Route path="/pricing" element={<Pricing />} />
-                <Route path="/how-it-works" element={<HowItWorks />} />
-                <Route path="/subscription/success" element={<SubscriptionSuccess />} />
-                <Route path="/admin" element={<Admin />} />
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
-          </BrowserRouter>
-        </TooltipProvider>
+        <AppSettingsProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/app" element={<AppPage />} />
+                  <Route path="/app/:id" element={<AppPage />} />
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/auth/callback" element={<AuthCallback />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/profile" element={<ProfileSetup />} />
+                  <Route path="/analytics" element={<Analytics />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/privacy" element={<Privacy />} />
+                  <Route path="/terms" element={<Terms />} />
+                  <Route path="/pricing" element={<Pricing />} />
+                  <Route path="/how-it-works" element={<HowItWorks />} />
+                  <Route path="/subscription/success" element={<SubscriptionSuccess />} />
+                  <Route path="/admin" element={<Admin />} />
+                  <Route path="/admin/login" element={<AdminLogin />} />
+                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
+            </BrowserRouter>
+          </TooltipProvider>
+        </AppSettingsProvider>
       </AuthProvider>
     </QueryClientProvider>
   </ErrorBoundary>
