@@ -3,17 +3,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Search, AlertCircle } from "lucide-react";
+import { Search, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import type { JobData } from "@/pages/App";
 
 interface JobDescriptionInputProps {
   onSubmit: (data: JobData) => void;
-  onBack: () => void;
   initialData?: JobData | null;
 }
 
-const JobDescriptionInput = ({ onSubmit, onBack, initialData }: JobDescriptionInputProps) => {
+const JobDescriptionInput = ({ onSubmit, initialData }: JobDescriptionInputProps) => {
   const [company, setCompany] = useState(initialData?.company || "");
   const [title, setTitle] = useState(initialData?.title || "");
   const [description, setDescription] = useState(initialData?.description || "");
@@ -64,14 +63,6 @@ const JobDescriptionInput = ({ onSubmit, onBack, initialData }: JobDescriptionIn
         animate={{ opacity: 1, y: 0 }}
         className="mb-8"
       >
-        <button
-          onClick={onBack}
-          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to resume
-        </button>
-        
         <h1 className="text-3xl font-bold text-foreground mb-2">
           Paste the Job Description
         </h1>

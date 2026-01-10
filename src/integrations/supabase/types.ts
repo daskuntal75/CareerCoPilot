@@ -193,6 +193,7 @@ export type Database = {
           created_at: string
           id: string
           metadata: Json | null
+          resume_type: string | null
           token_count: number | null
           user_id: string
         }
@@ -204,6 +205,7 @@ export type Database = {
           created_at?: string
           id?: string
           metadata?: Json | null
+          resume_type?: string | null
           token_count?: number | null
           user_id: string
         }
@@ -215,6 +217,7 @@ export type Database = {
           created_at?: string
           id?: string
           metadata?: Json | null
+          resume_type?: string | null
           token_count?: number | null
           user_id?: string
         }
@@ -227,6 +230,69 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_cover_letter_templates: {
+        Row: {
+          content: string
+          file_name: string | null
+          file_path: string | null
+          id: string
+          updated_at: string | null
+          uploaded_at: string | null
+          user_id: string
+        }
+        Insert: {
+          content: string
+          file_name?: string | null
+          file_path?: string | null
+          id?: string
+          updated_at?: string | null
+          uploaded_at?: string | null
+          user_id: string
+        }
+        Update: {
+          content?: string
+          file_name?: string | null
+          file_path?: string | null
+          id?: string
+          updated_at?: string | null
+          uploaded_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_resumes: {
+        Row: {
+          content: string
+          file_name: string
+          file_path: string | null
+          id: string
+          resume_type: string
+          updated_at: string | null
+          uploaded_at: string | null
+          user_id: string
+        }
+        Insert: {
+          content: string
+          file_name: string
+          file_path?: string | null
+          id?: string
+          resume_type: string
+          updated_at?: string | null
+          uploaded_at?: string | null
+          user_id: string
+        }
+        Update: {
+          content?: string
+          file_name?: string
+          file_path?: string | null
+          id?: string
+          resume_type?: string
+          updated_at?: string | null
+          uploaded_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {

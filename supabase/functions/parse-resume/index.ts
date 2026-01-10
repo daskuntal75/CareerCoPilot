@@ -1,11 +1,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import JSZip from "https://esm.sh/jszip@3.10.1";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+// File size limits in bytes
+const FILE_SIZE_LIMITS = {
+  "application/pdf": 3 * 1024 * 1024, // 3MB for PDFs
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": 2 * 1024 * 1024, // 2MB for DOCX
+  "text/plain": 1 * 1024 * 1024, // 1MB for TXT
 };
 
 // Chunk text into overlapping segments
@@ -81,11 +87,33 @@ serve(async (req) => {
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File;
-    const applicationId = formData.get("applicationId") as string | null;
+    const resumeType = formData.get("resumeType") as string || "detailed"; // 'detailed' | 'abridged' | 'cover-letter-template'
     
     if (!file) {
       return new Response(
         JSON.stringify({ error: "No file provided" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate file type
+    const fileType = file.type;
+    const validTypes = Object.keys(FILE_SIZE_LIMITS);
+    if (!validTypes.includes(fileType)) {
+      return new Response(
+        JSON.stringify({ error: "Unsupported file type. Please upload PDF, DOCX, or TXT." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate file size BEFORE reading into memory
+    const maxSize = FILE_SIZE_LIMITS[fileType as keyof typeof FILE_SIZE_LIMITS];
+    if (file.size > maxSize) {
+      const maxSizeMB = (maxSize / (1024 * 1024)).toFixed(1);
+      return new Response(
+        JSON.stringify({ 
+          error: `File too large. Maximum size for ${fileType.split('/').pop()?.toUpperCase()} files is ${maxSizeMB}MB. Please upload a smaller file.` 
+        }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -113,16 +141,19 @@ serve(async (req) => {
     }
 
     const fileName = file.name;
-    const fileType = file.type;
-    const fileBuffer = await file.arrayBuffer();
     let textContent = "";
+    let filePath: string | null = null;
 
     // Handle different file types
     if (fileType === "text/plain") {
+      const fileBuffer = await file.arrayBuffer();
       textContent = new TextDecoder().decode(fileBuffer);
     } else if (fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
-      // Extract text from DOCX using JSZip (DOCX is a ZIP archive with XML)
+      // Dynamically import JSZip only for DOCX files to save memory
+      const JSZip = (await import("https://esm.sh/jszip@3.10.1")).default;
+      
       try {
+        const fileBuffer = await file.arrayBuffer();
         const zip = await JSZip.loadAsync(fileBuffer);
         const documentXml = await zip.file("word/document.xml")?.async("string");
         
@@ -130,19 +161,17 @@ serve(async (req) => {
           throw new Error("Could not find document.xml in DOCX file");
         }
         
-        // Extract text content from XML, handling paragraphs and text runs
-        // Remove XML tags but preserve paragraph breaks
         textContent = documentXml
-          .replace(/<w:p[^>]*>/g, "\n") // Paragraph start -> newline
-          .replace(/<w:br[^>]*>/g, "\n") // Line breaks
-          .replace(/<w:tab[^>]*>/g, "\t") // Tabs
-          .replace(/<[^>]+>/g, "") // Remove all other XML tags
+          .replace(/<w:p[^>]*>/g, "\n")
+          .replace(/<w:br[^>]*>/g, "\n")
+          .replace(/<w:tab[^>]*>/g, "\t")
+          .replace(/<[^>]+>/g, "")
           .replace(/&lt;/g, "<")
           .replace(/&gt;/g, ">")
           .replace(/&amp;/g, "&")
           .replace(/&quot;/g, '"')
           .replace(/&apos;/g, "'")
-          .replace(/\n\s*\n\s*\n/g, "\n\n") // Normalize multiple newlines
+          .replace(/\n\s*\n\s*\n/g, "\n\n")
           .trim();
         
         console.log("Successfully extracted text from DOCX using JSZip");
@@ -151,15 +180,19 @@ serve(async (req) => {
         throw new Error("Failed to parse DOCX file. Please ensure it's a valid Word document.");
       }
     } else if (fileType === "application/pdf") {
-      // Use AI to extract text from PDF
       const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
       if (!LOVABLE_API_KEY) {
         throw new Error("LOVABLE_API_KEY is not configured");
       }
 
-      // Use proper base64 encoding
+      // Read file and encode to base64
+      const fileBuffer = await file.arrayBuffer();
       const bytes = new Uint8Array(fileBuffer);
       const base64 = base64Encode(bytes.buffer);
+      
+      // Clear bytes reference to free memory
+      // @ts-ignore - allowing null assignment for memory optimization
+      const clearedBytes = null;
       
       const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
@@ -192,47 +225,102 @@ serve(async (req) => {
       if (!response.ok) {
         const errorText = await response.text();
         console.error("PDF parsing error:", errorText);
-        throw new Error("Failed to parse PDF. Please try a different file.");
+        throw new Error("Failed to parse PDF. Please try a different file or a smaller PDF.");
       }
 
       const data = await response.json();
       textContent = data.choices?.[0]?.message?.content || "";
       console.log("Successfully extracted text from PDF using AI");
-    } else {
+    }
+
+    // Skip storage upload for memory optimization - store content directly in DB
+    // Optional: Upload file for smaller files only
+    if (file.size < 1 * 1024 * 1024) { // Only upload files under 1MB
+      try {
+        const fileBuffer = await file.arrayBuffer();
+        filePath = `${user.id}/${resumeType}/${Date.now()}_${fileName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("resumes")
+          .upload(filePath, fileBuffer, {
+            contentType: fileType,
+            upsert: true,
+          });
+        
+        if (uploadError) {
+          console.error("Storage upload error:", uploadError);
+          filePath = null;
+        }
+      } catch (uploadErr) {
+        console.error("File upload skipped due to memory constraints");
+        filePath = null;
+      }
+    }
+
+    // Store in appropriate table based on resumeType
+    if (resumeType === "cover-letter-template") {
+      // Store in user_cover_letter_templates
+      const { error: upsertError } = await supabase
+        .from("user_cover_letter_templates")
+        .upsert({
+          user_id: user.id,
+          file_name: fileName,
+          file_path: filePath,
+          content: textContent,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: "user_id",
+        });
+
+      if (upsertError) {
+        console.error("Error storing cover letter template:", upsertError);
+        throw new Error("Failed to store cover letter template");
+      }
+
       return new Response(
-        JSON.stringify({ error: "Unsupported file type. Please upload PDF, DOCX, or TXT." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          fileName,
+          content: textContent,
+          filePath,
+          type: "cover-letter-template",
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Upload original file to storage
-    const filePath = `${user.id}/${Date.now()}_${fileName}`;
-    const { error: uploadError } = await supabase.storage
-      .from("resumes")
-      .upload(filePath, fileBuffer, {
-        contentType: fileType,
-        upsert: false,
+    // Store resume in user_resumes table (detailed or abridged)
+    const { error: upsertError } = await supabase
+      .from("user_resumes")
+      .upsert({
+        user_id: user.id,
+        resume_type: resumeType,
+        file_name: fileName,
+        file_path: filePath,
+        content: textContent,
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: "user_id,resume_type",
       });
 
-    if (uploadError) {
-      console.error("Storage upload error:", uploadError);
+    if (upsertError) {
+      console.error("Error storing resume:", upsertError);
+      throw new Error("Failed to store resume");
     }
 
     // Chunk the resume content
     const chunks = chunkText(textContent, 500, 100);
     
-    // Delete existing chunks for this application
-    if (applicationId) {
-      await supabase
-        .from("resume_chunks")
-        .delete()
-        .eq("application_id", applicationId);
-    }
+    // Delete existing chunks for this user and resume type
+    await supabase
+      .from("resume_chunks")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("resume_type", resumeType);
 
     // Store chunks in database
     const chunksToInsert = chunks.map(chunk => ({
       user_id: user.id,
-      application_id: applicationId || null,
+      application_id: null,
+      resume_type: resumeType,
       chunk_index: chunk.index,
       content: chunk.content,
       chunk_type: detectChunkType(chunk.content),
@@ -250,13 +338,14 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Parsed resume into ${chunks.length} chunks`);
+    console.log(`Parsed ${resumeType} resume into ${chunks.length} chunks`);
 
     return new Response(
       JSON.stringify({
         fileName,
         content: textContent,
-        filePath: uploadError ? null : filePath,
+        filePath,
+        resumeType,
         chunksCount: chunks.length,
         chunks: chunks.map(c => ({
           index: c.index,

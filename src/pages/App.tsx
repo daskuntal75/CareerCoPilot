@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import ResumeUpload from "@/components/app/ResumeUpload";
 import JobDescriptionInput from "@/components/app/JobDescriptionInput";
 import AnalysisResults from "@/components/app/AnalysisResults";
 import CoverLetterEditor from "@/components/app/CoverLetterEditor";
@@ -11,16 +10,13 @@ import AppStepper from "@/components/app/AppStepper";
 import GenerationProgress, { GenerationStage } from "@/components/app/GenerationProgress";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-export type AppStep = "upload" | "job" | "analysis" | "editor" | "interview";
-
-export interface ResumeData {
-  fileName: string;
-  content: string;
-  filePath?: string | null;
-}
+export type AppStep = "job" | "analysis" | "editor" | "interview";
 
 export interface JobData {
   company: string;
@@ -44,9 +40,9 @@ const AppPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { detailedResume, isProfileComplete, isLoading: isProfileLoading } = useUserProfile();
   
-  const [currentStep, setCurrentStep] = useState<AppStep>("upload");
-  const [resumeData, setResumeData] = useState<ResumeData | null>(null);
+  const [currentStep, setCurrentStep] = useState<AppStep>("job");
   const [jobData, setJobData] = useState<JobData | null>(null);
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
   const [coverLetter, setCoverLetter] = useState<string>("");
@@ -85,14 +81,6 @@ const AppPage = () => {
         description: data.job_description,
       });
 
-      if (data.resume_content) {
-        setResumeData({
-          fileName: data.resume_file_path?.split("/").pop() || "resume.pdf",
-          content: data.resume_content,
-          filePath: data.resume_file_path,
-        });
-      }
-
       if (data.requirements_analysis) {
         const analysis = data.requirements_analysis as any;
         setAnalysisData({
@@ -117,8 +105,6 @@ const AppPage = () => {
         setCurrentStep("editor");
       } else if (data.requirements_analysis) {
         setCurrentStep("analysis");
-      } else if (data.resume_content) {
-        setCurrentStep("job");
       }
     } catch (error) {
       console.error("Error loading application:", error);
@@ -165,19 +151,13 @@ const AppPage = () => {
     }
   };
 
-  const handleResumeUpload = async (data: ResumeData) => {
-    setResumeData(data);
-    setCurrentStep("job");
-    
-    if (user) {
-      await saveApplication({
-        resume_content: data.content,
-        resume_file_path: data.filePath,
-      });
-    }
-  };
-
   const handleJobSubmit = async (data: JobData) => {
+    if (!detailedResume) {
+      toast.error("Please upload your resume in Career Documents first");
+      navigate("/profile");
+      return;
+    }
+
     setJobData(data);
     setIsLoading(true);
 
@@ -185,7 +165,7 @@ const AppPage = () => {
       // Call AI for job fit analysis with RAG support
       const response = await supabase.functions.invoke("analyze-job-fit", {
         body: {
-          resumeContent: resumeData?.content,
+          resumeContent: detailedResume.content,
           jobDescription: data.description,
           jobTitle: data.title,
           company: data.company,
@@ -224,7 +204,7 @@ const AppPage = () => {
   };
 
   const handleGenerateCoverLetter = async () => {
-    if (!jobData || !resumeData) return;
+    if (!jobData || !detailedResume) return;
     
     setIsLoading(true);
     setGenerationType("cover-letter");
@@ -238,7 +218,7 @@ const AppPage = () => {
       // RAG-grounded cover letter generation using only verified resume chunks
       const response = await supabase.functions.invoke("generate-cover-letter", {
         body: {
-          resumeContent: resumeData.content,
+          resumeContent: detailedResume.content,
           jobDescription: jobData.description,
           jobTitle: jobData.title,
           company: jobData.company,
@@ -273,7 +253,7 @@ const AppPage = () => {
   };
 
   const handleGenerateInterviewPrep = async (sectionToRegenerate?: string) => {
-    if (!jobData || !resumeData) return;
+    if (!jobData || !detailedResume) return;
     
     setIsLoading(true);
     setGenerationType("interview-prep");
@@ -286,7 +266,7 @@ const AppPage = () => {
       
       const response = await supabase.functions.invoke("generate-interview-prep", {
         body: {
-          resumeContent: resumeData.content,
+          resumeContent: detailedResume.content,
           jobDescription: jobData.description,
           jobTitle: jobData.title,
           company: jobData.company,
@@ -340,6 +320,44 @@ const AppPage = () => {
     setCurrentStep(step);
   };
 
+  // Show loading while checking profile
+  if (isProfileLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading your profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Redirect to profile setup if not complete
+  if (user && !isProfileComplete) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <Header />
+        <main className="flex-1 pt-24 pb-12 flex items-center justify-center">
+          <div className="text-center max-w-md mx-auto px-4">
+            <div className="w-16 h-16 rounded-full bg-warning/20 flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-8 h-8 text-warning" />
+            </div>
+            <h2 className="text-2xl font-bold text-foreground mb-2">
+              Complete Your Profile First
+            </h2>
+            <p className="text-muted-foreground mb-6">
+              Upload your detailed resume to start applying for jobs. Your resume will be used for all applications.
+            </p>
+            <Button variant="hero" size="lg" onClick={() => navigate("/profile")}>
+              Upload Resume
+            </Button>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
@@ -376,14 +394,9 @@ const AppPage = () => {
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.3 }}
             >
-              {currentStep === "upload" && (
-                <ResumeUpload onUpload={handleResumeUpload} />
-              )}
-              
               {currentStep === "job" && (
                 <JobDescriptionInput 
                   onSubmit={handleJobSubmit} 
-                  onBack={() => setCurrentStep("upload")}
                   initialData={jobData}
                 />
               )}
