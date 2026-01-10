@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { sanitizeInput, sandboxUntrustedInput, hashString } from "../_shared/security-utils.ts";
+import { sanitizeInput, hashString } from "../_shared/security-utils.ts";
 import { logSecurityThreat } from "../_shared/audit-utils.ts";
 
 const corsHeaders = {
@@ -10,23 +10,23 @@ const corsHeaders = {
 
 // Section-specific prompts for regeneration
 const sectionPrompts: Record<string, string> = {
-  opening: `Focus ONLY on regenerating the opening paragraph. Create an attention-grabbing, professional yet engaging introduction that immediately captures the reader's interest. Return ONLY the new opening paragraph text.`,
-  skills: `Focus ONLY on regenerating the skills and experience section. Highlight the most relevant skills and experiences that match the job requirements. Use STAR format for key achievements. Return ONLY the skills/experience paragraphs.`,
-  achievements: `Focus ONLY on regenerating the key achievements section. Emphasize quantifiable results and impactful accomplishments from the resume. Use SMART metrics where available. Return ONLY the achievements content.`,
-  motivation: `Focus ONLY on regenerating the "why this company" section. Express genuine interest in the company, its mission, culture, and how the candidate's values align. Return ONLY the motivation paragraph.`,
-  closing: `Focus ONLY on regenerating the closing paragraph. Create a strong call-to-action that expresses enthusiasm and invites further discussion. Return ONLY the closing paragraph.`,
-  full: `Regenerate the ENTIRE cover letter with improvements based on the feedback provided. Create a complete, polished cover letter.`,
+  opening: `Focus ONLY on regenerating the opening paragraph. Create an attention-grabbing, professional yet engaging introduction. Return ONLY the new opening paragraph text.`,
+  skills: `Focus ONLY on regenerating the skills and experience section. Highlight relevant skills using STAR format. Return ONLY the skills/experience paragraphs.`,
+  achievements: `Focus ONLY on regenerating achievements. Emphasize quantifiable results with SMART metrics. Return ONLY the achievements content.`,
+  motivation: `Focus ONLY on regenerating the "why this company" section. Express genuine interest and alignment. Return ONLY the motivation paragraph.`,
+  closing: `Focus ONLY on regenerating the closing. Create a strong call-to-action. Return ONLY the closing paragraph.`,
+  full: `Regenerate the ENTIRE cover letter package including the requirements mapping table and fit calculation.`,
 };
 
 const tipInstructions: Record<string, string> = {
-  more_specific: "Include more specific examples with concrete details from the candidate's actual experience.",
-  shorter: "Make the content more concise - reduce word count and get to the point faster.",
-  longer: "Expand with more detail and elaboration to provide richer context.",
-  formal: "Use a more formal, professional, traditional tone throughout.",
-  conversational: "Use a more conversational, friendly, approachable tone.",
-  quantify: "Add more metrics, numbers, and quantifiable achievements.",
-  passion: "Express more genuine enthusiasm, interest, and passion for the role and company.",
-  unique: "Emphasize unique differentiating factors that set this candidate apart.",
+  more_specific: "Include more specific examples with concrete details.",
+  shorter: "Make content more concise - reduce word count.",
+  longer: "Expand with more detail and elaboration.",
+  formal: "Use a more formal, professional tone.",
+  conversational: "Use a more conversational, friendly tone.",
+  quantify: "Add more metrics and quantifiable achievements.",
+  passion: "Express more enthusiasm and passion for the role.",
+  unique: "Emphasize unique differentiating factors.",
 };
 
 serve(async (req) => {
@@ -39,7 +39,8 @@ serve(async (req) => {
       resumeContent, 
       jobDescription, 
       jobTitle, 
-      company, 
+      company,
+      coverLetterTemplate,
       analysisData, 
       applicationId, 
       userId,
@@ -62,23 +63,21 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Create Supabase client
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // SECURITY: Sanitize job description to prevent prompt injection (OWASP LLM01)
+    // Security: Sanitize inputs
     const { sanitized: sanitizedJD, threats, hasMaliciousContent } = sanitizeInput(jobDescription);
     
-    if (hasMaliciousContent) {
-      console.warn(`Security threats detected: ${threats.length} issues`);
+    if (hasMaliciousContent && userId) {
       await logSecurityThreat(supabase, userId, 'cover_letter_injection', {
         hash: hashString(jobDescription),
         threats: threats.map(t => t.type),
       });
     }
 
-    // RAG: Retrieve only verified, matched resume chunks for cover letter generation
+    // RAG: Retrieve verified resume chunks
     let verifiedExperience = "";
     
     if (applicationId && userId) {
@@ -112,44 +111,41 @@ serve(async (req) => {
         }
 
         verifiedExperience = `
-VERIFIED EXPERIENCE (RAG-Retrieved - USE ONLY THIS):
+VERIFIED EXPERIENCE (USE ONLY THIS):
 ${Array.from(uniqueChunks.values()).join('\n\n')}
 
-VERIFIED REQUIREMENT MATCHES:
+VERIFIED MATCHES:
 ${verifiedRequirements.slice(0, 10).join('\n')}
 `;
       }
     }
 
-    // Build analysis context from analysisData
+    // Build analysis context
     const analysisContext = analysisData ? `
-KEY MATCHES FROM ANALYSIS:
+KEY MATCHES:
 ${analysisData.requirements
   .filter((r: any) => r.status === "yes")
   .map((r: any) => `- ${r.requirement}: ${r.evidence}`)
   .join("\n")}
 
-GAPS TO ADDRESS:
+GAPS:
 ${analysisData.requirements
   .filter((r: any) => r.status === "no" || r.status === "partial")
   .map((r: any) => `- ${r.requirement}: ${r.evidence}`)
   .join("\n")}
 ` : "";
 
-    // Build regeneration context if this is a regeneration request
+    // Build regeneration context
     let regenerationContext = "";
     if (sectionToRegenerate && sectionPrompts[sectionToRegenerate]) {
-      regenerationContext = `\n\n# REGENERATION REQUEST\n`;
-      regenerationContext += `You are regenerating a SPECIFIC SECTION of an existing cover letter.\n`;
-      regenerationContext += `\n## Section to Regenerate: ${sectionToRegenerate.toUpperCase()}\n`;
-      regenerationContext += `\n## Instructions:\n${sectionPrompts[sectionToRegenerate]}\n`;
+      regenerationContext = `\n# REGENERATION REQUEST\nSection: ${sectionToRegenerate.toUpperCase()}\n${sectionPrompts[sectionToRegenerate]}\n`;
       
       if (userFeedback) {
-        regenerationContext += `\n## User Feedback (IMPORTANT - address this specifically):\n${userFeedback}\n`;
+        regenerationContext += `\nUser Feedback:\n${userFeedback}\n`;
       }
       
-      if (selectedTips && selectedTips.length > 0) {
-        regenerationContext += `\n## Improvement Guidelines:\n`;
+      if (selectedTips?.length > 0) {
+        regenerationContext += `\nImprovement Guidelines:\n`;
         for (const tip of selectedTips) {
           if (tipInstructions[tip]) {
             regenerationContext += `- ${tipInstructions[tip]}\n`;
@@ -158,75 +154,90 @@ ${analysisData.requirements
       }
       
       if (existingCoverLetter) {
-        regenerationContext += `\n## Existing Cover Letter (for context):\n${existingCoverLetter}\n`;
+        regenerationContext += `\nExisting Cover Letter:\n${existingCoverLetter}\n`;
       }
     }
 
-    const systemPrompt = `You are acting as a senior professional who is considering external opportunities. Your task is to analyze a job posting, compare it against the resume materials, and create a compelling cover letter that demonstrates fit for the role. Maintain a professional yet light-hearted and engaging tone.
+    // Cover letter template context
+    const templateContext = coverLetterTemplate ? `
+COVER LETTER TEMPLATE (use as style reference):
+${coverLetterTemplate}
+` : "";
 
-# CRITICAL TRUTHFULNESS CONSTRAINT:
-You must not invent, infer, or embellish any experience, scope, metrics, or responsibilities that are not explicitly supported by the provided VERIFIED EXPERIENCE. If a job requirement cannot be directly supported by resume evidence, explicitly state "No direct match" in the mapping table and do not imply experience in the cover letter.
+    const systemPrompt = `You are a senior professional analyzing a job posting against resume materials to create a compelling cover letter with requirements mapping.
 
-# RAG GROUNDING RULE:
-You MUST ONLY use experiences, metrics, and achievements that appear in the VERIFIED EXPERIENCE section. Do not fabricate or infer any additional qualifications.`;
+# TRUTHFULNESS CONSTRAINT
+Do not invent or embellish experience not in the resume. If a requirement has no match, state "No direct match" in the mapping table.`;
 
     const userPrompt = sectionToRegenerate && sectionToRegenerate !== "full" 
-      ? `Here is the job posting information:
-
-<job_posting>
-${sanitizedJD}
-</job_posting>
-
-<job_title>
-${jobTitle} at ${company}
-</job_title>
-
-${verifiedExperience || `<resume>
-${resumeContent}
-</resume>`}
+      ? `<job_posting>${sanitizedJD}</job_posting>
+<job_title>${jobTitle} at ${company}</job_title>
+${verifiedExperience || `<resume>${resumeContent}</resume>`}
 ${analysisContext}
 ${regenerationContext}
 
-IMPORTANT: Return ONLY the regenerated section content. Do not include the full cover letter or any other sections.`
-      : `Here is the job posting information:
-
-<job_posting>
-${sanitizedJD}
-</job_posting>
-
-Here is the job title:
-<job_title>
-${jobTitle} at ${company}
-</job_title>
-
-${verifiedExperience || `Here is the resume:
-<resume>
-${resumeContent}
-</resume>`}
+Return ONLY the regenerated section.`
+      : `<job_posting>${sanitizedJD}</job_posting>
+<job_title>${jobTitle} at ${company}</job_title>
+${verifiedExperience || `<resume>${resumeContent}</resume>`}
+${templateContext}
 ${analysisContext}
 ${regenerationContext}
 
-# Checklist of Sub-Tasks
+# TASK
 
-Before beginning substantive work, perform these conceptual sub-tasks:
+## Step 1: Extract Top 10 Job Requirements
+Focus on decision-critical requirements (ownership scope, leadership, domain expertise). Exclude generic skills.
 
-1. Review the job posting and extract the top 10 specific job requirements
-2. Analyze the VERIFIED EXPERIENCE to identify relevant skills, experiences, and achievements
-3. Map actual skills and experiences to each of the top 10 job requirements (be honest - do not embellish or fabricate)
-4. Calculate a job fit percentage based on how many requirements are genuinely met
-5. Draft a cover letter that weaves matching qualifications into compelling narratives using STAR + SMART format (without spelling out the acronym)
-6. Validate all outputs for completeness, accuracy, and clarity
+## Step 2: Map Experience to Requirements
+For each requirement, find matching resume evidence. Use "No direct match" if none found.
 
-Write a professional, concise cover letter:
-- **Opening Paragraph**: Light-hearted and attention-grabbing while remaining professional
-- **Body Paragraphs**: Focus on the top 3 job requirements using ONLY verified experience
-- **Job Fit Statement**: Reference the calculated fit percentage
-- **Closing**: Polite, professional, and impactful
-- **Tone**: Professional yet engaging, ATS-friendly
+## Step 3: Calculate Fit Score
+Count requirements genuinely met, divide by 10, multiply by 100.
 
-Return ONLY the cover letter text, ready to use.`;
+## Step 4: Write Cover Letter
 
-    // Make the AI request with or without streaming
+**Opening**: Professional yet attention-grabbing, stand out from typical letters.
+
+**Body** (2-3 paragraphs): Focus on top 3 requirements using STAR format (Situation, Task, Action, Result) with specific metrics. Keep narratives flowing naturally.
+
+**Fit Statement**: Reference your calculated fit percentage.
+
+**Closing**: Polite, professional, impactful call-to-action.
+
+**Tone**: Professional yet engaging, ATS-friendly with relevant keywords.
+
+## OUTPUT FORMAT
+
+Provide your response in this exact format:
+
+---
+
+[COVER LETTER]
+
+[Full cover letter text here]
+
+---
+
+[REQUIREMENTS MAPPING TABLE]
+
+| # | Job Requirement | Your Experience | Evidence |
+|---|-----------------|-----------------|----------|
+| 1 | [Requirement] | [Match or "No direct match"] | [Brief evidence] |
+| 2 | ... | ... | ... |
+[Continue for all 10 requirements]
+
+---
+
+[FIT SCORE CALCULATION]
+
+Requirements Met: X out of 10
+**Fit Score: XX%**
+
+Methodology: [Brief explanation of how score was calculated]
+
+---`;
+
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -234,7 +245,7 @@ Return ONLY the cover letter text, ready to use.`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-3-flash-preview",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -261,7 +272,6 @@ Return ONLY the cover letter text, ready to use.`;
       throw new Error(`AI gateway error: ${response.status}`);
     }
 
-    // If streaming, return the stream directly
     if (stream) {
       return new Response(response.body, {
         headers: { 
@@ -273,7 +283,6 @@ Return ONLY the cover letter text, ready to use.`;
       });
     }
 
-    // Non-streaming response
     const data = await response.json();
     const coverLetter = data.choices?.[0]?.message?.content;
     
