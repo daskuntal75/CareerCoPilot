@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import Header from "@/components/layout/Header";
@@ -11,12 +11,21 @@ import {
 } from "recharts";
 import { 
   TrendingUp, Users, FileText, Target, 
-  Calendar, Activity, ArrowUpRight, ArrowDownRight
+  Calendar, Activity, ArrowUpRight, ArrowDownRight,
+  Download, FileDown
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { toast } from "sonner";
 
 interface AnalyticsData {
   totalEvents: number;
@@ -172,6 +181,186 @@ const Analytics = () => {
     }
   };
 
+  // Export to CSV
+  const exportToCSV = useCallback(() => {
+    if (!data) return;
+
+    const csvRows: string[] = [];
+    
+    // Summary section
+    csvRows.push("=== ANALYTICS SUMMARY ===");
+    csvRows.push(`Date Range,Last ${dateRange} days`);
+    csvRows.push(`Total Events,${data.totalEvents}`);
+    csvRows.push(`Unique Sessions,${data.uniqueSessions}`);
+    csvRows.push(`Total Applications,${data.totalApplications}`);
+    csvRows.push(`Cover Letters Generated,${data.coverLettersGenerated}`);
+    csvRows.push(`Interview Preps Generated,${data.interviewPrepsGenerated}`);
+    csvRows.push(`Conversion Rate,${data.conversionRate}%`);
+    csvRows.push("");
+    
+    // Events by day
+    csvRows.push("=== DAILY ACTIVITY ===");
+    csvRows.push("Date,Events,Sessions");
+    data.eventsByDay.forEach(d => {
+      csvRows.push(`${d.date},${d.events},${d.sessions}`);
+    });
+    csvRows.push("");
+    
+    // Events by category
+    csvRows.push("=== EVENTS BY CATEGORY ===");
+    csvRows.push("Category,Count");
+    data.eventsByCategory.forEach(c => {
+      csvRows.push(`${c.name},${c.value}`);
+    });
+    csvRows.push("");
+    
+    // Application funnel
+    csvRows.push("=== APPLICATION FUNNEL ===");
+    csvRows.push("Stage,Count,Percentage");
+    data.applicationFunnel.forEach(f => {
+      csvRows.push(`${f.stage},${f.count},${f.percentage}%`);
+    });
+    csvRows.push("");
+    
+    // Fit score distribution
+    csvRows.push("=== FIT SCORE DISTRIBUTION ===");
+    csvRows.push("Range,Count");
+    data.fitScoreDistribution.forEach(f => {
+      csvRows.push(`${f.range},${f.count}`);
+    });
+    csvRows.push("");
+    
+    // Top events
+    csvRows.push("=== TOP EVENTS ===");
+    csvRows.push("Event Name,Count");
+    data.topEvents.forEach(e => {
+      csvRows.push(`${e.name},${e.count}`);
+    });
+
+    const csvContent = csvRows.join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `analytics-report-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    toast.success("CSV report downloaded");
+  }, [data, dateRange]);
+
+  // Export to PDF (via print)
+  const exportToPDF = useCallback(() => {
+    if (!data) return;
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      toast.error("Please allow popups to download PDF");
+      return;
+    }
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Analytics Report - ${format(new Date(), "yyyy-MM-dd")}</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; color: #333; }
+            h1 { color: #1a1a1a; border-bottom: 2px solid #e5e5e5; padding-bottom: 10px; }
+            h2 { color: #4a4a4a; margin-top: 30px; }
+            table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+            th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+            th { background-color: #f5f5f5; font-weight: 600; }
+            tr:nth-child(even) { background-color: #fafafa; }
+            .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 20px 0; }
+            .metric { background: #f9f9f9; padding: 15px; border-radius: 8px; text-align: center; }
+            .metric-value { font-size: 24px; font-weight: bold; color: #1a1a1a; }
+            .metric-label { font-size: 12px; color: #666; margin-top: 5px; }
+            .footer { margin-top: 40px; text-align: center; color: #999; font-size: 12px; }
+            @media print { body { padding: 20px; } }
+          </style>
+        </head>
+        <body>
+          <h1>📊 Analytics Report</h1>
+          <p>Generated on ${format(new Date(), "MMMM d, yyyy")} | Last ${dateRange} days</p>
+          
+          <div class="metric-grid">
+            <div class="metric">
+              <div class="metric-value">${data.totalEvents}</div>
+              <div class="metric-label">Total Events</div>
+            </div>
+            <div class="metric">
+              <div class="metric-value">${data.uniqueSessions}</div>
+              <div class="metric-label">Sessions</div>
+            </div>
+            <div class="metric">
+              <div class="metric-value">${data.totalApplications}</div>
+              <div class="metric-label">Applications</div>
+            </div>
+            <div class="metric">
+              <div class="metric-value">${data.conversionRate}%</div>
+              <div class="metric-label">Conversion Rate</div>
+            </div>
+          </div>
+
+          <h2>📅 Daily Activity</h2>
+          <table>
+            <thead><tr><th>Date</th><th>Events</th><th>Sessions</th></tr></thead>
+            <tbody>
+              ${data.eventsByDay.map(d => `<tr><td>${d.date}</td><td>${d.events}</td><td>${d.sessions}</td></tr>`).join("")}
+            </tbody>
+          </table>
+
+          <h2>📁 Events by Category</h2>
+          <table>
+            <thead><tr><th>Category</th><th>Count</th></tr></thead>
+            <tbody>
+              ${data.eventsByCategory.map(c => `<tr><td>${c.name}</td><td>${c.value}</td></tr>`).join("")}
+            </tbody>
+          </table>
+
+          <h2>🎯 Application Funnel</h2>
+          <table>
+            <thead><tr><th>Stage</th><th>Count</th><th>Percentage</th></tr></thead>
+            <tbody>
+              ${data.applicationFunnel.map(f => `<tr><td>${f.stage}</td><td>${f.count}</td><td>${f.percentage}%</td></tr>`).join("")}
+            </tbody>
+          </table>
+
+          <h2>📊 Fit Score Distribution</h2>
+          <table>
+            <thead><tr><th>Score Range</th><th>Count</th></tr></thead>
+            <tbody>
+              ${data.fitScoreDistribution.map(f => `<tr><td>${f.range}</td><td>${f.count}</td></tr>`).join("")}
+            </tbody>
+          </table>
+
+          <h2>🔥 Top Events</h2>
+          <table>
+            <thead><tr><th>Event</th><th>Count</th></tr></thead>
+            <tbody>
+              ${data.topEvents.map(e => `<tr><td>${e.name.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase())}</td><td>${e.count}</td></tr>`).join("")}
+            </tbody>
+          </table>
+
+          <div class="footer">
+            <p>Generated by CareerCopilot Analytics</p>
+          </div>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    printWindow.onload = () => {
+      printWindow.print();
+    };
+    
+    toast.success("PDF ready for download");
+  }, [data, dateRange]);
+
   if (authLoading || !user) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -196,17 +385,38 @@ const Analytics = () => {
               <h1 className="text-3xl font-bold text-foreground">Analytics</h1>
               <p className="text-muted-foreground">Track your job search performance and engagement</p>
             </div>
-            <Select value={dateRange} onValueChange={setDateRange}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Select range" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7">Last 7 days</SelectItem>
-                <SelectItem value="14">Last 14 days</SelectItem>
-                <SelectItem value="30">Last 30 days</SelectItem>
-                <SelectItem value="90">Last 90 days</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-3">
+              <Select value={dateRange} onValueChange={setDateRange}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Select range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7">Last 7 days</SelectItem>
+                  <SelectItem value="14">Last 14 days</SelectItem>
+                  <SelectItem value="30">Last 30 days</SelectItem>
+                  <SelectItem value="90">Last 90 days</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" disabled={!data || loading}>
+                    <Download className="w-4 h-4 mr-2" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={exportToCSV}>
+                    <FileDown className="w-4 h-4 mr-2" />
+                    Download as CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={exportToPDF}>
+                    <FileText className="w-4 h-4 mr-2" />
+                    Download as PDF
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </motion.div>
 
           {loading ? (
