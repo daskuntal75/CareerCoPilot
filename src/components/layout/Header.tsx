@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Rocket, Menu, X, LogOut, LayoutDashboard, FileText, BarChart3 } from "lucide-react";
+import { Rocket, Menu, X, LogOut, LayoutDashboard, FileText, BarChart3, Settings } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
@@ -106,6 +106,12 @@ const Header = () => {
                       )}
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/settings">
+                      <Settings className="w-4 h-4 mr-2" />
+                      Settings
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut}>
                     <LogOut className="w-4 h-4 mr-2" />
@@ -170,6 +176,9 @@ const Header = () => {
                         </Badge>
                       )}
                     </Button>
+                  </Link>
+                  <Link to="/settings" onClick={() => setMobileMenuOpen(false)}>
+                    <Button variant="ghost" className="w-full justify-start">Settings</Button>
                   </Link>
                 </>
               )}
