@@ -1,12 +1,32 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Download, Copy, RefreshCw, Check, FileText, FileType, MessageSquare } from "lucide-react";
-import { motion } from "framer-motion";
+import { Checkbox } from "@/components/ui/checkbox";
+import { 
+  ArrowLeft, Download, Copy, RefreshCw, Check, FileText, FileType, 
+  MessageSquare, ChevronDown, FileEdit, Sparkles, Target, MessageCircle
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { Document, Packer, Paragraph, TextRun, HeadingLevel } from "docx";
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
 import type { JobData } from "@/pages/App";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 
 interface CoverLetterEditorProps {
   content: string;
@@ -14,12 +34,49 @@ interface CoverLetterEditorProps {
   onContentChange: (content: string) => void;
   onBack: () => void;
   onGenerateInterviewPrep?: () => void;
+  onRegenerateCoverLetter?: (section: string, feedback: string, tips: string[]) => void;
+  isRegenerating?: boolean;
+  onGoToInterviewPrep?: () => void;
+  hasInterviewPrep?: boolean;
 }
 
-const CoverLetterEditor = ({ content, jobData, onContentChange, onBack, onGenerateInterviewPrep }: CoverLetterEditorProps) => {
+const regenerationSections = [
+  { key: "opening", label: "Opening Paragraph", description: "Regenerate the attention-grabbing introduction" },
+  { key: "skills", label: "Skills & Experience", description: "Regenerate the skills alignment section" },
+  { key: "achievements", label: "Key Achievements", description: "Regenerate achievement highlights" },
+  { key: "motivation", label: "Company Motivation", description: "Regenerate why this company section" },
+  { key: "closing", label: "Closing Paragraph", description: "Regenerate the call-to-action ending" },
+  { key: "full", label: "Full Cover Letter", description: "Regenerate the entire cover letter" },
+];
+
+const regenerationTips = [
+  { id: "more_specific", label: "Add more specific examples", description: "Include concrete details from experience" },
+  { id: "shorter", label: "Make it more concise", description: "Reduce word count, get to the point faster" },
+  { id: "longer", label: "Expand with more detail", description: "Add more depth and elaboration" },
+  { id: "formal", label: "More formal tone", description: "Professional, traditional language" },
+  { id: "conversational", label: "More conversational tone", description: "Friendly, approachable language" },
+  { id: "quantify", label: "Add more metrics/numbers", description: "Quantify achievements with data" },
+  { id: "passion", label: "Show more enthusiasm", description: "Express genuine interest and passion" },
+  { id: "unique", label: "Highlight unique value", description: "Emphasize differentiating factors" },
+];
+
+const CoverLetterEditor = ({ 
+  content, 
+  jobData, 
+  onContentChange, 
+  onBack, 
+  onGenerateInterviewPrep,
+  onRegenerateCoverLetter,
+  isRegenerating,
+  onGoToInterviewPrep,
+  hasInterviewPrep,
+}: CoverLetterEditorProps) => {
   const [copied, setCopied] = useState(false);
-  const [isRegenerating, setIsRegenerating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [showRegenerateDialog, setShowRegenerateDialog] = useState(false);
+  const [selectedSection, setSelectedSection] = useState<string | null>(null);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [selectedTips, setSelectedTips] = useState<string[]>([]);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(content);
@@ -49,6 +106,11 @@ const CoverLetterEditor = ({ content, jobData, onContentChange, onBack, onGenera
       if (response.error) throw new Error(response.error.message);
       
       const { pdf, filename } = response.data;
+      
+      if (!pdf) {
+        throw new Error("No PDF data received");
+      }
+      
       const byteCharacters = atob(pdf);
       const byteNumbers = new Array(byteCharacters.length);
       for (let i = 0; i < byteCharacters.length; i++) {
@@ -81,50 +143,96 @@ const CoverLetterEditor = ({ content, jobData, onContentChange, onBack, onGenera
     
     setIsExporting(true);
     try {
-      // Parse content into paragraphs
       const lines = content.split('\n');
       const paragraphs: Paragraph[] = [];
       
+      // Add title
+      paragraphs.push(new Paragraph({
+        children: [
+          new TextRun({ 
+            text: `Cover Letter - ${jobData.title} at ${jobData.company}`, 
+            bold: true, 
+            size: 32 
+          })
+        ],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 400 },
+      }));
+      
       for (const line of lines) {
         if (line.trim() === '') {
-          paragraphs.push(new Paragraph({ text: '' }));
+          paragraphs.push(new Paragraph({ text: '', spacing: { after: 120 } }));
         } else if (line.startsWith('## ')) {
           // Section header
           paragraphs.push(new Paragraph({
-            text: line.replace('## ', ''),
+            children: [
+              new TextRun({ 
+                text: line.replace('## ', ''), 
+                bold: true, 
+                size: 28 
+              })
+            ],
             heading: HeadingLevel.HEADING_2,
-            spacing: { before: 200, after: 100 },
+            spacing: { before: 300, after: 150 },
           }));
         } else if (line.startsWith('# ')) {
           // Main header
           paragraphs.push(new Paragraph({
-            text: line.replace('# ', ''),
+            children: [
+              new TextRun({ 
+                text: line.replace('# ', ''), 
+                bold: true, 
+                size: 32 
+              })
+            ],
             heading: HeadingLevel.HEADING_1,
-            spacing: { before: 200, after: 100 },
+            spacing: { before: 400, after: 200 },
           }));
-        } else if (line.startsWith('• ') || line.startsWith('- ')) {
+        } else if (line.startsWith('• ') || line.startsWith('- ') || line.startsWith('* ')) {
           // Bullet point
           paragraphs.push(new Paragraph({
-            children: [new TextRun({ text: line.replace(/^[•-]\s*/, ''), size: 24 })],
+            children: [new TextRun({ text: line.replace(/^[•\-\*]\s*/, ''), size: 24 })],
             bullet: { level: 0 },
+            spacing: { after: 80 },
           }));
-        } else if (line.startsWith('**') && line.endsWith('**')) {
-          // Bold text
+        } else if (line.match(/^\*\*.*\*\*$/)) {
+          // Bold text line
           paragraphs.push(new Paragraph({
             children: [new TextRun({ text: line.replace(/\*\*/g, ''), bold: true, size: 24 })],
+            spacing: { after: 120 },
           }));
         } else {
-          // Regular paragraph
+          // Regular paragraph - handle inline bold
+          const parts = line.split(/(\*\*[^*]+\*\*)/g);
+          const runs: TextRun[] = [];
+          
+          for (const part of parts) {
+            if (part.startsWith('**') && part.endsWith('**')) {
+              runs.push(new TextRun({ text: part.replace(/\*\*/g, ''), bold: true, size: 24 }));
+            } else if (part) {
+              runs.push(new TextRun({ text: part, size: 24 }));
+            }
+          }
+          
           paragraphs.push(new Paragraph({
-            children: [new TextRun({ text: line, size: 24 })],
-            spacing: { after: 100 },
+            children: runs,
+            spacing: { after: 120 },
           }));
         }
       }
       
       const doc = new Document({
         sections: [{
-          properties: {},
+          properties: {
+            page: {
+              margin: {
+                top: 1440, // 1 inch in twips
+                right: 1440,
+                bottom: 1440,
+                left: 1440,
+              },
+            },
+          },
           children: paragraphs,
         }],
       });
@@ -145,12 +253,34 @@ const CoverLetterEditor = ({ content, jobData, onContentChange, onBack, onGenera
     }
   };
 
-  const handleRegenerate = async () => {
-    setIsRegenerating(true);
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    // In a real app, this would call the AI again
-    toast.success("Cover letter regenerated");
-    setIsRegenerating(false);
+  const handleOpenRegenerateDialog = (sectionKey: string) => {
+    setSelectedSection(sectionKey);
+    setFeedbackText("");
+    setSelectedTips([]);
+    setShowRegenerateDialog(true);
+  };
+
+  const handleRegenerateSubmit = () => {
+    if (!feedbackText.trim() && selectedTips.length === 0) {
+      toast.error("Please provide feedback or select at least one improvement tip");
+      return;
+    }
+    
+    if (onRegenerateCoverLetter && selectedSection) {
+      onRegenerateCoverLetter(selectedSection, feedbackText, selectedTips);
+      setShowRegenerateDialog(false);
+      setSelectedSection(null);
+      setFeedbackText("");
+      setSelectedTips([]);
+    }
+  };
+
+  const toggleTip = (tipId: string) => {
+    setSelectedTips(prev => 
+      prev.includes(tipId) 
+        ? prev.filter(t => t !== tipId)
+        : [...prev, tipId]
+    );
   };
 
   const wordCount = content.trim().split(/\s+/).filter(Boolean).length;
@@ -180,20 +310,50 @@ const CoverLetterEditor = ({ content, jobData, onContentChange, onBack, onGenera
             </p>
           </div>
           
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRegenerate}
-              disabled={isRegenerating}
-            >
-              {isRegenerating ? (
-                <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-              ) : (
-                <RefreshCw className="w-4 h-4" />
-              )}
-              Regenerate
-            </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Navigate to Interview Prep if exists */}
+            {hasInterviewPrep && onGoToInterviewPrep && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onGoToInterviewPrep}
+              >
+                <MessageCircle className="w-4 h-4" />
+                View Interview Prep
+              </Button>
+            )}
+            
+            {/* Regenerate Dropdown */}
+            {onRegenerateCoverLetter && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" disabled={isRegenerating}>
+                    {isRegenerating ? (
+                      <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4" />
+                    )}
+                    Regenerate
+                    <ChevronDown className="w-4 h-4 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuLabel>Select section to regenerate</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {regenerationSections.map((section) => (
+                    <DropdownMenuItem
+                      key={section.key}
+                      onClick={() => handleOpenRegenerateDialog(section.key)}
+                      className="flex flex-col items-start gap-0.5 cursor-pointer"
+                    >
+                      <span className="font-medium">{section.label}</span>
+                      <span className="text-xs text-muted-foreground">{section.description}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            
             <Button
               variant="outline"
               size="sm"
@@ -257,8 +417,13 @@ const CoverLetterEditor = ({ content, jobData, onContentChange, onBack, onGenera
                 variant="accent" 
                 className="w-full justify-start"
                 onClick={handleDownloadPDF}
+                disabled={isExporting}
               >
-                <Download className="w-4 h-4" />
+                {isExporting ? (
+                  <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
                 Download PDF
               </Button>
               
@@ -266,6 +431,7 @@ const CoverLetterEditor = ({ content, jobData, onContentChange, onBack, onGenera
                 variant="outline" 
                 className="w-full justify-start"
                 onClick={handleDownloadDOCX}
+                disabled={isExporting}
               >
                 <FileType className="w-4 h-4" />
                 Download DOCX
@@ -281,7 +447,7 @@ const CoverLetterEditor = ({ content, jobData, onContentChange, onBack, onGenera
               </Button>
             </div>
 
-            {onGenerateInterviewPrep && (
+            {onGenerateInterviewPrep && !hasInterviewPrep && (
               <div className="mt-6 pt-6 border-t border-border">
                 <h4 className="text-sm font-medium text-foreground mb-3">Next Step</h4>
                 <Button 
@@ -296,25 +462,97 @@ const CoverLetterEditor = ({ content, jobData, onContentChange, onBack, onGenera
             )}
 
             <div className="mt-6 pt-6 border-t border-border">
-              <h4 className="text-sm font-medium text-foreground mb-3">Tips</h4>
-              <ul className="text-xs text-muted-foreground space-y-2">
-                <li className="flex items-start gap-2">
-                  <span className="text-accent">•</span>
-                  Review for your personal voice
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-accent">•</span>
-                  Add specific details if needed
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-accent">•</span>
-                  Keep it under 400 words
-                </li>
-              </ul>
+              <h4 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-accent" />
+                Quick Improvements
+              </h4>
+              <div className="space-y-2">
+                {regenerationTips.slice(0, 4).map((tip) => (
+                  <button
+                    key={tip.id}
+                    onClick={() => handleOpenRegenerateDialog("full")}
+                    className="w-full text-left text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 p-2 rounded-lg transition-colors flex items-start gap-2"
+                  >
+                    <Target className="w-3 h-3 mt-0.5 flex-shrink-0 text-accent" />
+                    {tip.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </motion.div>
       </div>
+
+      {/* Regeneration Dialog */}
+      <Dialog open={showRegenerateDialog} onOpenChange={setShowRegenerateDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileEdit className="w-5 h-5 text-accent" />
+              Regenerate {selectedSection ? regenerationSections.find(s => s.key === selectedSection)?.label : "Section"}
+            </DialogTitle>
+            <DialogDescription>
+              Help us understand what you'd like to improve. Your feedback is required to ensure we generate content that meets your expectations.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">
+                What would you like to change? <span className="text-destructive">*</span>
+              </label>
+              <Textarea
+                value={feedbackText}
+                onChange={(e) => setFeedbackText(e.target.value)}
+                placeholder="Please describe what wasn't working and what you'd like instead. Be as specific as possible..."
+                className="min-h-[100px]"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-foreground mb-3 block">
+                Select improvement areas (optional but recommended)
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {regenerationTips.map((tip) => (
+                  <label
+                    key={tip.id}
+                    className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
+                      selectedTips.includes(tip.id) 
+                        ? "border-accent bg-accent/5" 
+                        : "border-border hover:border-accent/50"
+                    }`}
+                  >
+                    <Checkbox
+                      checked={selectedTips.includes(tip.id)}
+                      onCheckedChange={() => toggleTip(tip.id)}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <div className="text-sm font-medium">{tip.label}</div>
+                      <div className="text-xs text-muted-foreground">{tip.description}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRegenerateDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="hero" 
+              onClick={handleRegenerateSubmit}
+              disabled={!feedbackText.trim() && selectedTips.length === 0}
+            >
+              <RefreshCw className="w-4 h-4" />
+              Regenerate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -418,6 +418,14 @@ const AppPage = () => {
                   onContentChange={handleCoverLetterChange}
                   onBack={() => setCurrentStep("analysis")}
                   onGenerateInterviewPrep={() => handleGenerateInterviewPrep()}
+                  onRegenerateCoverLetter={(section, feedback, tips) => {
+                    // TODO: Implement section-based cover letter regeneration
+                    toast.info(`Regenerating ${section} with your feedback...`);
+                    handleGenerateCoverLetter();
+                  }}
+                  isRegenerating={isLoading}
+                  hasInterviewPrep={!!interviewPrep}
+                  onGoToInterviewPrep={() => setCurrentStep("interview")}
                 />
               )}
 
@@ -426,8 +434,12 @@ const AppPage = () => {
                   data={interviewPrep}
                   jobData={jobData}
                   onBack={() => setCurrentStep("editor")}
-                  onRegenerateSection={(section) => handleGenerateInterviewPrep(section)}
+                  onRegenerateSection={(section, feedback, tips) => {
+                    toast.info(`Regenerating ${section} with your feedback...`);
+                    handleGenerateInterviewPrep(section);
+                  }}
                   isRegenerating={isLoading}
+                  onGoToCoverLetter={() => setCurrentStep("editor")}
                 />
               )}
             </motion.div>
