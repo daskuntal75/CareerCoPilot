@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
@@ -8,6 +8,7 @@ import AnalysisResults from "@/components/app/AnalysisResults";
 import CoverLetterEditor from "@/components/app/CoverLetterEditor";
 import InterviewPrep, { InterviewPrepData } from "@/components/app/InterviewPrep";
 import AppStepper from "@/components/app/AppStepper";
+import GenerationProgress, { GenerationStage } from "@/components/app/GenerationProgress";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -53,6 +54,8 @@ const AppPage = () => {
   const [applicationId, setApplicationId] = useState<string | null>(id || null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [generationStage, setGenerationStage] = useState<GenerationStage>("analyzing");
+  const [generationType, setGenerationType] = useState<"cover-letter" | "interview-prep">("cover-letter");
 
   // Load existing application if ID provided
   useEffect(() => {
@@ -224,8 +227,14 @@ const AppPage = () => {
     if (!jobData || !resumeData) return;
     
     setIsLoading(true);
+    setGenerationType("cover-letter");
+    setGenerationStage("analyzing");
     
     try {
+      // Simulate stage progression
+      const stageTimer1 = setTimeout(() => setGenerationStage("drafting"), 3000);
+      const stageTimer2 = setTimeout(() => setGenerationStage("refining"), 8000);
+      
       // RAG-grounded cover letter generation using only verified resume chunks
       const response = await supabase.functions.invoke("generate-cover-letter", {
         body: {
@@ -239,7 +248,13 @@ const AppPage = () => {
         },
       });
 
+      clearTimeout(stageTimer1);
+      clearTimeout(stageTimer2);
+
       if (response.error) throw new Error(response.error.message);
+      
+      setGenerationStage("complete");
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       setCoverLetter(response.data.coverLetter);
       setCurrentStep("editor");
@@ -257,12 +272,18 @@ const AppPage = () => {
     }
   };
 
-  const handleGenerateInterviewPrep = async () => {
+  const handleGenerateInterviewPrep = async (sectionToRegenerate?: string) => {
     if (!jobData || !resumeData) return;
     
     setIsLoading(true);
+    setGenerationType("interview-prep");
+    setGenerationStage("analyzing");
     
     try {
+      // Simulate stage progression
+      const stageTimer1 = setTimeout(() => setGenerationStage("drafting"), 4000);
+      const stageTimer2 = setTimeout(() => setGenerationStage("refining"), 10000);
+      
       const response = await supabase.functions.invoke("generate-interview-prep", {
         body: {
           resumeContent: resumeData.content,
@@ -270,18 +291,33 @@ const AppPage = () => {
           jobTitle: jobData.title,
           company: jobData.company,
           analysisData,
+          sectionToRegenerate,
+          existingData: sectionToRegenerate ? interviewPrep : undefined,
         },
       });
 
+      clearTimeout(stageTimer1);
+      clearTimeout(stageTimer2);
+
       if (response.error) throw new Error(response.error.message);
       
-      setInterviewPrep(response.data);
-      setCurrentStep("interview");
-
-      if (user) {
-        await saveApplication({
-          interview_prep: response.data,
-        });
+      setGenerationStage("complete");
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // If regenerating a section, merge the data
+      if (sectionToRegenerate && interviewPrep) {
+        const updatedPrep = { ...interviewPrep, ...response.data };
+        setInterviewPrep(updatedPrep);
+        if (user) {
+          await saveApplication({ interview_prep: updatedPrep });
+        }
+        toast.success(`${sectionToRegenerate} regenerated successfully`);
+      } else {
+        setInterviewPrep(response.data);
+        setCurrentStep("interview");
+        if (user) {
+          await saveApplication({ interview_prep: response.data });
+        }
       }
     } catch (error) {
       console.error("Error generating interview prep:", error);
@@ -316,15 +352,16 @@ const AppPage = () => {
           </div>
 
           {/* Loading Overlay */}
-          {isLoading && (
+          {isLoading && (currentStep === "analysis" || currentStep === "editor") && (
+            <GenerationProgress currentStage={generationStage} type={generationType} />
+          )}
+          
+          {/* Simple loading for job analysis */}
+          {isLoading && currentStep === "job" && (
             <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center">
               <div className="text-center">
                 <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                <p className="text-lg font-medium text-foreground">
-                  {currentStep === "job" ? "Analyzing job fit..." : 
-                   currentStep === "analysis" ? "Generating cover letter..." :
-                   "Preparing interview questions..."}
-                </p>
+                <p className="text-lg font-medium text-foreground">Analyzing job fit...</p>
                 <p className="text-sm text-muted-foreground">This may take a moment</p>
               </div>
             </div>
@@ -367,7 +404,7 @@ const AppPage = () => {
                   jobData={jobData}
                   onContentChange={handleCoverLetterChange}
                   onBack={() => setCurrentStep("analysis")}
-                  onGenerateInterviewPrep={handleGenerateInterviewPrep}
+                  onGenerateInterviewPrep={() => handleGenerateInterviewPrep()}
                 />
               )}
 
@@ -376,6 +413,8 @@ const AppPage = () => {
                   data={interviewPrep}
                   jobData={jobData}
                   onBack={() => setCurrentStep("editor")}
+                  onRegenerateSection={(section) => handleGenerateInterviewPrep(section)}
+                  isRegenerating={isLoading}
                 />
               )}
             </motion.div>
