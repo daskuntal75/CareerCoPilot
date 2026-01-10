@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useNotifications } from "@/hooks/useNotifications";
 import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
+import UsageWidget from "@/components/dashboard/UsageWidget";
 
 interface Application {
   id: string;
@@ -184,28 +185,36 @@ const Dashboard = () => {
             </Button>
           </motion.div>
 
-          {/* Stats */}
+          {/* Stats and Usage */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8"
+            className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-8"
           >
-            <div className="bg-card border border-border rounded-xl p-4">
-              <div className="text-2xl font-bold text-foreground">{stats.total}</div>
-              <div className="text-sm text-muted-foreground">Total Applications</div>
+            {/* Stats Cards */}
+            <div className="lg:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-card border border-border rounded-xl p-4">
+                <div className="text-2xl font-bold text-foreground">{stats.total}</div>
+                <div className="text-sm text-muted-foreground">Total Applications</div>
+              </div>
+              <div className="bg-card border border-border rounded-xl p-4">
+                <div className="text-2xl font-bold text-blue-600">{stats.applied}</div>
+                <div className="text-sm text-muted-foreground">Applied</div>
+              </div>
+              <div className="bg-card border border-border rounded-xl p-4">
+                <div className="text-2xl font-bold text-purple-600">{stats.interviewing}</div>
+                <div className="text-sm text-muted-foreground">Interviewing</div>
+              </div>
+              <div className="bg-card border border-border rounded-xl p-4">
+                <div className="text-2xl font-bold text-success">{stats.offers}</div>
+                <div className="text-sm text-muted-foreground">Offers</div>
+              </div>
             </div>
-            <div className="bg-card border border-border rounded-xl p-4">
-              <div className="text-2xl font-bold text-blue-600">{stats.applied}</div>
-              <div className="text-sm text-muted-foreground">Applied</div>
-            </div>
-            <div className="bg-card border border-border rounded-xl p-4">
-              <div className="text-2xl font-bold text-purple-600">{stats.interviewing}</div>
-              <div className="text-sm text-muted-foreground">Interviewing</div>
-            </div>
-            <div className="bg-card border border-border rounded-xl p-4">
-              <div className="text-2xl font-bold text-success">{stats.offers}</div>
-              <div className="text-sm text-muted-foreground">Offers</div>
+
+            {/* Usage Widget */}
+            <div className="lg:col-span-1">
+              <UsageWidget />
             </div>
           </motion.div>
 

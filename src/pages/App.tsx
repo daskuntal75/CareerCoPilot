@@ -362,6 +362,20 @@ const AppPage = () => {
   const handleGenerateInterviewPrep = async (sectionToRegenerate?: string) => {
     if (!jobData || !detailedResume) return;
     
+    // Check usage limits for free tier (only for new generations, not regenerations)
+    if (!sectionToRegenerate && !canUseFeature("interview_prep")) {
+      toast.error(
+        "Interview prep is a Pro feature. Upgrade to access interview preparation!",
+        {
+          action: {
+            label: "Upgrade",
+            onClick: () => navigate("/pricing"),
+          },
+        }
+      );
+      return;
+    }
+    
     setIsLoading(true);
     setGenerationType("interview-prep");
     setGenerationStage("analyzing");
@@ -371,6 +385,16 @@ const AppPage = () => {
     setAbortController(controller);
     
     try {
+      // Increment usage before generation (only for new generations)
+      if (!sectionToRegenerate) {
+        const usageIncremented = await incrementUsage("interview_prep");
+        if (!usageIncremented && limits.interview_prep !== -1) {
+          toast.error("Failed to track usage. Please try again.");
+          setIsLoading(false);
+          return;
+        }
+      }
+
       // For interview prep, we use non-streaming since we need structured JSON
       // The function handles retries and timeouts internally
       setGenerationStage("drafting");
