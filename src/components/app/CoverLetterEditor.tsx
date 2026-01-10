@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -96,10 +96,37 @@ const CoverLetterEditor = ({
     renameVersion,
   } = useDocumentVersions(applicationId || null, "cover_letter");
 
+  // Track previous content for auto-versioning
+  const previousContentRef = useRef<string>(content);
+  const lastAutoSaveRef = useRef<number>(Date.now());
+
   // Save initial version when content first loads
   useEffect(() => {
     if (content && applicationId && versions.length === 0) {
       saveVersion(content, null, "initial");
+      previousContentRef.current = content;
+    }
+  }, [content, applicationId, versions.length]);
+
+  // Auto-version after regeneration (significant content change)
+  useEffect(() => {
+    if (!content || !applicationId || versions.length === 0) return;
+    
+    const previousContent = previousContentRef.current;
+    const timeSinceLastSave = Date.now() - lastAutoSaveRef.current;
+    
+    // Calculate word count difference
+    const previousWordCount = previousContent.trim().split(/\s+/).filter(Boolean).length;
+    const currentWordCount = content.trim().split(/\s+/).filter(Boolean).length;
+    const wordCountDiff = Math.abs(currentWordCount - previousWordCount);
+    
+    // Auto-save if content changed significantly (>20% words changed) and at least 30 seconds since last save
+    const significantChange = wordCountDiff > Math.max(previousWordCount * 0.2, 20);
+    
+    if (significantChange && timeSinceLastSave > 30000) {
+      saveVersion(content, null, "regenerated", `Auto-saved after changes`);
+      previousContentRef.current = content;
+      lastAutoSaveRef.current = Date.now();
     }
   }, [content, applicationId, versions.length]);
 

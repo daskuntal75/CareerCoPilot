@@ -441,6 +441,13 @@ const AppPage = () => {
                   }}
                   isRegenerating={isLoading}
                   onGoToCoverLetter={() => setCurrentStep("editor")}
+                  applicationId={applicationId}
+                  onDataChange={(newData) => {
+                    setInterviewPrep(newData);
+                    if (user && applicationId) {
+                      saveApplication({ interview_prep: newData });
+                    }
+                  }}
                 />
               )}
             </motion.div>
