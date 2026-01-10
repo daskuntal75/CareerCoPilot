@@ -10,12 +10,13 @@ import type { JobData } from "@/pages/App";
 interface JobDescriptionInputProps {
   onSubmit: (data: JobData) => void;
   onBack: () => void;
+  initialData?: JobData | null;
 }
 
-const JobDescriptionInput = ({ onSubmit, onBack }: JobDescriptionInputProps) => {
-  const [company, setCompany] = useState("");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+const JobDescriptionInput = ({ onSubmit, onBack, initialData }: JobDescriptionInputProps) => {
+  const [company, setCompany] = useState(initialData?.company || "");
+  const [title, setTitle] = useState(initialData?.title || "");
+  const [description, setDescription] = useState(initialData?.description || "");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [errors, setErrors] = useState<{ company?: string; title?: string; description?: string }>({});
 

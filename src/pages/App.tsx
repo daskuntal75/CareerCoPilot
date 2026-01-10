@@ -1,18 +1,24 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import ResumeUpload from "@/components/app/ResumeUpload";
 import JobDescriptionInput from "@/components/app/JobDescriptionInput";
 import AnalysisResults from "@/components/app/AnalysisResults";
 import CoverLetterEditor from "@/components/app/CoverLetterEditor";
+import InterviewPrep, { InterviewPrepData } from "@/components/app/InterviewPrep";
 import AppStepper from "@/components/app/AppStepper";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
-export type AppStep = "upload" | "job" | "analysis" | "editor";
+export type AppStep = "upload" | "job" | "analysis" | "editor" | "interview";
 
 export interface ResumeData {
   fileName: string;
   content: string;
+  filePath?: string | null;
 }
 
 export interface JobData {
@@ -34,57 +40,259 @@ export interface AnalysisData {
 }
 
 const AppPage = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  
   const [currentStep, setCurrentStep] = useState<AppStep>("upload");
   const [resumeData, setResumeData] = useState<ResumeData | null>(null);
   const [jobData, setJobData] = useState<JobData | null>(null);
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
   const [coverLetter, setCoverLetter] = useState<string>("");
+  const [interviewPrep, setInterviewPrep] = useState<InterviewPrepData | null>(null);
+  const [applicationId, setApplicationId] = useState<string | null>(id || null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleResumeUpload = (data: ResumeData) => {
+  // Load existing application if ID provided
+  useEffect(() => {
+    if (id && user) {
+      loadApplication(id);
+    }
+  }, [id, user]);
+
+  const loadApplication = async (appId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("applications")
+        .select("*")
+        .eq("id", appId)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data) {
+        toast.error("Application not found");
+        navigate("/dashboard");
+        return;
+      }
+
+      setJobData({
+        company: data.company,
+        title: data.job_title,
+        description: data.job_description,
+      });
+
+      if (data.resume_content) {
+        setResumeData({
+          fileName: data.resume_file_path?.split("/").pop() || "resume.pdf",
+          content: data.resume_content,
+          filePath: data.resume_file_path,
+        });
+      }
+
+      if (data.requirements_analysis) {
+        const analysis = data.requirements_analysis as any;
+        setAnalysisData({
+          fitScore: data.fit_score || analysis.fitScore,
+          fitLevel: data.fit_level as any || analysis.fitLevel,
+          requirements: analysis.requirements || [],
+        });
+      }
+
+      if (data.cover_letter) {
+        setCoverLetter(data.cover_letter);
+      }
+
+      if (data.interview_prep) {
+        setInterviewPrep(data.interview_prep as any);
+      }
+
+      // Set appropriate step based on data
+      if (data.interview_prep) {
+        setCurrentStep("interview");
+      } else if (data.cover_letter) {
+        setCurrentStep("editor");
+      } else if (data.requirements_analysis) {
+        setCurrentStep("analysis");
+      } else if (data.resume_content) {
+        setCurrentStep("job");
+      }
+    } catch (error) {
+      console.error("Error loading application:", error);
+      toast.error("Failed to load application");
+    }
+  };
+
+  const saveApplication = async (updates: Record<string, any>) => {
+    if (!user) return null;
+    
+    setIsSaving(true);
+    try {
+      if (applicationId) {
+        const { error } = await supabase
+          .from("applications")
+          .update(updates)
+          .eq("id", applicationId);
+        
+        if (error) throw error;
+        return applicationId;
+      } else {
+        const { data, error } = await supabase
+          .from("applications")
+          .insert({
+            user_id: user.id,
+            company: jobData?.company || updates.company || "Unknown Company",
+            job_title: jobData?.title || updates.job_title || "Unknown Position",
+            job_description: jobData?.description || updates.job_description || "",
+            ...updates,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        setApplicationId(data.id);
+        return data.id;
+      }
+    } catch (error) {
+      console.error("Error saving application:", error);
+      toast.error("Failed to save application");
+      return null;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleResumeUpload = async (data: ResumeData) => {
     setResumeData(data);
     setCurrentStep("job");
-  };
-
-  const handleJobSubmit = (data: JobData) => {
-    setJobData(data);
-    // Simulate analysis
-    const mockAnalysis: AnalysisData = {
-      fitScore: 78,
-      fitLevel: "strong",
-      requirements: [
-        { requirement: "10+ years of product leadership experience", status: "yes", evidence: "15 years as Director and Sr. Director of Product" },
-        { requirement: "Enterprise B2B SaaS experience", status: "yes", evidence: "Led B2B products at Splunk, VMware" },
-        { requirement: "Cross-functional team leadership", status: "yes", evidence: "Managed teams of 25+ across Engineering, Design, Data Science" },
-        { requirement: "Data-driven decision making", status: "yes", evidence: "Built analytics platforms, defined KPIs for product success" },
-        { requirement: "AI/ML product experience", status: "partial", evidence: "Experience with ML-powered features, not core AI products" },
-        { requirement: "Go-to-market strategy", status: "yes", evidence: "Led product launches generating $50M+ revenue" },
-        { requirement: "Stakeholder management", status: "yes", evidence: "Presented to C-suite, managed VP relationships" },
-        { requirement: "Agile/Scrum methodology", status: "yes", evidence: "Implemented agile across 4 product teams" },
-        { requirement: "Healthcare industry experience", status: "no", evidence: "No direct healthcare experience" },
-        { requirement: "Remote team management", status: "partial", evidence: "Managed hybrid teams, limited fully remote" },
-      ],
-    };
-    setAnalysisData(mockAnalysis);
-    setCurrentStep("analysis");
-  };
-
-  const handleGenerateCoverLetter = () => {
-    // Mock cover letter
-    const mockLetter = `Dear Hiring Manager,
-
-When I led the development of Splunk's hybrid cloud security platform, I didn't just ship features—I transformed how 2,000+ enterprise customers detected threats, reducing their mean time to detection by 65%. That same obsession with measurable customer outcomes is exactly what drew me to ${jobData?.company}'s ${jobData?.title} role.
-
-Your job posting emphasizes the need for a product leader who can drive cross-functional alignment while maintaining a data-driven approach. At Splunk, I managed a portfolio of security products generating over $400M in ARR, working daily with Engineering, Design, and Sales to prioritize features that moved the needle. When our largest enterprise customer flagged onboarding friction as their #1 pain point, I led the initiative that reduced time-to-value from 2 days to under 2 hours—resulting in a 40% improvement in customer satisfaction scores.
-
-The requirement for "10+ years of product leadership" aligns directly with my 15-year trajectory from PM to Director, where I've consistently grown teams (from 3 to 25), expanded product scope (single feature to full platform), and increased revenue responsibility ($10M to $400M+). My experience building products at the intersection of security and data also positions me well for the AI-driven future your roadmap suggests.
-
-I'm particularly excited about ${jobData?.company}'s mission and would welcome the opportunity to discuss how my experience scaling B2B platforms could accelerate your product vision.
-
-Best regards,
-[Your Name]`;
     
-    setCoverLetter(mockLetter);
-    setCurrentStep("editor");
+    if (user) {
+      await saveApplication({
+        resume_content: data.content,
+        resume_file_path: data.filePath,
+      });
+    }
+  };
+
+  const handleJobSubmit = async (data: JobData) => {
+    setJobData(data);
+    setIsLoading(true);
+
+    try {
+      // Call AI for job fit analysis
+      const response = await supabase.functions.invoke("analyze-job-fit", {
+        body: {
+          resumeContent: resumeData?.content,
+          jobDescription: data.description,
+          jobTitle: data.title,
+          company: data.company,
+        },
+      });
+
+      if (response.error) throw new Error(response.error.message);
+      
+      const analysis: AnalysisData = {
+        fitScore: response.data.fitScore,
+        fitLevel: response.data.fitLevel,
+        requirements: response.data.requirements,
+      };
+      
+      setAnalysisData(analysis);
+      setCurrentStep("analysis");
+
+      if (user) {
+        await saveApplication({
+          company: data.company,
+          job_title: data.title,
+          job_description: data.description,
+          fit_score: analysis.fitScore,
+          fit_level: analysis.fitLevel,
+          requirements_analysis: analysis,
+        });
+      }
+    } catch (error) {
+      console.error("Error analyzing job fit:", error);
+      toast.error("Failed to analyze job fit. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGenerateCoverLetter = async () => {
+    if (!jobData || !resumeData) return;
+    
+    setIsLoading(true);
+    
+    try {
+      const response = await supabase.functions.invoke("generate-cover-letter", {
+        body: {
+          resumeContent: resumeData.content,
+          jobDescription: jobData.description,
+          jobTitle: jobData.title,
+          company: jobData.company,
+          analysisData,
+        },
+      });
+
+      if (response.error) throw new Error(response.error.message);
+      
+      setCoverLetter(response.data.coverLetter);
+      setCurrentStep("editor");
+
+      if (user) {
+        await saveApplication({
+          cover_letter: response.data.coverLetter,
+        });
+      }
+    } catch (error) {
+      console.error("Error generating cover letter:", error);
+      toast.error("Failed to generate cover letter. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGenerateInterviewPrep = async () => {
+    if (!jobData || !resumeData) return;
+    
+    setIsLoading(true);
+    
+    try {
+      const response = await supabase.functions.invoke("generate-interview-prep", {
+        body: {
+          resumeContent: resumeData.content,
+          jobDescription: jobData.description,
+          jobTitle: jobData.title,
+          company: jobData.company,
+          analysisData,
+        },
+      });
+
+      if (response.error) throw new Error(response.error.message);
+      
+      setInterviewPrep(response.data);
+      setCurrentStep("interview");
+
+      if (user) {
+        await saveApplication({
+          interview_prep: response.data,
+        });
+      }
+    } catch (error) {
+      console.error("Error generating interview prep:", error);
+      toast.error("Failed to generate interview prep. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCoverLetterChange = async (content: string) => {
+    setCoverLetter(content);
+    
+    // Debounced save
+    if (user && applicationId) {
+      await saveApplication({ cover_letter: content });
+    }
   };
 
   const goToStep = (step: AppStep) => {
@@ -101,6 +309,21 @@ Best regards,
           <div className="mb-8">
             <AppStepper currentStep={currentStep} onStepClick={goToStep} />
           </div>
+
+          {/* Loading Overlay */}
+          {isLoading && (
+            <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center">
+              <div className="text-center">
+                <div className="w-12 h-12 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                <p className="text-lg font-medium text-foreground">
+                  {currentStep === "job" ? "Analyzing job fit..." : 
+                   currentStep === "analysis" ? "Generating cover letter..." :
+                   "Preparing interview questions..."}
+                </p>
+                <p className="text-sm text-muted-foreground">This may take a moment</p>
+              </div>
+            </div>
+          )}
 
           {/* Step Content */}
           <AnimatePresence mode="wait">
@@ -119,6 +342,7 @@ Best regards,
                 <JobDescriptionInput 
                   onSubmit={handleJobSubmit} 
                   onBack={() => setCurrentStep("upload")}
+                  initialData={jobData}
                 />
               )}
               
@@ -135,12 +359,29 @@ Best regards,
                 <CoverLetterEditor 
                   content={coverLetter}
                   jobData={jobData}
-                  onContentChange={setCoverLetter}
+                  onContentChange={handleCoverLetterChange}
                   onBack={() => setCurrentStep("analysis")}
+                  onGenerateInterviewPrep={handleGenerateInterviewPrep}
+                />
+              )}
+
+              {currentStep === "interview" && jobData && interviewPrep && (
+                <InterviewPrep
+                  data={interviewPrep}
+                  jobData={jobData}
+                  onBack={() => setCurrentStep("editor")}
                 />
               )}
             </motion.div>
           </AnimatePresence>
+
+          {/* Save indicator */}
+          {isSaving && (
+            <div className="fixed bottom-4 right-4 bg-card border border-border rounded-lg px-3 py-2 shadow-lg flex items-center gap-2">
+              <div className="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+              <span className="text-sm text-muted-foreground">Saving...</span>
+            </div>
+          )}
         </div>
       </main>
 

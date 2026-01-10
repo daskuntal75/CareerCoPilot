@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Download, Copy, RefreshCw, Check, FileText, FileType } from "lucide-react";
+import { ArrowLeft, Download, Copy, RefreshCw, Check, FileText, FileType, MessageSquare } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import type { JobData } from "@/pages/App";
 
 interface CoverLetterEditorProps {
@@ -11,11 +12,13 @@ interface CoverLetterEditorProps {
   jobData: JobData;
   onContentChange: (content: string) => void;
   onBack: () => void;
+  onGenerateInterviewPrep?: () => void;
 }
 
-const CoverLetterEditor = ({ content, jobData, onContentChange, onBack }: CoverLetterEditorProps) => {
+const CoverLetterEditor = ({ content, jobData, onContentChange, onBack, onGenerateInterviewPrep }: CoverLetterEditorProps) => {
   const [copied, setCopied] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(content);
@@ -24,14 +27,49 @@ const CoverLetterEditor = ({ content, jobData, onContentChange, onBack }: CoverL
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleDownloadPDF = () => {
-    // In a real app, this would generate a PDF
-    toast.success("PDF download started");
+  const handleDownloadPDF = async () => {
+    setIsExporting(true);
+    try {
+      const response = await supabase.functions.invoke("export-pdf", {
+        body: { content, title: jobData.title, company: jobData.company, jobTitle: jobData.title },
+      });
+      
+      if (response.error) throw new Error(response.error.message);
+      
+      const { pdf, filename } = response.data;
+      const byteCharacters = atob(pdf);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: "application/pdf" });
+      
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      toast.success("PDF downloaded!");
+    } catch (error) {
+      console.error("PDF export error:", error);
+      toast.error("Failed to export PDF");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleDownloadDOCX = () => {
-    // In a real app, this would generate a DOCX
-    toast.success("DOCX download started");
+    const blob = new Blob([content], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `CoverLetter_${jobData.company.replace(/\s+/g, "_")}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Document downloaded!");
   };
 
   const handleRegenerate = async () => {
@@ -169,6 +207,20 @@ const CoverLetterEditor = ({ content, jobData, onContentChange, onBack }: CoverL
                 Copy as Text
               </Button>
             </div>
+
+            {onGenerateInterviewPrep && (
+              <div className="mt-6 pt-6 border-t border-border">
+                <h4 className="text-sm font-medium text-foreground mb-3">Next Step</h4>
+                <Button 
+                  variant="hero" 
+                  className="w-full"
+                  onClick={onGenerateInterviewPrep}
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  Prepare for Interview
+                </Button>
+              </div>
+            )}
 
             <div className="mt-6 pt-6 border-t border-border">
               <h4 className="text-sm font-medium text-foreground mb-3">Tips</h4>
