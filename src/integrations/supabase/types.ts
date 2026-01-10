@@ -71,6 +71,47 @@ export type Database = {
         }
         Relationships: []
       }
+      job_requirements: {
+        Row: {
+          application_id: string
+          category: string | null
+          created_at: string
+          id: string
+          is_critical: boolean | null
+          metadata: Json | null
+          requirement_index: number
+          requirement_text: string
+        }
+        Insert: {
+          application_id: string
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_critical?: boolean | null
+          metadata?: Json | null
+          requirement_index: number
+          requirement_text: string
+        }
+        Update: {
+          application_id?: string
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_critical?: boolean | null
+          metadata?: Json | null
+          requirement_index?: number
+          requirement_text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_requirements_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -97,6 +138,95 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      requirement_matches: {
+        Row: {
+          chunk_id: string
+          created_at: string
+          id: string
+          is_verified: boolean | null
+          match_evidence: string | null
+          requirement_id: string
+          similarity_score: number
+        }
+        Insert: {
+          chunk_id: string
+          created_at?: string
+          id?: string
+          is_verified?: boolean | null
+          match_evidence?: string | null
+          requirement_id: string
+          similarity_score: number
+        }
+        Update: {
+          chunk_id?: string
+          created_at?: string
+          id?: string
+          is_verified?: boolean | null
+          match_evidence?: string | null
+          requirement_id?: string
+          similarity_score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "requirement_matches_chunk_id_fkey"
+            columns: ["chunk_id"]
+            isOneToOne: false
+            referencedRelation: "resume_chunks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "requirement_matches_requirement_id_fkey"
+            columns: ["requirement_id"]
+            isOneToOne: false
+            referencedRelation: "job_requirements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      resume_chunks: {
+        Row: {
+          application_id: string | null
+          chunk_index: number
+          chunk_type: string | null
+          content: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          token_count: number | null
+          user_id: string
+        }
+        Insert: {
+          application_id?: string | null
+          chunk_index: number
+          chunk_type?: string | null
+          content: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          token_count?: number | null
+          user_id: string
+        }
+        Update: {
+          application_id?: string | null
+          chunk_index?: number
+          chunk_type?: string | null
+          content?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          token_count?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resume_chunks_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
