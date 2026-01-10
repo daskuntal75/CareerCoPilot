@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ChevronDown, ChevronRight, MessageCircle, Lightbulb, AlertTriangle, HelpCircle, Building, Target, TrendingUp, Users, Briefcase, RefreshCw } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, MessageCircle, Lightbulb, AlertTriangle, HelpCircle, Building, Target, TrendingUp, Users, Briefcase, RefreshCw, Download, Play } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import type { JobData } from "@/pages/App";
+import InterviewPractice from "./InterviewPractice";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -217,6 +220,8 @@ const QuestionCard = ({ question, index }: { question: InterviewQuestion; index:
 
 const InterviewPrep = ({ data, jobData, onBack, onRegenerateSection, isRegenerating }: InterviewPrepProps) => {
   const [activeTab, setActiveTab] = useState<"questions" | "research" | "strategy">("questions");
+  const [showPracticeMode, setShowPracticeMode] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const regenerationSections = [
     { key: "questions", label: "Interview Questions", description: "Regenerate predicted questions & STAR answers" },
@@ -227,6 +232,45 @@ const InterviewPrep = ({ data, jobData, onBack, onRegenerateSection, isRegenerat
     { key: "strategicAnalysis", label: "SWOT Analysis", description: "Regenerate strategic analysis" },
     { key: "uniqueValueProposition", label: "Value Proposition", description: "Regenerate your unique value prop" },
   ];
+
+  const handleExportPDF = async () => {
+    setIsExporting(true);
+    try {
+      const response = await supabase.functions.invoke("export-pdf", {
+        body: {
+          type: "interview-prep",
+          interviewPrepData: data,
+          jobTitle: jobData.title,
+          company: jobData.company,
+        },
+      });
+
+      if (response.error) throw new Error(response.error.message);
+
+      const { pdf, filename } = response.data;
+      const byteCharacters = atob(pdf);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: "application/pdf" });
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      toast.success("Interview prep PDF downloaded!");
+    } catch (error) {
+      console.error("PDF export error:", error);
+      toast.error("Failed to export PDF");
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // Handle both old format (string[]) and new format (object with categories)
   const renderQuestionsToAsk = () => {
@@ -299,38 +343,73 @@ const InterviewPrep = ({ data, jobData, onBack, onRegenerateSection, isRegenerat
             </p>
           </div>
           
-          {onRegenerateSection && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" disabled={isRegenerating}>
-                  {isRegenerating ? (
-                    <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-                  ) : (
-                    <RefreshCw className="w-4 h-4" />
-                  )}
-                  Regenerate Section
-                  <ChevronDown className="w-4 h-4 ml-1" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel>Select section to regenerate</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {regenerationSections.map((section) => (
-                  <DropdownMenuItem
-                    key={section.key}
-                    onClick={() => onRegenerateSection(section.key)}
-                    className="flex flex-col items-start gap-0.5 cursor-pointer"
-                  >
-                    <span className="font-medium">{section.label}</span>
-                    <span className="text-xs text-muted-foreground">{section.description}</span>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="hero"
+              size="sm"
+              onClick={() => setShowPracticeMode(true)}
+              disabled={!data.questions || data.questions.length === 0}
+            >
+              <Play className="w-4 h-4" />
+              Practice Mode
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportPDF}
+              disabled={isExporting}
+            >
+              {isExporting ? (
+                <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+              ) : (
+                <Download className="w-4 h-4" />
+              )}
+              Export PDF
+            </Button>
+
+            {onRegenerateSection && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" disabled={isRegenerating}>
+                    {isRegenerating ? (
+                      <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+                    ) : (
+                      <RefreshCw className="w-4 h-4" />
+                    )}
+                    Regenerate
+                    <ChevronDown className="w-4 h-4 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  <DropdownMenuLabel>Select section to regenerate</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {regenerationSections.map((section) => (
+                    <DropdownMenuItem
+                      key={section.key}
+                      onClick={() => onRegenerateSection(section.key)}
+                      className="flex flex-col items-start gap-0.5 cursor-pointer"
+                    >
+                      <span className="font-medium">{section.label}</span>
+                      <span className="text-xs text-muted-foreground">{section.description}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
         </div>
       </motion.div>
 
+      {/* Practice Mode Modal */}
+      <AnimatePresence>
+        {showPracticeMode && data.questions && (
+          <InterviewPractice
+            questions={data.questions}
+            onClose={() => setShowPracticeMode(false)}
+          />
+        )}
+      </AnimatePresence>
       {/* Tabs */}
       <div className="flex gap-2 mb-6 border-b border-border">
         <button
