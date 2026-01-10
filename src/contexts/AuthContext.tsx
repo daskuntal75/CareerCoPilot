@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode, useCallback 
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { SubscriptionStatus, SubscriptionTier } from "@/lib/stripe-config";
+import { DEMO_SUBSCRIPTION } from "@/lib/demo-config";
 
 interface AuthContextType {
   user: User | null;
@@ -35,23 +36,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const { data, error } = await supabase.functions.invoke("check-subscription");
+      // First check if demo mode is enabled
+      const { data: demoData } = await supabase.functions.invoke("check-demo-mode");
       
-      if (error) {
-        console.error("Error checking subscription:", error);
+      if (demoData?.demo_mode && !demoData?.stripe_enabled) {
+        // Demo mode is on and Stripe is off - give everyone Pro
+        setSubscription(DEMO_SUBSCRIPTION);
         return;
       }
 
-      if (data) {
-        setSubscription({
-          subscribed: data.subscribed || false,
-          tier: (data.tier as SubscriptionTier) || "free",
-          subscription_end: data.subscription_end || null,
-          price_id: data.price_id,
-        });
+      // Only check Stripe subscription if Stripe is enabled
+      if (demoData?.stripe_enabled) {
+        const { data, error } = await supabase.functions.invoke("check-subscription");
+        
+        if (error) {
+          console.error("Error checking subscription:", error);
+          // Fall back to demo mode if enabled
+          if (demoData?.demo_mode) {
+            setSubscription(DEMO_SUBSCRIPTION);
+          }
+          return;
+        }
+
+        if (data) {
+          setSubscription({
+            subscribed: data.subscribed || false,
+            tier: (data.tier as SubscriptionTier) || "free",
+            subscription_end: data.subscription_end || null,
+            price_id: data.price_id,
+          });
+          return;
+        }
+      }
+
+      // If demo mode is on but Stripe check failed, still give Pro
+      if (demoData?.demo_mode) {
+        setSubscription(DEMO_SUBSCRIPTION);
+      } else {
+        setSubscription(defaultSubscription);
       }
     } catch (error) {
       console.error("Failed to check subscription:", error);
+      // Try to give demo subscription on error if we can
+      try {
+        const { data: demoData } = await supabase.functions.invoke("check-demo-mode");
+        if (demoData?.demo_mode) {
+          setSubscription(DEMO_SUBSCRIPTION);
+          return;
+        }
+      } catch {
+        // Ignore
+      }
     }
   }, [session?.access_token]);
 

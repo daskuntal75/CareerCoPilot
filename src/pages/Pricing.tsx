@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
-import { Check, Sparkles, Zap, Crown, Building2, Loader2 } from "lucide-react";
+import { Check, Sparkles, Zap, Crown, Building2, Loader2, TestTube } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,14 +11,40 @@ import { toast } from "sonner";
 import { STRIPE_PLANS } from "@/lib/stripe-config";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const Pricing = () => {
   const [isAnnual, setIsAnnual] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
-  const { user } = useAuth();
+  const [demoMode, setDemoMode] = useState(false);
+  const [stripeEnabled, setStripeEnabled] = useState(false);
+  const { user, subscription } = useAuth();
   const navigate = useNavigate();
 
+  useEffect(() => {
+    checkSettings();
+  }, []);
+
+  const checkSettings = async () => {
+    try {
+      const { data } = await supabase.functions.invoke("check-demo-mode");
+      if (data) {
+        setDemoMode(data.demo_mode ?? false);
+        setStripeEnabled(data.stripe_enabled ?? false);
+      }
+    } catch (error) {
+      console.error("Error checking settings:", error);
+    }
+  };
+
   const handleSubscribe = async (priceId: string, planName: string) => {
+    // If Stripe is not enabled, show demo message
+    if (!stripeEnabled) {
+      toast.info("Payments are not yet enabled. Enjoy Pro features in demo mode!");
+      navigate(user ? "/app" : "/auth");
+      return;
+    }
+
     if (!user) {
       toast.info("Please sign in to subscribe");
       navigate("/auth");
@@ -151,6 +177,40 @@ const Pricing = () => {
       <Header />
       <main className="flex-1 pt-24 pb-12">
         <div className="container mx-auto px-4 lg:px-8">
+          {/* Demo Mode Banner */}
+          {demoMode && !stripeEnabled && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-8"
+            >
+              <Alert className="border-amber-500/50 bg-amber-500/10 max-w-2xl mx-auto">
+                <TestTube className="h-4 w-4 text-amber-500" />
+                <AlertDescription className="text-amber-700 dark:text-amber-300">
+                  <strong>Demo Mode Active:</strong> All users currently have access to Pro features for free! 
+                  {user ? " Start using the app now." : " Sign up to get started."}
+                </AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
+
+          {/* Current subscription indicator */}
+          {user && subscription.subscribed && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-8"
+            >
+              <Alert className="border-accent/50 bg-accent/10 max-w-2xl mx-auto">
+                <Sparkles className="h-4 w-4 text-accent" />
+                <AlertDescription>
+                  You're currently on the <strong className="capitalize">{subscription.tier}</strong> plan. 
+                  {demoMode ? " (Demo mode)" : ""}
+                </AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
+
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
