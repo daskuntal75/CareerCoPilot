@@ -259,13 +259,62 @@ Return the complete analysis as a JSON object following the structure in the sys
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
     
-    // Parse the JSON from the response
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("Failed to parse AI response");
+    if (!content) {
+      throw new Error("Empty response from AI");
     }
+
+    // Extract JSON from response - handle markdown code blocks
+    let jsonString = content;
     
-    const interviewPrep = JSON.parse(jsonMatch[0]);
+    // Remove markdown code blocks if present
+    const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (codeBlockMatch) {
+      jsonString = codeBlockMatch[1].trim();
+    } else {
+      // Try to find raw JSON object
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonString = jsonMatch[0];
+      }
+    }
+
+    // Sanitize the JSON string to fix common AI formatting issues
+    const sanitizeJson = (str: string): string => {
+      return str
+        // Remove control characters except newlines and tabs
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+        // Fix unescaped newlines in strings (replace with \n)
+        .replace(/(?<!\\)\\n/g, '\\n')
+        // Fix trailing commas before closing brackets
+        .replace(/,(\s*[}\]])/g, '$1')
+        // Fix single quotes used as string delimiters (common AI mistake)
+        .replace(/:\s*'([^']*)'/g, ': "$1"')
+        // Remove any BOM or zero-width characters
+        .replace(/[\uFEFF\u200B-\u200D\u2060]/g, '');
+    };
+
+    let interviewPrep;
+    try {
+      interviewPrep = JSON.parse(sanitizeJson(jsonString));
+    } catch (parseError) {
+      console.error("Initial parse failed, attempting recovery:", parseError);
+      
+      // Try more aggressive cleanup
+      const aggressiveCleanup = jsonString
+        // Remove all non-printable characters except whitespace
+        .replace(/[^\x20-\x7E\s]/g, '')
+        // Fix any remaining issues with quotes
+        .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3');
+      
+      try {
+        interviewPrep = JSON.parse(aggressiveCleanup);
+      } catch (secondError) {
+        console.error("JSON parsing failed after cleanup. Raw content length:", content.length);
+        console.error("First 500 chars:", content.substring(0, 500));
+        console.error("Last 500 chars:", content.substring(content.length - 500));
+        throw new Error("Failed to parse AI response as valid JSON");
+      }
+    }
 
     return new Response(JSON.stringify(interviewPrep), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
