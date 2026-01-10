@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { 
   ArrowLeft, Download, Copy, RefreshCw, Check, FileText, FileType, 
-  MessageSquare, ChevronDown, FileEdit, Sparkles, Target, MessageCircle
+  MessageSquare, ChevronDown, FileEdit, Sparkles, Target, MessageCircle,
+  Eye, Clock, History
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -27,6 +28,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
+import ExportPreviewModal from "./ExportPreviewModal";
+import VersionHistoryPanel from "./VersionHistoryPanel";
+import { useDocumentVersions, DocumentVersion } from "@/hooks/useDocumentVersions";
 
 interface CoverLetterEditorProps {
   content: string;
@@ -38,6 +42,7 @@ interface CoverLetterEditorProps {
   isRegenerating?: boolean;
   onGoToInterviewPrep?: () => void;
   hasInterviewPrep?: boolean;
+  applicationId?: string | null;
 }
 
 const regenerationSections = [
@@ -70,6 +75,7 @@ const CoverLetterEditor = ({
   isRegenerating,
   onGoToInterviewPrep,
   hasInterviewPrep,
+  applicationId,
 }: CoverLetterEditorProps) => {
   const [copied, setCopied] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -77,6 +83,39 @@ const CoverLetterEditor = ({
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [feedbackText, setFeedbackText] = useState("");
   const [selectedTips, setSelectedTips] = useState<string[]>([]);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+
+  // Version history hook
+  const {
+    versions,
+    isLoading: isLoadingVersions,
+    saveVersion,
+    restoreVersion,
+    deleteVersion,
+    renameVersion,
+  } = useDocumentVersions(applicationId || null, "cover_letter");
+
+  // Save initial version when content first loads
+  useEffect(() => {
+    if (content && applicationId && versions.length === 0) {
+      saveVersion(content, null, "initial");
+    }
+  }, [content, applicationId, versions.length]);
+
+  const handleRestoreVersion = async (version: DocumentVersion) => {
+    const success = await restoreVersion(version);
+    if (success && version.content) {
+      onContentChange(version.content);
+    }
+  };
+
+  const handleSelectVersion = (version: DocumentVersion) => {
+    if (version.content) {
+      // Just preview - don't restore yet
+      toast.info(`Viewing version ${version.version_number}. Click "Restore" to apply.`);
+    }
+  };
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(content);
@@ -409,46 +448,93 @@ const CoverLetterEditor = ({
           transition={{ delay: 0.2 }}
           className="lg:col-span-1"
         >
-          <div className="bg-card rounded-xl border border-border p-6 sticky top-24">
-            <h3 className="font-semibold text-foreground mb-4">Export</h3>
-            
-            <div className="space-y-3">
-              <Button 
-                variant="accent" 
-                className="w-full justify-start"
-                onClick={handleDownloadPDF}
-                disabled={isExporting}
-              >
-                {isExporting ? (
-                  <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-                ) : (
-                  <Download className="w-4 h-4" />
-                )}
-                Download PDF
-              </Button>
+          <div className="bg-card rounded-xl border border-border p-6 sticky top-24 space-y-6">
+            <div>
+              <h3 className="font-semibold text-foreground mb-4">Export</h3>
               
-              <Button 
-                variant="outline" 
-                className="w-full justify-start"
-                onClick={handleDownloadDOCX}
-                disabled={isExporting}
-              >
-                <FileType className="w-4 h-4" />
-                Download DOCX
-              </Button>
-              
-              <Button 
-                variant="outline" 
-                className="w-full justify-start"
-                onClick={handleCopy}
-              >
-                <FileText className="w-4 h-4" />
-                Copy as Text
-              </Button>
+              <div className="space-y-3">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start"
+                  onClick={() => setShowPreviewModal(true)}
+                >
+                  <Eye className="w-4 h-4" />
+                  Preview Document
+                </Button>
+                
+                <Button 
+                  variant="accent" 
+                  className="w-full justify-start"
+                  onClick={handleDownloadPDF}
+                  disabled={isExporting}
+                >
+                  {isExporting ? (
+                    <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  Download PDF
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start"
+                  onClick={handleDownloadDOCX}
+                  disabled={isExporting}
+                >
+                  <FileType className="w-4 h-4" />
+                  Download DOCX
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start"
+                  onClick={handleCopy}
+                >
+                  <FileText className="w-4 h-4" />
+                  Copy as Text
+                </Button>
+              </div>
             </div>
 
+            {/* Version History */}
+            {applicationId && (
+              <div className="pt-6 border-t border-border">
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start"
+                  onClick={() => setShowVersionHistory(!showVersionHistory)}
+                >
+                  <History className="w-4 h-4" />
+                  Version History ({versions.length})
+                </Button>
+                
+                <AnimatePresence>
+                  {showVersionHistory && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="mt-4 overflow-hidden"
+                    >
+                      <VersionHistoryPanel
+                        versions={versions}
+                        currentVersionId={versions.find(v => v.is_current)?.id}
+                        documentType="cover_letter"
+                        onSelectVersion={handleSelectVersion}
+                        onRestoreVersion={handleRestoreVersion}
+                        onDeleteVersion={deleteVersion}
+                        onRenameVersion={renameVersion}
+                        isLoading={isLoadingVersions}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
             {onGenerateInterviewPrep && !hasInterviewPrep && (
-              <div className="mt-6 pt-6 border-t border-border">
+              <div className="pt-6 border-t border-border">
                 <h4 className="text-sm font-medium text-foreground mb-3">Next Step</h4>
                 <Button 
                   variant="hero" 
@@ -461,7 +547,7 @@ const CoverLetterEditor = ({
               </div>
             )}
 
-            <div className="mt-6 pt-6 border-t border-border">
+            <div className="pt-6 border-t border-border">
               <h4 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-accent" />
                 Quick Improvements
@@ -553,6 +639,19 @@ const CoverLetterEditor = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Export Preview Modal */}
+      <ExportPreviewModal
+        open={showPreviewModal}
+        onOpenChange={setShowPreviewModal}
+        type="cover-letter"
+        content={content}
+        jobTitle={jobData.title}
+        company={jobData.company}
+        onDownloadPDF={handleDownloadPDF}
+        onDownloadDOCX={handleDownloadDOCX}
+        isExporting={isExporting}
+      />
     </div>
   );
 };

@@ -5,7 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { 
   ArrowLeft, ChevronDown, ChevronRight, MessageCircle, Lightbulb, AlertTriangle, 
   HelpCircle, Building, Target, TrendingUp, Users, Briefcase, RefreshCw, 
-  Download, Play, FileEdit, FileType, Sparkles
+  Download, Play, FileEdit, FileType, Sparkles, Eye
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
 import type { JobData } from "@/pages/App";
 import InterviewPractice from "./InterviewPractice";
+import ExportPreviewModal from "./ExportPreviewModal";
 import {
   Dialog,
   DialogContent,
@@ -270,6 +271,7 @@ const InterviewPrep = ({
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [feedbackText, setFeedbackText] = useState("");
   const [selectedTips, setSelectedTips] = useState<string[]>([]);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
 
   const handleExportPDF = async () => {
     setIsExporting(true);
@@ -570,6 +572,11 @@ const InterviewPrep = ({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setShowPreviewModal(true)}>
+                  <Eye className="w-4 h-4 mr-2" />
+                  Preview Document
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleExportPDF}>
                   <Download className="w-4 h-4 mr-2" />
                   Download PDF
@@ -1114,6 +1121,19 @@ const InterviewPrep = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Export Preview Modal */}
+      <ExportPreviewModal
+        open={showPreviewModal}
+        onOpenChange={setShowPreviewModal}
+        type="interview-prep"
+        interviewPrepData={data}
+        jobTitle={jobData.title}
+        company={jobData.company}
+        onDownloadPDF={handleExportPDF}
+        onDownloadDOCX={handleExportDOCX}
+        isExporting={isExporting}
+      />
     </div>
   );
 };
