@@ -7,10 +7,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Reduced file size limits for edge function memory constraints
+// File size limits for edge function memory constraints
 const FILE_SIZE_LIMITS = {
-  "application/pdf": 1.5 * 1024 * 1024, // 1.5MB for PDFs
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": 1 * 1024 * 1024, // 1MB for DOCX
+  "application/pdf": 2 * 1024 * 1024, // 2MB for PDFs
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": 1.5 * 1024 * 1024, // 1.5MB for DOCX
   "text/plain": 500 * 1024, // 500KB for TXT
 };
 
