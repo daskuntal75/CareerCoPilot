@@ -357,6 +357,7 @@ const AppPage = () => {
                   jobData={jobData}
                   onGenerate={handleGenerateCoverLetter}
                   onBack={() => setCurrentStep("job")}
+                  applicationId={applicationId}
                 />
               )}
               
