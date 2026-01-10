@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -29,6 +29,10 @@ export interface UserProfileData {
   isLoading: boolean;
 }
 
+// Cache for profile data
+const profileCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
 export function useUserProfile() {
   const { user } = useAuth();
   const [detailedResume, setDetailedResume] = useState<UserResume | null>(null);
@@ -36,12 +40,31 @@ export function useUserProfile() {
   const [coverLetterTemplate, setCoverLetterTemplate] = useState<UserCoverLetterTemplate | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const hasFetchedRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  const fetchProfile = useCallback(async (showLoading = true) => {
+  const fetchProfile = useCallback(async (showLoading = true, bypassCache = false) => {
     if (!user) {
       setIsLoading(false);
       return;
     }
+
+    // Check cache first
+    const cacheKey = user.id;
+    const cached = profileCache.get(cacheKey);
+    if (!bypassCache && cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      setDetailedResume(cached.data.detailedResume);
+      setAbridgedResume(cached.data.abridgedResume);
+      setCoverLetterTemplate(cached.data.coverLetterTemplate);
+      setIsLoading(false);
+      hasFetchedRef.current = true;
+      return;
+    }
+
+    // Cancel any in-flight requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
 
     // Only show loading on initial fetch, not on refetches
     if (showLoading && !hasFetchedRef.current) {
@@ -49,37 +72,51 @@ export function useUserProfile() {
     }
     
     try {
-      // Fetch resumes
-      const { data: resumes, error: resumesError } = await supabase
-        .from("user_resumes")
-        .select("*")
-        .eq("user_id", user.id);
+      // Fetch resumes and template in parallel
+      const [resumesResult, templateResult] = await Promise.all([
+        supabase
+          .from("user_resumes")
+          .select("*")
+          .eq("user_id", user.id),
+        supabase
+          .from("user_cover_letter_templates")
+          .select("*")
+          .eq("user_id", user.id)
+          .maybeSingle(),
+      ]);
 
-      if (resumesError) {
-        console.error("Error fetching resumes:", resumesError);
-      } else if (resumes) {
-        const detailed = resumes.find(r => r.resume_type === "detailed") as UserResume | undefined;
-        const abridged = resumes.find(r => r.resume_type === "abridged") as UserResume | undefined;
-        setDetailedResume(detailed || null);
-        setAbridgedResume(abridged || null);
+      if (resumesResult.error) {
+        console.error("Error fetching resumes:", resumesResult.error);
+      }
+      
+      if (templateResult.error) {
+        console.error("Error fetching cover letter template:", templateResult.error);
       }
 
-      // Fetch cover letter template
-      const { data: template, error: templateError } = await supabase
-        .from("user_cover_letter_templates")
-        .select("*")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      const resumes = resumesResult.data || [];
+      const detailed = resumes.find(r => r.resume_type === "detailed") as UserResume | undefined;
+      const abridged = resumes.find(r => r.resume_type === "abridged") as UserResume | undefined;
+      const template = templateResult.data as UserCoverLetterTemplate | null;
 
-      if (templateError) {
-        console.error("Error fetching cover letter template:", templateError);
-      } else {
-        setCoverLetterTemplate(template as UserCoverLetterTemplate | null);
-      }
+      setDetailedResume(detailed || null);
+      setAbridgedResume(abridged || null);
+      setCoverLetterTemplate(template);
+
+      // Update cache
+      profileCache.set(cacheKey, {
+        data: {
+          detailedResume: detailed || null,
+          abridgedResume: abridged || null,
+          coverLetterTemplate: template,
+        },
+        timestamp: Date.now(),
+      });
       
       hasFetchedRef.current = true;
     } catch (error) {
-      console.error("Error fetching user profile:", error);
+      if ((error as Error).name !== 'AbortError') {
+        console.error("Error fetching user profile:", error);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -87,14 +124,29 @@ export function useUserProfile() {
 
   useEffect(() => {
     fetchProfile();
+    
+    // Cleanup on unmount
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
   }, [fetchProfile]);
 
   const refreshProfile = useCallback(() => {
-    return fetchProfile(false); // Don't show loading on manual refresh
+    return fetchProfile(false, true); // Bypass cache on manual refresh
   }, [fetchProfile]);
 
-  // Profile is complete if detailed resume exists (required)
-  const isProfileComplete = detailedResume !== null;
+  // Clear cache on logout
+  useEffect(() => {
+    if (!user) {
+      profileCache.clear();
+      hasFetchedRef.current = false;
+    }
+  }, [user]);
+
+  // Memoize return value to prevent unnecessary re-renders
+  const isProfileComplete = useMemo(() => detailedResume !== null, [detailedResume]);
 
   return {
     detailedResume,
