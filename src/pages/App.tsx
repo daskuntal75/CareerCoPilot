@@ -426,6 +426,7 @@ const AppPage = () => {
                   isRegenerating={isLoading}
                   hasInterviewPrep={!!interviewPrep}
                   onGoToInterviewPrep={() => setCurrentStep("interview")}
+                  applicationId={applicationId}
                 />
               )}
 

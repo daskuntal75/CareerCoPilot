@@ -71,6 +71,56 @@ export type Database = {
         }
         Relationships: []
       }
+      document_versions: {
+        Row: {
+          application_id: string | null
+          content: string | null
+          created_at: string
+          created_by_action: string | null
+          document_type: string
+          id: string
+          is_current: boolean | null
+          structured_content: Json | null
+          user_id: string
+          version_name: string | null
+          version_number: number
+        }
+        Insert: {
+          application_id?: string | null
+          content?: string | null
+          created_at?: string
+          created_by_action?: string | null
+          document_type: string
+          id?: string
+          is_current?: boolean | null
+          structured_content?: Json | null
+          user_id: string
+          version_name?: string | null
+          version_number?: number
+        }
+        Update: {
+          application_id?: string | null
+          content?: string | null
+          created_at?: string
+          created_by_action?: string | null
+          document_type?: string
+          id?: string
+          is_current?: boolean | null
+          structured_content?: Json | null
+          user_id?: string
+          version_name?: string | null
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_versions_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       job_requirements: {
         Row: {
           application_id: string
