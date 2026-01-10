@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Rocket, Menu, X, LogOut, LayoutDashboard, FileText } from "lucide-react";
+import { Rocket, Menu, X, LogOut, LayoutDashboard, FileText, BarChart3 } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
@@ -49,6 +49,9 @@ const Header = () => {
                 <Link to="/dashboard">
                   <Button variant="ghost" size="sm">Dashboard</Button>
                 </Link>
+                <Link to="/analytics">
+                  <Button variant="ghost" size="sm">Analytics</Button>
+                </Link>
                 <Link to="/profile">
                   <Button variant="ghost" size="sm" className="relative">
                     Career Documents
@@ -84,6 +87,12 @@ const Header = () => {
                     <Link to="/dashboard">
                       <LayoutDashboard className="w-4 h-4 mr-2" />
                       Dashboard
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/analytics">
+                      <BarChart3 className="w-4 h-4 mr-2" />
+                      Analytics
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
@@ -148,6 +157,9 @@ const Header = () => {
                 <>
                   <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)}>
                     <Button variant="ghost" className="w-full justify-start">Dashboard</Button>
+                  </Link>
+                  <Link to="/analytics" onClick={() => setMobileMenuOpen(false)}>
+                    <Button variant="ghost" className="w-full justify-start">Analytics</Button>
                   </Link>
                   <Link to="/profile" onClick={() => setMobileMenuOpen(false)}>
                     <Button variant="ghost" className="w-full justify-start">
