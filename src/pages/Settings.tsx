@@ -5,7 +5,7 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
-import { User, Bell, Mail, Clock, Save, Check, Lock } from "lucide-react";
+import { User, Bell, Mail, Clock, Save, Check, Lock, Shield, Fingerprint } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,8 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { ChangePasswordForm } from "@/components/auth/ChangePasswordForm";
+import { TwoFactorSetup } from "@/components/auth/TwoFactorSetup";
+import { BiometricLogin } from "@/components/auth/BiometricLogin";
 
 interface ProfileSettings {
   full_name: string | null;
@@ -255,12 +257,40 @@ const Settings = () => {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Lock className="w-5 h-5 text-accent" />
-                    Security
+                    Password
                   </CardTitle>
-                  <CardDescription>Manage your password and security settings</CardDescription>
+                  <CardDescription>Change your password</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <ChangePasswordForm />
+                </CardContent>
+              </Card>
+
+              {/* Two-Factor Authentication */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-accent" />
+                    Two-Factor Authentication
+                  </CardTitle>
+                  <CardDescription>Add an extra layer of security with TOTP</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <TwoFactorSetup />
+                </CardContent>
+              </Card>
+
+              {/* Biometric Login */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Fingerprint className="w-5 h-5 text-accent" />
+                    Biometric Login
+                  </CardTitle>
+                  <CardDescription>Use Face ID, Touch ID, or Windows Hello</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <BiometricLogin mode="setup" />
                 </CardContent>
               </Card>
 

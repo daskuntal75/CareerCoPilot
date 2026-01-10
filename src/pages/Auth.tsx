@@ -13,6 +13,10 @@ import { useAnalytics } from "@/hooks/useAnalytics";
 import { PasswordStrengthMeter, isPasswordStrong } from "@/components/auth/PasswordStrengthMeter";
 import { ForgotPasswordForm } from "@/components/auth/ForgotPasswordForm";
 import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm";
+import { TwoFactorVerify } from "@/components/auth/TwoFactorVerify";
+import { BiometricLogin } from "@/components/auth/BiometricLogin";
+import { EmailLookupForm } from "@/components/auth/EmailLookupForm";
+import { supabase } from "@/integrations/supabase/client";
 
 // Input validation schemas
 const emailSchema = z.string().trim().email("Invalid email address").max(255, "Email too long");
@@ -23,7 +27,7 @@ const nameSchema = z.string().trim().min(2, "Name must be at least 2 characters"
 const RATE_LIMIT_ATTEMPTS = 5;
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
 
-type AuthMode = "login" | "signup" | "forgot-password" | "reset";
+type AuthMode = "login" | "signup" | "forgot-password" | "reset" | "2fa" | "find-email";
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
@@ -36,6 +40,7 @@ const Auth = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; name?: string }>({});
+  const [pendingMfa, setPendingMfa] = useState(false);
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
   const { trackAuthEvent, trackPageView } = useAnalytics();
@@ -46,11 +51,14 @@ const Auth = () => {
   const [rateLimited, setRateLimited] = useState(false);
   const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
 
-  // Track page view and redirect if already logged in
+  // Track page view and redirect if already logged in and verified
   useEffect(() => {
     trackPageView("auth", { mode });
-    if (user && mode !== "reset") {
-      navigate("/dashboard");
+    if (user && mode !== "reset" && mode !== "2fa") {
+      // Check if email is confirmed
+      if (user.email_confirmed_at) {
+        navigate("/dashboard");
+      }
     }
   }, [user, navigate, mode]);
 
@@ -129,6 +137,18 @@ const Auth = () => {
     return Object.keys(newErrors).length === 0;
   };
 
+  const checkMfaRequired = async (): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase.auth.mfa.listFactors();
+      if (error) return false;
+      
+      const verifiedFactor = data?.totp?.find(f => f.status === "verified");
+      return !!verifiedFactor;
+    } catch {
+      return false;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -141,13 +161,19 @@ const Auth = () => {
       if (mode === "login") {
         const { error } = await signIn(email.trim(), password);
         if (error) {
-          // Don't reveal if email exists or not
           toast.error("Invalid email or password");
           trackAuthEvent("login_failed");
         } else {
-          toast.success("Welcome back!");
-          trackAuthEvent("login_success");
-          navigate("/dashboard");
+          // Check if MFA is required
+          const mfaRequired = await checkMfaRequired();
+          if (mfaRequired) {
+            setMode("2fa");
+            setPendingMfa(true);
+          } else {
+            toast.success("Welcome back!");
+            trackAuthEvent("login_success");
+            navigate("/dashboard");
+          }
         }
       } else if (mode === "signup") {
         const { error } = await signUp(email.trim(), password, fullName.trim());
@@ -155,14 +181,25 @@ const Auth = () => {
           toast.error(error.message);
           trackAuthEvent("signup_failed", { error: error.message });
         } else {
-          toast.success("Account created! You can now sign in.");
+          toast.success("Check your email to verify your account!");
           trackAuthEvent("signup_success");
-          navigate("/dashboard");
+          // Don't redirect - show message about email verification
         }
       }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleMfaVerified = () => {
+    setPendingMfa(false);
+    toast.success("Welcome back!");
+    trackAuthEvent("login_success", { mfa: true });
+    navigate("/dashboard");
+  };
+
+  const handleBiometricSuccess = () => {
+    navigate("/dashboard");
   };
 
   const renderContent = () => {
@@ -172,6 +209,22 @@ const Auth = () => {
 
     if (mode === "reset") {
       return <ResetPasswordForm />;
+    }
+
+    if (mode === "2fa") {
+      return (
+        <TwoFactorVerify
+          onVerified={handleMfaVerified}
+          onBack={() => {
+            setMode("login");
+            setPendingMfa(false);
+          }}
+        />
+      );
+    }
+
+    if (mode === "find-email") {
+      return <EmailLookupForm onBack={() => setMode("login")} />;
     }
 
     const isLogin = mode === "login";
@@ -188,6 +241,24 @@ const Auth = () => {
               : "Get started with CareerCopilot AI"}
           </p>
         </div>
+
+        {/* Biometric Login - only show on login mode */}
+        {isLogin && (
+          <div className="mb-4">
+            <BiometricLogin onSuccess={handleBiometricSuccess} mode="login" />
+          </div>
+        )}
+
+        {isLogin && (
+          <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">or continue with email</span>
+            </div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {rateLimited && (
@@ -305,7 +376,7 @@ const Auth = () => {
           </Button>
         </form>
 
-        <div className="mt-6 text-center">
+        <div className="mt-6 space-y-2 text-center">
           <button
             type="button"
             onClick={() => {
@@ -318,6 +389,18 @@ const Auth = () => {
               ? "Don't have an account? Sign up" 
               : "Already have an account? Sign in"}
           </button>
+
+          {isLogin && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setMode("find-email")}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Forgot which email you used?
+              </button>
+            </div>
+          )}
         </div>
       </>
     );
