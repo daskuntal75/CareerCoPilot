@@ -415,6 +415,51 @@ export type Database = {
           },
         ]
       }
+      revenue_events: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          currency: string
+          event_type: string
+          id: string
+          metadata: Json | null
+          status: string | null
+          stripe_customer_id: string | null
+          stripe_invoice_id: string | null
+          stripe_payment_intent_id: string | null
+          stripe_subscription_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          amount_cents?: number
+          created_at?: string
+          currency?: string
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          status?: string | null
+          stripe_customer_id?: string | null
+          stripe_invoice_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_subscription_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          currency?: string
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          status?: string | null
+          stripe_customer_id?: string | null
+          stripe_invoice_id?: string | null
+          stripe_payment_intent_id?: string | null
+          stripe_subscription_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       sanitization_log: {
         Row: {
           id: string
@@ -439,6 +484,54 @@ export type Database = {
           sanitized_at?: string
           threats_detected?: Json | null
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean | null
+          canceled_at: string | null
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          price_id: string | null
+          status: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
+          tier: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cancel_at_period_end?: boolean | null
+          canceled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          price_id?: string | null
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          tier?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cancel_at_period_end?: boolean | null
+          canceled_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          price_id?: string | null
+          status?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
+          tier?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -535,6 +628,27 @@ export type Database = {
         }
         Relationships: []
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -548,6 +662,27 @@ export type Database = {
           date: string
           interviews_scheduled: number
           offers_received: number
+        }[]
+      }
+      get_admin_revenue_stats: {
+        Args: { days_back?: number }
+        Returns: {
+          cancellations: number
+          date: string
+          mrr_cents: number
+          new_subscriptions: number
+          subscription_revenue_cents: number
+          total_revenue_cents: number
+        }[]
+      }
+      get_admin_revenue_summary: {
+        Args: never
+        Returns: {
+          active_subscriptions: number
+          churn_rate: number
+          mrr_cents: number
+          revenue_this_month_cents: number
+          total_revenue_cents: number
         }[]
       }
       get_admin_usage_stats: {
@@ -568,9 +703,30 @@ export type Database = {
           users_with_applications: number
         }[]
       }
+      get_admin_users_with_subscriptions: {
+        Args: { page_number?: number; page_size?: number; search_term?: string }
+        Returns: {
+          cover_letters_used: number
+          created_at: string
+          email: string
+          full_name: string
+          subscription_end: string
+          subscription_status: string
+          subscription_tier: string
+          total_applications: number
+          user_id: string
+        }[]
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "moderator" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -697,6 +853,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "moderator", "user"],
+    },
   },
 } as const
