@@ -9,12 +9,10 @@ import {
   Users, 
   FileText, 
   TrendingUp, 
-  Calendar,
   Shield,
   AlertTriangle,
   RefreshCw,
   BarChart3,
-  MessageSquare,
   Briefcase
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +31,7 @@ import {
   Bar,
   Legend,
 } from "recharts";
+import UserManagement from "@/components/admin/UserManagement";
 
 interface UserSummary {
   total_users: number;
@@ -62,6 +61,7 @@ const Admin = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [userSummary, setUserSummary] = useState<UserSummary | null>(null);
   const [usageStats, setUsageStats] = useState<UsageStats[]>([]);
   const [applicationStats, setApplicationStats] = useState<ApplicationStats[]>([]);
@@ -109,6 +109,7 @@ const Admin = () => {
         fetchUsageStats(),
         fetchApplicationStats(),
       ]);
+      setRefreshTrigger((prev) => prev + 1);
     } catch (error) {
       console.error("Error fetching admin data:", error);
       toast.error("Failed to load admin data");
@@ -288,8 +289,12 @@ const Admin = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <Tabs defaultValue="usage" className="space-y-6">
+            <Tabs defaultValue="users" className="space-y-6">
               <TabsList>
+                <TabsTrigger value="users" className="flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  Users
+                </TabsTrigger>
                 <TabsTrigger value="usage" className="flex items-center gap-2">
                   <BarChart3 className="w-4 h-4" />
                   Feature Usage
@@ -299,6 +304,10 @@ const Admin = () => {
                   Applications
                 </TabsTrigger>
               </TabsList>
+
+              <TabsContent value="users">
+                <UserManagement refreshTrigger={refreshTrigger} />
+              </TabsContent>
 
               <TabsContent value="usage">
                 <Card>
