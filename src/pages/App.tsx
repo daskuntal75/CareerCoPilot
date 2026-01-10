@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAnalytics } from "@/hooks/useAnalytics";
+import { useUsageTracking } from "@/hooks/useUsageTracking";
 import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
 
 export type AppStep = "job" | "analysis" | "editor" | "interview";
@@ -44,6 +45,7 @@ const AppPage = () => {
   const { user } = useAuth();
   const { detailedResume, isProfileComplete, isLoading: isProfileLoading } = useUserProfile();
   const { trackPageView, trackApplicationEvent, trackCoverLetterEvent, trackInterviewPrepEvent } = useAnalytics();
+  const { canUseFeature, incrementUsage, getRemainingUsage, limits } = useUsageTracking();
   
   const [currentStep, setCurrentStep] = useState<AppStep>("job");
   const [jobData, setJobData] = useState<JobData | null>(null);
@@ -220,6 +222,21 @@ const AppPage = () => {
   const handleGenerateCoverLetter = async () => {
     if (!jobData || !detailedResume) return;
     
+    // Check usage limits for free tier
+    if (!canUseFeature("cover_letter")) {
+      const remaining = getRemainingUsage("cover_letter");
+      toast.error(
+        `You've reached your monthly limit of ${limits.cover_letter} cover letters. Upgrade to Pro for unlimited access!`,
+        {
+          action: {
+            label: "Upgrade",
+            onClick: () => navigate("/pricing"),
+          },
+        }
+      );
+      return;
+    }
+    
     setIsLoading(true);
     setGenerationType("cover-letter");
     setGenerationStage("analyzing");
@@ -229,6 +246,14 @@ const AppPage = () => {
     setAbortController(controller);
     
     try {
+      // Increment usage before generation
+      const usageIncremented = await incrementUsage("cover_letter");
+      if (!usageIncremented) {
+        toast.error("Failed to track usage. Please try again.");
+        setIsLoading(false);
+        return;
+      }
+
       // Get auth token for streaming request
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Authentication required");

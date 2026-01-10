@@ -61,7 +61,7 @@ serve(async (req) => {
         },
       ],
       mode: "subscription",
-      success_url: `${origin}/dashboard?subscription=success`,
+      success_url: `${origin}/subscription/success`,
       cancel_url: `${origin}/pricing?subscription=canceled`,
       allow_promotion_codes: true,
     });
