@@ -5,7 +5,7 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
-import { User, Bell, Mail, Clock, Save, Check, Lock, Shield, Fingerprint, ShieldCheck } from "lucide-react";
+import { User, Bell, Mail, Clock, Save, Check, Lock, Shield, Fingerprint, ShieldCheck, CreditCard } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import { TwoFactorSetup } from "@/components/auth/TwoFactorSetup";
 import { BiometricLogin } from "@/components/auth/BiometricLogin";
 import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
 import SecurityPrivacyDashboard from "@/components/settings/SecurityPrivacyDashboard";
+import SubscriptionManagement from "@/components/settings/SubscriptionManagement";
 
 interface ProfileSettings {
   full_name: string | null;
@@ -150,10 +151,14 @@ const Settings = () => {
               transition={{ delay: 0.1 }}
             >
               <Tabs defaultValue="account" className="space-y-6">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger value="account" className="flex items-center gap-2">
                     <User className="w-4 h-4" />
                     Account
+                  </TabsTrigger>
+                  <TabsTrigger value="billing" className="flex items-center gap-2">
+                    <CreditCard className="w-4 h-4" />
+                    Billing
                   </TabsTrigger>
                   <TabsTrigger value="security" className="flex items-center gap-2">
                     <Lock className="w-4 h-4" />
@@ -329,6 +334,11 @@ const Settings = () => {
                       )}
                     </Button>
                   </div>
+                </TabsContent>
+
+                {/* Billing Tab */}
+                <TabsContent value="billing" className="space-y-6">
+                  <SubscriptionManagement />
                 </TabsContent>
 
                 {/* Security Tab */}

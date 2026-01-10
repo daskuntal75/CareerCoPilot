@@ -1,65 +1,151 @@
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
-import { Check, Sparkles } from "lucide-react";
+import { Check, Sparkles, Zap, Crown, Building2, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
-
-const plans = [
-  {
-    name: "Free",
-    price: "$0",
-    period: "forever",
-    description: "Perfect for trying out CareerCopilot",
-    features: [
-      "3 applications per month",
-      "Basic cover letter generation",
-      "Job fit analysis",
-      "PDF export",
-    ],
-    cta: "Get Started",
-    ctaLink: "/app",
-    highlighted: false,
-  },
-  {
-    name: "Pro",
-    price: "$19",
-    period: "per month",
-    description: "For active job seekers",
-    features: [
-      "Unlimited applications",
-      "Advanced AI cover letters",
-      "Interview prep guides",
-      "STAR answer frameworks",
-      "Version history",
-      "Priority support",
-      "PDF & DOCX export",
-    ],
-    cta: "Start Pro Trial",
-    ctaLink: "/auth",
-    highlighted: true,
-  },
-  {
-    name: "Team",
-    price: "$49",
-    period: "per month",
-    description: "For career coaches & teams",
-    features: [
-      "Everything in Pro",
-      "5 team members",
-      "Client management",
-      "Analytics dashboard",
-      "Custom branding",
-      "API access",
-      "Dedicated support",
-    ],
-    cta: "Contact Sales",
-    ctaLink: "/auth",
-    highlighted: false,
-  },
-];
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { STRIPE_PLANS } from "@/lib/stripe-config";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 const Pricing = () => {
+  const [isAnnual, setIsAnnual] = useState(false);
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSubscribe = async (priceId: string, planName: string) => {
+    if (!user) {
+      toast.info("Please sign in to subscribe");
+      navigate("/auth");
+      return;
+    }
+
+    setLoadingPlan(planName);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: { priceId },
+      });
+
+      if (error) throw error;
+
+      if (data?.url) {
+        window.open(data.url, "_blank");
+      }
+    } catch (error) {
+      console.error("Checkout error:", error);
+      toast.error("Failed to start checkout. Please try again.");
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
+
+  const plans = [
+    {
+      name: "Free",
+      icon: Zap,
+      monthlyPrice: 0,
+      annualPrice: 0,
+      period: "forever",
+      description: "Trial for conversion; captures email for nurture",
+      features: [
+        "3 cover letters per month",
+        "Basic fit score analysis",
+        "PDF export",
+        "Job description parsing",
+      ],
+      notIncluded: [
+        "Interview prep",
+        "STAR guides",
+        "Version history",
+      ],
+      cta: "Get Started Free",
+      ctaAction: () => navigate(user ? "/app" : "/auth"),
+      highlighted: false,
+      priceId: null,
+    },
+    {
+      name: "Pro",
+      icon: Sparkles,
+      monthlyPrice: 29,
+      annualPrice: 199,
+      annualSavings: "Save 43%",
+      period: isAnnual ? "year" : "month",
+      description: "1.4% of monthly value delivered ($2K); < 1 hr saved justifies",
+      features: [
+        "Unlimited cover letters",
+        "Advanced fit mapping",
+        "Interview questions",
+        "Version history",
+        "PDF & DOCX export",
+        "Priority support",
+      ],
+      notIncluded: [
+        "Full STAR guides",
+        "Tone customization",
+        "Priority AI",
+      ],
+      cta: "Start Pro Trial",
+      ctaAction: () => handleSubscribe(
+        isAnnual ? STRIPE_PLANS.pro_annual.price_id : STRIPE_PLANS.pro_monthly.price_id,
+        "Pro"
+      ),
+      highlighted: true,
+      priceId: isAnnual ? STRIPE_PLANS.pro_annual.price_id : STRIPE_PLANS.pro_monthly.price_id,
+    },
+    {
+      name: "Premium",
+      icon: Crown,
+      monthlyPrice: 79,
+      annualPrice: 599,
+      annualSavings: "Save 37%",
+      period: isAnnual ? "year" : "month",
+      description: "< $2K exec coaching; replaces 1-2 coaching sessions",
+      features: [
+        "Everything in Pro",
+        "Full interview prep",
+        "STAR answer guides",
+        "Tone customization",
+        "Priority AI processing",
+        "Advanced analytics",
+      ],
+      notIncluded: [],
+      cta: "Go Premium",
+      ctaAction: () => handleSubscribe(
+        isAnnual ? STRIPE_PLANS.premium_annual.price_id : STRIPE_PLANS.premium_monthly.price_id,
+        "Premium"
+      ),
+      highlighted: false,
+      priceId: isAnnual ? STRIPE_PLANS.premium_annual.price_id : STRIPE_PLANS.premium_monthly.price_id,
+    },
+    {
+      name: "Enterprise",
+      icon: Building2,
+      monthlyPrice: null,
+      annualPrice: null,
+      period: "custom",
+      description: "Outplacement firms, career services; priced per seat",
+      features: [
+        "Everything in Premium",
+        "Team licenses",
+        "SSO integration",
+        "Admin dashboard",
+        "API access",
+        "Dedicated support",
+        "Custom branding",
+      ],
+      notIncluded: [],
+      cta: "Contact Sales",
+      ctaAction: () => window.open("mailto:enterprise@careercopilot.ai?subject=Enterprise Inquiry", "_blank"),
+      highlighted: false,
+      priceId: null,
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
@@ -68,76 +154,138 @@ const Pricing = () => {
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-center max-w-3xl mx-auto mb-16"
+            className="text-center max-w-3xl mx-auto mb-12"
           >
             <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
-              Simple, Transparent Pricing
+              Invest in Your Career
             </h1>
-            <p className="text-xl text-muted-foreground">
-              Choose the plan that fits your job search needs. Cancel anytime.
+            <p className="text-xl text-muted-foreground mb-8">
+              Choose the plan that matches your job search intensity. All plans include a 14-day money-back guarantee.
             </p>
+            
+            {/* Billing Toggle */}
+            <div className="flex items-center justify-center gap-4">
+              <Label 
+                htmlFor="billing-toggle" 
+                className={`text-sm font-medium ${!isAnnual ? "text-foreground" : "text-muted-foreground"}`}
+              >
+                Monthly
+              </Label>
+              <Switch
+                id="billing-toggle"
+                checked={isAnnual}
+                onCheckedChange={setIsAnnual}
+              />
+              <Label 
+                htmlFor="billing-toggle" 
+                className={`text-sm font-medium ${isAnnual ? "text-foreground" : "text-muted-foreground"}`}
+              >
+                Annual
+                <span className="ml-2 text-xs bg-accent/20 text-accent px-2 py-0.5 rounded-full">
+                  Save up to 43%
+                </span>
+              </Label>
+            </div>
           </motion.div>
 
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {plans.map((plan, index) => (
-              <motion.div
-                key={plan.name}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className={`relative rounded-2xl border p-8 ${
-                  plan.highlighted
-                    ? "border-accent bg-accent/5 shadow-lg shadow-accent/10"
-                    : "border-border bg-card"
-                }`}
-              >
-                {plan.highlighted && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <span className="bg-accent text-accent-foreground text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1">
-                      <Sparkles className="w-3 h-3" />
-                      Most Popular
-                    </span>
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+            {plans.map((plan, index) => {
+              const Icon = plan.icon;
+              const displayPrice = isAnnual ? plan.annualPrice : plan.monthlyPrice;
+              
+              return (
+                <motion.div
+                  key={plan.name}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className={`relative rounded-2xl border p-6 flex flex-col ${
+                    plan.highlighted
+                      ? "border-accent bg-accent/5 shadow-lg shadow-accent/10 scale-105"
+                      : "border-border bg-card"
+                  }`}
+                >
+                  {plan.highlighted && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <span className="bg-accent text-accent-foreground text-xs font-semibold px-3 py-1 rounded-full flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" />
+                        Most Popular
+                      </span>
+                    </div>
+                  )}
+
+                  {isAnnual && plan.annualSavings && (
+                    <div className="absolute -top-3 right-4">
+                      <span className="bg-green-500 text-white text-xs font-semibold px-2 py-1 rounded-full">
+                        {plan.annualSavings}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="text-center mb-6">
+                    <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center mx-auto mb-3">
+                      <Icon className="w-6 h-6 text-accent" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-foreground mb-2">{plan.name}</h3>
+                    <div className="flex items-baseline justify-center gap-1">
+                      {displayPrice !== null ? (
+                        <>
+                          <span className="text-4xl font-bold text-foreground">${displayPrice}</span>
+                          <span className="text-muted-foreground">/{plan.period}</span>
+                        </>
+                      ) : (
+                        <span className="text-2xl font-bold text-foreground">Custom</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2 leading-relaxed">{plan.description}</p>
                   </div>
-                )}
 
-                <div className="text-center mb-6">
-                  <h3 className="text-xl font-semibold text-foreground mb-2">{plan.name}</h3>
-                  <div className="flex items-baseline justify-center gap-1">
-                    <span className="text-4xl font-bold text-foreground">{plan.price}</span>
-                    <span className="text-muted-foreground">/{plan.period}</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-2">{plan.description}</p>
-                </div>
+                  <ul className="space-y-2 mb-6 flex-1">
+                    {plan.features.map((feature) => (
+                      <li key={feature} className="flex items-start gap-2 text-sm">
+                        <Check className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
+                        <span className="text-muted-foreground">{feature}</span>
+                      </li>
+                    ))}
+                    {plan.notIncluded.map((feature) => (
+                      <li key={feature} className="flex items-start gap-2 text-sm opacity-50">
+                        <span className="w-4 h-4 flex-shrink-0 mt-0.5 text-center">—</span>
+                        <span className="text-muted-foreground line-through">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
 
-                <ul className="space-y-3 mb-8">
-                  {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-center gap-2 text-sm">
-                      <Check className="w-4 h-4 text-accent flex-shrink-0" />
-                      <span className="text-muted-foreground">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                <Link to={plan.ctaLink} className="block">
                   <Button
-                    variant={plan.highlighted ? "hero" : "outline"}
+                    variant={plan.highlighted ? "default" : "outline"}
                     className="w-full"
+                    onClick={plan.ctaAction}
+                    disabled={loadingPlan === plan.name}
                   >
-                    {plan.cta}
+                    {loadingPlan === plan.name ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      plan.cta
+                    )}
                   </Button>
-                </Link>
-              </motion.div>
-            ))}
+                </motion.div>
+              );
+            })}
           </div>
 
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
-            className="text-center mt-16"
+            className="text-center mt-16 space-y-4"
           >
             <p className="text-muted-foreground">
               All plans include a 14-day money-back guarantee. No questions asked.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Need help choosing? <Link to="/auth" className="text-accent hover:underline">Contact our team</Link>
             </p>
           </motion.div>
         </div>
