@@ -3,6 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Upload, FileText, X, CheckCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import type { ResumeData } from "@/pages/App";
 
 interface ResumeUploadProps {
@@ -62,13 +64,52 @@ const ResumeUpload = ({ onUpload }: ResumeUploadProps) => {
     if (!file) return;
     
     setIsProcessing(true);
-    // Simulate file processing
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    onUpload({
-      fileName: file.name,
-      content: "Parsed resume content would go here...",
-    });
+    setError(null);
+
+    try {
+      // Get the current session for auth
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error("Please sign in to upload your resume");
+      }
+
+      // Create FormData and send to edge function
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-resume`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to parse resume");
+      }
+
+      const data = await response.json();
+      
+      toast.success("Resume parsed successfully!");
+      
+      onUpload({
+        fileName: data.fileName,
+        content: data.content,
+        filePath: data.filePath,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to process resume";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const removeFile = () => {
