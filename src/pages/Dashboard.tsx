@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useNotifications } from "@/hooks/useNotifications";
+import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
 
 interface Application {
   id: string;
@@ -147,6 +148,11 @@ const Dashboard = () => {
         <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
       </div>
     );
+  }
+
+  // Check if email is verified
+  if (!user.email_confirmed_at) {
+    return <EmailVerificationRequired email={user.email || ""} />;
   }
 
   const stats = {

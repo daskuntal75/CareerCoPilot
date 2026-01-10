@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAnalytics } from "@/hooks/useAnalytics";
+import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
 
 export type AppStep = "job" | "analysis" | "editor" | "interview";
 
@@ -360,6 +361,11 @@ const AppPage = () => {
         </div>
       </div>
     );
+  }
+
+  // Check if email is verified
+  if (user && !user.email_confirmed_at) {
+    return <EmailVerificationRequired email={user.email || ""} />;
   }
 
   // Redirect to profile setup if not complete
