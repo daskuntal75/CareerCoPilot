@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Mail, Lock, User, AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { z } from "zod";
+import { useAnalytics } from "@/hooks/useAnalytics";
 
 // Input validation schemas
 const emailSchema = z.string().trim().email("Invalid email address").max(255, "Email too long");
@@ -28,6 +29,7 @@ const Auth = () => {
   const [errors, setErrors] = useState<{ email?: string; password?: string; name?: string }>({});
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
+  const { trackAuthEvent, trackPageView } = useAnalytics();
   
   // Rate limiting state
   const attemptCountRef = useRef(0);
@@ -35,8 +37,9 @@ const Auth = () => {
   const [rateLimited, setRateLimited] = useState(false);
   const [rateLimitCountdown, setRateLimitCountdown] = useState(0);
 
-  // Redirect if already logged in
+  // Track page view and redirect if already logged in
   useEffect(() => {
+    trackPageView("auth", { mode: isLogin ? "login" : "signup" });
     if (user) {
       navigate("/dashboard");
     }
@@ -118,16 +121,20 @@ const Auth = () => {
         if (error) {
           // Don't reveal if email exists or not
           toast.error("Invalid email or password");
+          trackAuthEvent("login_failed");
         } else {
           toast.success("Welcome back!");
+          trackAuthEvent("login_success");
           navigate("/dashboard");
         }
       } else {
         const { error } = await signUp(email.trim(), password, fullName.trim());
         if (error) {
           toast.error(error.message);
+          trackAuthEvent("signup_failed", { error: error.message });
         } else {
           toast.success("Account created! You can now sign in.");
+          trackAuthEvent("signup_success");
           navigate("/dashboard");
         }
       }
