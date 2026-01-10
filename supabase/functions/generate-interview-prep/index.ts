@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { resumeContent, jobDescription, jobTitle, company, analysisData } = await req.json();
+    const { resumeContent, jobDescription, jobTitle, company, analysisData, sectionToRegenerate, existingData } = await req.json();
     
     if (!resumeContent || !jobDescription) {
       return new Response(
@@ -110,7 +110,45 @@ ${analysisData.requirements
   .join("\n")}
 ` : "";
 
-    const userPrompt = `Here is the resume containing actual skills, experiences, and achievements:
+    // Section-specific prompts for regeneration
+    const sectionPrompts: Record<string, string> = {
+      questions: `Focus ONLY on generating interview questions. Generate 8-12 highly probable, role-specific interview questions segmented by interviewer type with STAR + SMART answers. Return JSON with only the "questions" array.`,
+      keyStrengths: `Focus ONLY on analyzing key strengths to highlight during the interview. Return JSON with only the "keyStrengths" array (5-7 items).`,
+      potentialConcerns: `Focus ONLY on identifying potential concerns the interviewer might have and how to address them. Return JSON with only the "potentialConcerns" array (3-5 items).`,
+      questionsToAsk: `Focus ONLY on generating strategic questions for the candidate to ask interviewers. Return JSON with only the "questionsToAsk" object containing arrays for forRecruiter, forHiringManager, forPeer, forTechnicalLead, forVP.`,
+      companyIntelligence: `Focus ONLY on company intelligence research. Return JSON with only the "companyIntelligence" object.`,
+      strategicAnalysis: `Focus ONLY on SWOT strategic analysis. Return JSON with only the "strategicAnalysis" object.`,
+      uniqueValueProposition: `Focus ONLY on crafting a unique value proposition and why this company statement. Return JSON with "uniqueValueProposition" and "whyThisCompany" fields.`,
+    };
+
+    const userPrompt = sectionToRegenerate && sectionPrompts[sectionToRegenerate] 
+      ? `Here is the resume containing actual skills, experiences, and achievements:
+
+<resume>
+${resumeContent}
+</resume>
+
+Here is the job description for this role:
+
+<job_description>
+${jobDescription}
+</job_description>
+
+<job_title>
+${jobTitle}
+</job_title>
+
+<company_name>
+${company}
+</company_name>
+${analysisContext}
+
+# YOUR TASK
+
+${sectionPrompts[sectionToRegenerate]}
+
+Base ALL content ONLY on actual experiences from the resume. Do not fabricate or embellish.`
+      : `Here is the resume containing actual skills, experiences, and achievements:
 
 <resume>
 ${resumeContent}

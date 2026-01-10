@@ -1,9 +1,17 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ChevronDown, ChevronRight, MessageCircle, Lightbulb, AlertTriangle, HelpCircle, Building, Target, TrendingUp, Users, Briefcase } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, MessageCircle, Lightbulb, AlertTriangle, HelpCircle, Building, Target, TrendingUp, Users, Briefcase, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { JobData } from "@/pages/App";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 
 interface StarAnswer {
   situation: string;
@@ -78,6 +86,8 @@ interface InterviewPrepProps {
   data: InterviewPrepData;
   jobData: JobData;
   onBack: () => void;
+  onRegenerateSection?: (section: string) => void;
+  isRegenerating?: boolean;
 }
 
 const categoryConfig: Record<string, { label: string; color: string }> = {
@@ -205,8 +215,18 @@ const QuestionCard = ({ question, index }: { question: InterviewQuestion; index:
   );
 };
 
-const InterviewPrep = ({ data, jobData, onBack }: InterviewPrepProps) => {
+const InterviewPrep = ({ data, jobData, onBack, onRegenerateSection, isRegenerating }: InterviewPrepProps) => {
   const [activeTab, setActiveTab] = useState<"questions" | "research" | "strategy">("questions");
+
+  const regenerationSections = [
+    { key: "questions", label: "Interview Questions", description: "Regenerate predicted questions & STAR answers" },
+    { key: "keyStrengths", label: "Key Strengths", description: "Regenerate strengths to highlight" },
+    { key: "potentialConcerns", label: "Concerns to Address", description: "Regenerate potential concerns" },
+    { key: "questionsToAsk", label: "Questions to Ask", description: "Regenerate questions for interviewers" },
+    { key: "companyIntelligence", label: "Company Intelligence", description: "Regenerate company research" },
+    { key: "strategicAnalysis", label: "SWOT Analysis", description: "Regenerate strategic analysis" },
+    { key: "uniqueValueProposition", label: "Value Proposition", description: "Regenerate your unique value prop" },
+  ];
 
   // Handle both old format (string[]) and new format (object with categories)
   const renderQuestionsToAsk = () => {
@@ -269,12 +289,46 @@ const InterviewPrep = ({ data, jobData, onBack }: InterviewPrepProps) => {
           Back to cover letter
         </button>
         
-        <h1 className="text-3xl font-bold text-foreground mb-2">
-          Interview Prep
-        </h1>
-        <p className="text-muted-foreground">
-          Comprehensive preparation for {jobData.title} at {jobData.company}
-        </p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground mb-2">
+              Interview Prep
+            </h1>
+            <p className="text-muted-foreground">
+              Comprehensive preparation for {jobData.title} at {jobData.company}
+            </p>
+          </div>
+          
+          {onRegenerateSection && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={isRegenerating}>
+                  {isRegenerating ? (
+                    <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4" />
+                  )}
+                  Regenerate Section
+                  <ChevronDown className="w-4 h-4 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuLabel>Select section to regenerate</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {regenerationSections.map((section) => (
+                  <DropdownMenuItem
+                    key={section.key}
+                    onClick={() => onRegenerateSection(section.key)}
+                    className="flex flex-col items-start gap-0.5 cursor-pointer"
+                  >
+                    <span className="font-medium">{section.label}</span>
+                    <span className="text-xs text-muted-foreground">{section.description}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+        </div>
       </motion.div>
 
       {/* Tabs */}
