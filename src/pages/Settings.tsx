@@ -5,7 +5,7 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
-import { User, Bell, Mail, Clock, Save, Check } from "lucide-react";
+import { User, Bell, Mail, Clock, Save, Check, Lock } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { useAnalytics } from "@/hooks/useAnalytics";
+import { ChangePasswordForm } from "@/components/auth/ChangePasswordForm";
 
 interface ProfileSettings {
   full_name: string | null;
@@ -246,6 +247,20 @@ const Settings = () => {
                       </div>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+
+              {/* Security Settings */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Lock className="w-5 h-5 text-accent" />
+                    Security
+                  </CardTitle>
+                  <CardDescription>Manage your password and security settings</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ChangePasswordForm />
                 </CardContent>
               </Card>
 
