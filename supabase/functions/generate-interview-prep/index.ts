@@ -70,7 +70,7 @@ const parseAIResponse = (content: string): any => {
   }
 };
 
-// Make AI request with retry logic
+// Make AI request with retry logic - using faster model for reliability
 const makeAIRequestWithRetry = async (
   apiKey: string,
   systemPrompt: string,
@@ -82,6 +82,10 @@ const makeAIRequestWithRetry = async (
     try {
       console.log(`AI request attempt ${attempt + 1}/${MAX_RETRIES}`);
       
+      // Use AbortController with 120s timeout to prevent premature cancellation
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
+      
       const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -89,13 +93,17 @@ const makeAIRequestWithRetry = async (
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-pro",
+          // Use faster model for better reliability and shorter response times
+          model: "google/gemini-2.5-flash",
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },
           ],
         }),
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
 
       // Don't retry on client errors (4xx) except rate limiting
       if (response.status === 429) {
@@ -131,6 +139,11 @@ const makeAIRequestWithRetry = async (
       // Don't retry on certain errors
       if (lastError.message.includes("credits depleted")) {
         throw lastError;
+      }
+      
+      // Don't retry on abort errors (timeout)
+      if (lastError.name === "AbortError") {
+        throw new Error("Request timed out after 120 seconds. Please try again.");
       }
 
       // Exponential backoff before retry

@@ -405,8 +405,8 @@ const AppPage = () => {
             <AppStepper currentStep={currentStep} onStepClick={goToStep} />
           </div>
 
-          {/* Loading Overlay */}
-          {isLoading && (currentStep === "analysis" || currentStep === "editor") && (
+          {/* Loading Overlay - show for interview step too */}
+          {isLoading && (currentStep === "analysis" || currentStep === "editor" || currentStep === "interview") && (
             <GenerationProgress currentStage={generationStage} type={generationType} />
           )}
           
