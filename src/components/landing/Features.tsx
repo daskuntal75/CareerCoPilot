@@ -5,7 +5,9 @@ import {
   Clock, 
   Eye, 
   Sparkles, 
-  Download 
+  Download,
+  Lock,
+  Server
 } from "lucide-react";
 
 const features = [
@@ -41,6 +43,29 @@ const features = [
   },
 ];
 
+const securityFeatures = [
+  {
+    icon: Lock,
+    title: "End-to-End Encryption",
+    description: "AES-256 encryption protects your data at rest and in transit.",
+  },
+  {
+    icon: Eye,
+    title: "Zero-Retention AI",
+    description: "AI models never store or train on your personal career data.",
+  },
+  {
+    icon: Shield,
+    title: "PII Redaction",
+    description: "Sensitive information automatically redacted before vector storage.",
+  },
+  {
+    icon: Server,
+    title: "GDPR/CCPA Compliant",
+    description: "Full data portability and right to erasure with one-click deletion.",
+  },
+];
+
 const Features = () => {
   return (
     <section className="py-20 lg:py-32">
@@ -60,7 +85,7 @@ const Features = () => {
           </p>
         </motion.div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-20">
           {features.map((feature, index) => (
             <motion.div
               key={index}
@@ -72,6 +97,50 @@ const Features = () => {
             >
               <div className="w-12 h-12 rounded-xl bg-secondary flex items-center justify-center mb-4 group-hover:bg-accent/10 transition-colors">
                 <feature.icon className="w-6 h-6 text-muted-foreground group-hover:text-accent transition-colors" />
+              </div>
+              
+              <h3 className="text-lg font-semibold text-foreground mb-2">
+                {feature.title}
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                {feature.description}
+              </p>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Security Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="text-center mb-12"
+        >
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-success/10 border border-success/20 text-success mb-6">
+            <Shield className="w-4 h-4" />
+            <span className="text-sm font-medium">Enterprise-Grade Security</span>
+          </div>
+          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+            Your Career Data, Protected
+          </h2>
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            We take your privacy seriously. Your resume and career history are never stored by AI models and are protected with bank-level encryption.
+          </p>
+        </motion.div>
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {securityFeatures.map((feature, index) => (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: index * 0.1 }}
+              className="group p-6 rounded-xl border border-success/20 bg-success/5 hover:border-success/40 hover:shadow-lg transition-all duration-300"
+            >
+              <div className="w-12 h-12 rounded-xl bg-success/10 flex items-center justify-center mb-4">
+                <feature.icon className="w-6 h-6 text-success" />
               </div>
               
               <h3 className="text-lg font-semibold text-foreground mb-2">

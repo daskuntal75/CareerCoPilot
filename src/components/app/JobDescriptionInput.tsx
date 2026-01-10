@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Search, AlertCircle } from "lucide-react";
+import { Search, AlertCircle, Shield, Lock, Eye } from "lucide-react";
 import { motion } from "framer-motion";
 import type { JobData } from "@/pages/App";
 
@@ -77,6 +77,21 @@ const JobDescriptionInput = ({ onSubmit, initialData }: JobDescriptionInputProps
         transition={{ delay: 0.1 }}
         className="bg-card rounded-xl border border-border p-6 space-y-6"
       >
+        {/* Security Banner */}
+        <div className="flex items-center justify-center gap-4 p-3 rounded-lg bg-success/5 border border-success/20">
+          <div className="flex items-center gap-1.5 text-xs text-success">
+            <Shield className="w-3.5 h-3.5" />
+            <span>Prompt injection protection</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-success">
+            <Lock className="w-3.5 h-3.5" />
+            <span>End-to-end encrypted</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-success">
+            <Eye className="w-3.5 h-3.5" />
+            <span>Zero AI retention</span>
+          </div>
+        </div>
         {/* Company and Title */}
         <div className="grid md:grid-cols-2 gap-4">
           <div className="space-y-2">

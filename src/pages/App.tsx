@@ -55,6 +55,7 @@ const AppPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [generationStage, setGenerationStage] = useState<GenerationStage>("analyzing");
   const [generationType, setGenerationType] = useState<"cover-letter" | "interview-prep">("cover-letter");
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
 
   // Load existing application if ID provided and track page view
   useEffect(() => {
@@ -407,7 +408,17 @@ const AppPage = () => {
 
           {/* Loading Overlay - show for interview step too */}
           {isLoading && (currentStep === "analysis" || currentStep === "editor" || currentStep === "interview") && (
-            <GenerationProgress currentStage={generationStage} type={generationType} />
+            <GenerationProgress 
+              currentStage={generationStage} 
+              type={generationType}
+              onCancel={() => {
+                if (abortController) {
+                  abortController.abort();
+                  setAbortController(null);
+                }
+                setIsLoading(false);
+              }}
+            />
           )}
           
           {/* Simple loading for job analysis */}
