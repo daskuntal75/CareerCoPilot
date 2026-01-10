@@ -1,95 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sanitizeInput, sandboxUntrustedInput, hashString } from "../_shared/security-utils.ts";
-import { createAuditLog, logSecurityThreat } from "../_shared/audit-utils.ts";
+import { logSecurityThreat } from "../_shared/audit-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-// Retry configuration
-const MAX_RETRIES = 3;
-const INITIAL_DELAY_MS = 1000;
-
-// Sleep utility for exponential backoff
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Make AI request with retry logic
-const makeAIRequestWithRetry = async (
-  apiKey: string,
-  systemPrompt: string,
-  userPrompt: string
-): Promise<string> => {
-  let lastError: Error | null = null;
-
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      console.log(`AI request attempt ${attempt + 1}/${MAX_RETRIES}`);
-      
-      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-pro",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-        }),
-      });
-
-      // Don't retry on client errors (4xx) except rate limiting
-      if (response.status === 429) {
-        const retryAfter = response.headers.get('Retry-After');
-        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : INITIAL_DELAY_MS * Math.pow(2, attempt);
-        console.log(`Rate limited, waiting ${waitTime}ms before retry`);
-        await sleep(waitTime);
-        continue;
-      }
-
-      if (response.status === 402) {
-        throw new Error("AI credits depleted. Please add funds to continue.");
-      }
-
-      if (!response.ok) {
-        const text = await response.text();
-        console.error(`AI gateway error (status ${response.status}):`, text);
-        throw new Error(`AI gateway error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const content = data.choices?.[0]?.message?.content;
-      
-      if (!content) {
-        throw new Error("Empty response from AI");
-      }
-
-      console.log(`Successfully received response on attempt ${attempt + 1}`);
-      return content;
-
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-      console.error(`Attempt ${attempt + 1} failed:`, lastError.message);
-      
-      // Don't retry on certain errors
-      if (lastError.message.includes("credits depleted")) {
-        throw lastError;
-      }
-
-      // Exponential backoff before retry
-      if (attempt < MAX_RETRIES - 1) {
-        const delay = INITIAL_DELAY_MS * Math.pow(2, attempt);
-        console.log(`Waiting ${delay}ms before retry...`);
-        await sleep(delay);
-      }
-    }
-  }
-
-  throw lastError || new Error("All retry attempts failed");
 };
 
 // Section-specific prompts for regeneration
@@ -127,11 +43,11 @@ serve(async (req) => {
       analysisData, 
       applicationId, 
       userId,
-      // New fields for section-based regeneration
       sectionToRegenerate,
       userFeedback,
       selectedTips,
       existingCoverLetter,
+      stream = false,
     } = await req.json();
     
     if (!resumeContent || !jobDescription) {
@@ -162,14 +78,10 @@ serve(async (req) => {
       });
     }
 
-    // Create sandboxed version of job description
-    const sandboxedJobDescription = sandboxUntrustedInput(sanitizedJD, "job_posting");
-
     // RAG: Retrieve only verified, matched resume chunks for cover letter generation
     let verifiedExperience = "";
     
     if (applicationId && userId) {
-      // Get matched chunks with high similarity scores
       const { data: matches } = await supabase
         .from("requirement_matches")
         .select(`
@@ -183,7 +95,6 @@ serve(async (req) => {
         .order("similarity_score", { ascending: false });
 
       if (matches && matches.length > 0) {
-        // Build verified experience from matched chunks
         const uniqueChunks = new Map<string, string>();
         const verifiedRequirements: string[] = [];
 
@@ -259,14 +170,11 @@ You must not invent, infer, or embellish any experience, scope, metrics, or resp
 # RAG GROUNDING RULE:
 You MUST ONLY use experiences, metrics, and achievements that appear in the VERIFIED EXPERIENCE section. Do not fabricate or infer any additional qualifications.`;
 
-    let userPrompt: string;
-    
-    if (sectionToRegenerate && sectionToRegenerate !== "full") {
-      // Section-specific regeneration
-      userPrompt = `Here is the job posting information:
+    const userPrompt = sectionToRegenerate && sectionToRegenerate !== "full" 
+      ? `Here is the job posting information:
 
 <job_posting>
-${jobDescription}
+${sanitizedJD}
 </job_posting>
 
 <job_title>
@@ -279,13 +187,11 @@ ${resumeContent}
 ${analysisContext}
 ${regenerationContext}
 
-IMPORTANT: Return ONLY the regenerated section content. Do not include the full cover letter or any other sections.`;
-    } else {
-      // Full cover letter generation (original or full regeneration)
-      userPrompt = `Here is the job posting information:
+IMPORTANT: Return ONLY the regenerated section content. Do not include the full cover letter or any other sections.`
+      : `Here is the job posting information:
 
 <job_posting>
-${jobDescription}
+${sanitizedJD}
 </job_posting>
 
 Here is the job title:
@@ -311,22 +217,6 @@ Before beginning substantive work, perform these conceptual sub-tasks:
 5. Draft a cover letter that weaves matching qualifications into compelling narratives using STAR + SMART format (without spelling out the acronym)
 6. Validate all outputs for completeness, accuracy, and clarity
 
-# Detailed Instructions
-
-## Step 1: Extract the 10 most decision-critical job requirements
-Focus only on requirements that would materially influence a hiring decision for this role.
-
-## Step 2: Analyze Qualifications
-Review the VERIFIED EXPERIENCE thoroughly and extract all relevant skills, experiences, achievements, and qualifications.
-
-## Step 3: Create Honest Mapping
-For each matched requirement, explicitly name why this experience matters for this specific role. Only claim matches where there is genuine, documented experience in the VERIFIED EXPERIENCE section.
-
-## Step 4: Calculate Job Fit Percentage
-Count how many of the top 10 requirements are genuinely met and calculate percentage.
-
-## Step 5: Draft the Cover Letter
-
 Write a professional, concise cover letter:
 - **Opening Paragraph**: Light-hearted and attention-grabbing while remaining professional
 - **Body Paragraphs**: Focus on the top 3 job requirements using ONLY verified experience
@@ -334,22 +224,62 @@ Write a professional, concise cover letter:
 - **Closing**: Polite, professional, and impactful
 - **Tone**: Professional yet engaging, ATS-friendly
 
-## Step 6: Create Job Requirements Mapping Table
-Show all 10 requirements with matching evidence or "No direct match"
+Return ONLY the cover letter text, ready to use.`;
 
-## Step 7: Self-Validation
-Verify all claims are factually accurate based on VERIFIED EXPERIENCE only.
+    // Make the AI request with or without streaming
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        stream: stream,
+      }),
+    });
 
-# Output Format
-
-Your final response should contain:
-1. **Professional Cover Letter**: Complete, ready-to-send
-2. **Job Requirements to Experience Mapping Table**: 10 requirements with evidence
-3. **Job Fit Calculation**: Methodology and percentage`;
+    if (!response.ok) {
+      if (response.status === 429) {
+        return new Response(JSON.stringify({ error: "Rate limits exceeded, please try again later." }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (response.status === 402) {
+        return new Response(JSON.stringify({ error: "AI credits depleted. Please add funds to continue." }), {
+          status: 402,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const text = await response.text();
+      console.error("AI gateway error:", response.status, text);
+      throw new Error(`AI gateway error: ${response.status}`);
     }
 
-    // Use retry logic for the AI request
-    const coverLetter = await makeAIRequestWithRetry(LOVABLE_API_KEY, systemPrompt, userPrompt);
+    // If streaming, return the stream directly
+    if (stream) {
+      return new Response(response.body, {
+        headers: { 
+          ...corsHeaders, 
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+        },
+      });
+    }
+
+    // Non-streaming response
+    const data = await response.json();
+    const coverLetter = data.choices?.[0]?.message?.content;
+    
+    if (!coverLetter) {
+      throw new Error("Empty response from AI");
+    }
 
     return new Response(JSON.stringify({ 
       coverLetter,

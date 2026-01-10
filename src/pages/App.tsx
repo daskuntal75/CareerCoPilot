@@ -224,33 +224,88 @@ const AppPage = () => {
     setGenerationType("cover-letter");
     setGenerationStage("analyzing");
     
+    // Create abort controller for cancellation
+    const controller = new AbortController();
+    setAbortController(controller);
+    
     try {
-      // Simulate stage progression
-      const stageTimer1 = setTimeout(() => setGenerationStage("drafting"), 3000);
-      const stageTimer2 = setTimeout(() => setGenerationStage("refining"), 8000);
-      
-      // RAG-grounded cover letter generation using only verified resume chunks
-      const response = await supabase.functions.invoke("generate-cover-letter", {
-        body: {
-          resumeContent: detailedResume.content,
-          jobDescription: jobData.description,
-          jobTitle: jobData.title,
-          company: jobData.company,
-          analysisData,
-          applicationId: applicationId,
-          userId: user?.id,
-        },
-      });
+      // Get auth token for streaming request
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Authentication required");
 
-      clearTimeout(stageTimer1);
-      clearTimeout(stageTimer2);
+      setGenerationStage("drafting");
 
-      if (response.error) throw new Error(response.error.message);
-      
+      // Make streaming request
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-cover-letter`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({
+            resumeContent: detailedResume.content,
+            jobDescription: jobData.description,
+            jobTitle: jobData.title,
+            company: jobData.company,
+            analysisData,
+            applicationId: applicationId,
+            userId: user?.id,
+            stream: true,
+          }),
+          signal: controller.signal,
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Request failed with status ${response.status}`);
+      }
+
+      // Handle SSE stream
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let buffer = "";
+
+      setGenerationStage("refining");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        
+        // Process SSE events line by line
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6).trim();
+            if (data === "[DONE]") break;
+            
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) {
+                fullContent += content;
+              }
+            } catch {
+              // Ignore parse errors for partial chunks
+            }
+          }
+        }
+      }
+
       setGenerationStage("complete");
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      setCoverLetter(response.data.coverLetter);
+      setCoverLetter(fullContent);
       setCurrentStep("editor");
       
       // Track analytics
@@ -262,15 +317,20 @@ const AppPage = () => {
 
       if (user) {
         await saveApplication({
-          cover_letter: response.data.coverLetter,
+          cover_letter: fullContent,
         });
       }
     } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        toast.info("Generation cancelled");
+        return;
+      }
       console.error("Error generating cover letter:", error);
-      toast.error("Failed to generate cover letter. Please try again.");
+      toast.error(error instanceof Error ? error.message : "Failed to generate cover letter. Please try again.");
       trackCoverLetterEvent("generation_failed", { error: String(error) });
     } finally {
       setIsLoading(false);
+      setAbortController(null);
     }
   };
 
@@ -281,10 +341,14 @@ const AppPage = () => {
     setGenerationType("interview-prep");
     setGenerationStage("analyzing");
     
+    // Create abort controller for cancellation
+    const controller = new AbortController();
+    setAbortController(controller);
+    
     try {
-      // Simulate stage progression
-      const stageTimer1 = setTimeout(() => setGenerationStage("drafting"), 4000);
-      const stageTimer2 = setTimeout(() => setGenerationStage("refining"), 10000);
+      // For interview prep, we use non-streaming since we need structured JSON
+      // The function handles retries and timeouts internally
+      setGenerationStage("drafting");
       
       const response = await supabase.functions.invoke("generate-interview-prep", {
         body: {
@@ -295,13 +359,14 @@ const AppPage = () => {
           analysisData,
           sectionToRegenerate,
           existingData: sectionToRegenerate ? interviewPrep : undefined,
+          stream: false, // Keep non-streaming for structured JSON response
         },
       });
 
-      clearTimeout(stageTimer1);
-      clearTimeout(stageTimer2);
-
       if (response.error) throw new Error(response.error.message);
+      
+      setGenerationStage("refining");
+      await new Promise(resolve => setTimeout(resolve, 300));
       
       setGenerationStage("complete");
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -331,11 +396,16 @@ const AppPage = () => {
         }
       }
     } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        toast.info("Generation cancelled");
+        return;
+      }
       console.error("Error generating interview prep:", error);
-      toast.error("Failed to generate interview prep. Please try again.");
+      toast.error(error instanceof Error ? error.message : "Failed to generate interview prep. Please try again.");
       trackInterviewPrepEvent("generation_failed", { error: String(error) });
     } finally {
       setIsLoading(false);
+      setAbortController(null);
     }
   };
 

@@ -70,7 +70,7 @@ const parseAIResponse = (content: string): any => {
   }
 };
 
-// Make AI request with retry logic - using faster model for reliability
+// Make AI request with retry logic - non-streaming
 const makeAIRequestWithRetry = async (
   apiKey: string,
   systemPrompt: string,
@@ -82,7 +82,6 @@ const makeAIRequestWithRetry = async (
     try {
       console.log(`AI request attempt ${attempt + 1}/${MAX_RETRIES}`);
       
-      // Use AbortController with 120s timeout to prevent premature cancellation
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 120000);
       
@@ -93,7 +92,6 @@ const makeAIRequestWithRetry = async (
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          // Use faster model for better reliability and shorter response times
           model: "google/gemini-2.5-flash",
           messages: [
             { role: "system", content: systemPrompt },
@@ -105,7 +103,6 @@ const makeAIRequestWithRetry = async (
       
       clearTimeout(timeoutId);
 
-      // Don't retry on client errors (4xx) except rate limiting
       if (response.status === 429) {
         const retryAfter = response.headers.get('Retry-After');
         const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : INITIAL_DELAY_MS * Math.pow(2, attempt);
@@ -127,7 +124,6 @@ const makeAIRequestWithRetry = async (
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content;
       
-      // Try to parse the response
       const parsed = parseAIResponse(content);
       console.log(`Successfully parsed response on attempt ${attempt + 1}`);
       return parsed;
@@ -136,17 +132,14 @@ const makeAIRequestWithRetry = async (
       lastError = error instanceof Error ? error : new Error(String(error));
       console.error(`Attempt ${attempt + 1} failed:`, lastError.message);
       
-      // Don't retry on certain errors
       if (lastError.message.includes("credits depleted")) {
         throw lastError;
       }
       
-      // Don't retry on abort errors (timeout)
       if (lastError.name === "AbortError") {
         throw new Error("Request timed out after 120 seconds. Please try again.");
       }
 
-      // Exponential backoff before retry
       if (attempt < MAX_RETRIES - 1) {
         const delay = INITIAL_DELAY_MS * Math.pow(2, attempt);
         console.log(`Waiting ${delay}ms before retry...`);
@@ -158,13 +151,59 @@ const makeAIRequestWithRetry = async (
   throw lastError || new Error("All retry attempts failed");
 };
 
+// Make streaming AI request
+const makeStreamingAIRequest = async (
+  apiKey: string,
+  systemPrompt: string,
+  userPrompt: string
+): Promise<Response> => {
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "google/gemini-2.5-flash",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      stream: true,
+    }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 429) {
+      throw new Error("Rate limits exceeded, please try again later.");
+    }
+    if (response.status === 402) {
+      throw new Error("AI credits depleted. Please add funds to continue.");
+    }
+    const text = await response.text();
+    console.error("AI gateway error:", response.status, text);
+    throw new Error(`AI gateway error: ${response.status}`);
+  }
+
+  return response;
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { resumeContent, jobDescription, jobTitle, company, analysisData, sectionToRegenerate, existingData } = await req.json();
+    const { 
+      resumeContent, 
+      jobDescription, 
+      jobTitle, 
+      company, 
+      analysisData, 
+      sectionToRegenerate, 
+      existingData,
+      stream = false,
+    } = await req.json();
     
     if (!resumeContent || !jobDescription) {
       return new Response(
@@ -185,13 +224,11 @@ serve(async (req) => {
 ## Accuracy Requirements:
 - Base ALL interview question responses ONLY on actual experiences, achievements, and metrics from the provided resume
 - DO NOT fabricate, embellish, or invent any metrics, outcomes, or experiences not present in the resume
-- DO NOT combine metrics or details from different projects into a single response
 - Maintain complete accuracy and truthfulness to the resume content
 
 ## Response Behavior:
 - Answer directly using your best judgment
-- Do not ask clarifying questions unless absolutely necessary
-- If the job description is empty, missing, or inaccessible, immediately state: "I need the full job description text to proceed."
+- Do not ask clarifying questions
 
 ## CRITICAL: JSON Output Format
 - You MUST return ONLY a valid JSON object, no markdown, no explanation
@@ -242,7 +279,7 @@ Return your response as a JSON object with this structure:
         "situation": "string - specific situation from resume",
         "task": "string - the challenge from resume",
         "action": "string - actions taken from resume",
-        "result": "string - SMART outcome (Specific, Measurable, Achievable, Relevant, Time-bound) from resume"
+        "result": "string - SMART outcome from resume"
       },
       "tips": ["string - additional tips"]
     }
@@ -258,8 +295,7 @@ Return your response as a JSON object with this structure:
   "potentialConcerns": ["string - concerns to address proactively"]
 }
 
-Generate 8-12 interview questions covering different interviewer types (recruiter, hiring manager, peer, technical, VP, panel).
-For EACH question, use the STAR + SMART format with content ONLY from the resume.`;
+Generate 8-12 interview questions covering different interviewer types.`;
 
     const analysisContext = analysisData ? `
 ANALYSIS SUMMARY:
@@ -273,118 +309,88 @@ ${analysisData.requirements
     const sectionPrompts: Record<string, string> = {
       questions: `Focus ONLY on generating interview questions. Generate 8-12 highly probable, role-specific interview questions segmented by interviewer type with STAR + SMART answers. Return JSON with only the "questions" array.`,
       keyStrengths: `Focus ONLY on analyzing key strengths to highlight during the interview. Return JSON with only the "keyStrengths" array (5-7 items).`,
-      potentialConcerns: `Focus ONLY on identifying potential concerns the interviewer might have and how to address them. Return JSON with only the "potentialConcerns" array (3-5 items).`,
-      questionsToAsk: `Focus ONLY on generating strategic questions for the candidate to ask interviewers. Return JSON with only the "questionsToAsk" object containing arrays for forRecruiter, forHiringManager, forPeer, forTechnicalLead, forVP.`,
+      potentialConcerns: `Focus ONLY on identifying potential concerns the interviewer might have. Return JSON with only the "potentialConcerns" array (3-5 items).`,
+      questionsToAsk: `Focus ONLY on generating strategic questions for the candidate to ask. Return JSON with only the "questionsToAsk" object.`,
       companyIntelligence: `Focus ONLY on company intelligence research. Return JSON with only the "companyIntelligence" object.`,
       strategicAnalysis: `Focus ONLY on SWOT strategic analysis. Return JSON with only the "strategicAnalysis" object.`,
-      uniqueValueProposition: `Focus ONLY on crafting a unique value proposition and why this company statement. Return JSON with "uniqueValueProposition" and "whyThisCompany" fields.`,
+      uniqueValueProposition: `Focus ONLY on crafting a unique value proposition. Return JSON with "uniqueValueProposition" and "whyThisCompany" fields.`,
     };
 
     const userPrompt = sectionToRegenerate && sectionPrompts[sectionToRegenerate] 
-      ? `Here is the resume containing actual skills, experiences, and achievements:
-
+      ? `Resume:
 <resume>
 ${resumeContent}
 </resume>
 
-Here is the job description for this role:
-
+Job Description:
 <job_description>
 ${jobDescription}
 </job_description>
 
-<job_title>
-${jobTitle}
-</job_title>
-
-<company_name>
-${company}
-</company_name>
+<job_title>${jobTitle}</job_title>
+<company_name>${company}</company_name>
 ${analysisContext}
 
 # YOUR TASK
-
 ${sectionPrompts[sectionToRegenerate]}
 
-Base ALL content ONLY on actual experiences from the resume. Do not fabricate or embellish.
+Base ALL content ONLY on actual experiences from the resume.
 IMPORTANT: Return ONLY valid JSON, no markdown code blocks.`
-      : `Here is the resume containing actual skills, experiences, and achievements:
-
+      : `Resume:
 <resume>
 ${resumeContent}
 </resume>
 
-Here is the job description for this role:
-
+Job Description:
 <job_description>
 ${jobDescription}
 </job_description>
 
-<job_title>
-${jobTitle}
-</job_title>
-
-<company_name>
-${company}
-</company_name>
+<job_title>${jobTitle}</job_title>
+<company_name>${company}</company_name>
 ${analysisContext}
 
 # YOUR TASK
 
-Complete a comprehensive interview preparation covering five phases:
+Complete comprehensive interview preparation covering:
 
-## Phase 1: Information Gathering & Validation
-- Acknowledge the application context (job title at company)
-- Review and validate the job description is complete
-- Research concrete company data:
-  - Current vision/mission statement
-  - Industry sector and market position
-  - Specific employee count if available
-  - Recent financial performance (revenue, profit with timeframes)
-  - Key products/services and customer segments
-
-## Phase 2: Strategic Analysis
-- Conduct comprehensive SWOT analysis:
-  - List key items in each quadrant (Strengths, Weaknesses, Opportunities, Threats)
-  - Identify the #1 most critical factor in each quadrant
-- Map competitive landscape
-
-## Phase 3: Cultural & Benefits Research
-- Research company culture and work environment insights
-- Focus on insights relevant to director-level or senior roles
-- Identify unique or standout employee benefits
-
-## Phase 4: Interview Preparation
-- Define core role requirements and key competencies the company seeks
-- Create a Unique Value Proposition statement based on resume experience and how it helps with the company's vision
-- Prepare a statement about why this company would be chosen
-- Predict interview structure (behavioral, product sense, technical, case studies)
-- Generate 8-12 highly probable, role-specific interview questions segmented by interviewer type:
-  - Recruiter Screen (2-3 questions)
-  - Hiring Manager (2-3 questions)
-  - Product Director/Peer (2-3 questions)
-  - Technical Lead/Engineering mgr (2-3 questions)
-  - VP (assessing culture fit) (2-3 questions)
-  - Group/Panel (1-2 questions)
-
-For EACH question, draft the best possible answer using STAR + SMART format:
-- Situation: Set context from actual resume experience
-- Task: Describe the challenge from resume
-- Action: Detail specific actions taken (from resume only)
-- Result: Provide concrete outcomes using SMART framework (Specific, Measurable, Achievable, Relevant, Time-bound) - from resume only
-
-## Phase 5: Question Generation
-Develop 3 insightful, strategic questions for the candidate to ask at each stage:
-- Questions for Recruiter
-- Questions for Hiring Manager
-- Questions for Product Director/Peer
-- Questions for Technical Lead/Engineering mgr
-- Questions for VP (assessing culture fit)
+1. Company research (vision, market, products)
+2. SWOT strategic analysis
+3. Culture and benefits research
+4. Interview structure prediction
+5. Generate 8-12 interview questions with STAR answers
+6. Strategic questions to ask interviewers
+7. Key strengths and potential concerns
 
 Return the complete analysis as a JSON object following the structure in the system prompt.
 IMPORTANT: Return ONLY valid JSON, no markdown code blocks.`;
 
-    // Use retry logic for the AI request
+    // Handle streaming request
+    if (stream) {
+      try {
+        const streamResponse = await makeStreamingAIRequest(LOVABLE_API_KEY, systemPrompt, userPrompt);
+        return new Response(streamResponse.body, {
+          headers: { 
+            ...corsHeaders, 
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+          },
+        });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Streaming failed";
+        return new Response(
+          JSON.stringify({ error: errorMessage }),
+          { 
+            status: errorMessage.includes("Rate limits") ? 429 : 
+                   errorMessage.includes("credits depleted") ? 402 : 500, 
+            headers: { ...corsHeaders, "Content-Type": "application/json" } 
+          }
+        );
+      }
+    }
+
+    // Non-streaming request with retry logic
     const interviewPrep = await makeAIRequestWithRetry(LOVABLE_API_KEY, systemPrompt, userPrompt);
 
     return new Response(JSON.stringify(interviewPrep), {
