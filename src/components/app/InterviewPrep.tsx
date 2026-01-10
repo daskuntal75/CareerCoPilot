@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { 
   ArrowLeft, ChevronDown, ChevronRight, MessageCircle, Lightbulb, AlertTriangle, 
   HelpCircle, Building, Target, TrendingUp, Users, Briefcase, RefreshCw, 
-  Download, Play, FileEdit, FileType, Sparkles, Eye
+  Download, Play, FileEdit, FileType, Sparkles, Eye, History
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,8 @@ import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } fro
 import type { JobData } from "@/pages/App";
 import InterviewPractice from "./InterviewPractice";
 import ExportPreviewModal from "./ExportPreviewModal";
+import VersionHistoryPanel from "./VersionHistoryPanel";
+import { useDocumentVersions, DocumentVersion } from "@/hooks/useDocumentVersions";
 import {
   Dialog,
   DialogContent,
@@ -107,6 +109,8 @@ interface InterviewPrepProps {
   onRegenerateSection?: (section: string, feedback: string, tips: string[]) => void;
   isRegenerating?: boolean;
   onGoToCoverLetter?: () => void;
+  applicationId?: string | null;
+  onDataChange?: (data: InterviewPrepData) => void;
 }
 
 const categoryConfig: Record<string, { label: string; color: string }> = {
@@ -263,6 +267,8 @@ const InterviewPrep = ({
   onRegenerateSection, 
   isRegenerating,
   onGoToCoverLetter,
+  applicationId,
+  onDataChange,
 }: InterviewPrepProps) => {
   const [activeTab, setActiveTab] = useState<"questions" | "research" | "strategy">("questions");
   const [showPracticeMode, setShowPracticeMode] = useState(false);
@@ -272,6 +278,65 @@ const InterviewPrep = ({
   const [feedbackText, setFeedbackText] = useState("");
   const [selectedTips, setSelectedTips] = useState<string[]>([]);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+
+  // Version history hook
+  const {
+    versions,
+    isLoading: isLoadingVersions,
+    saveVersion,
+    restoreVersion,
+    deleteVersion,
+    renameVersion,
+  } = useDocumentVersions(applicationId || null, "interview_prep");
+
+  // Track previous data for auto-versioning
+  const previousDataRef = useRef<InterviewPrepData>(data);
+  const lastAutoSaveRef = useRef<number>(Date.now());
+
+  // Save initial version when data first loads
+  useEffect(() => {
+    if (data && applicationId && versions.length === 0) {
+      saveVersion(null, data, "initial");
+      previousDataRef.current = data;
+    }
+  }, [data, applicationId, versions.length]);
+
+  // Auto-version after regeneration (significant data change)
+  useEffect(() => {
+    if (!data || !applicationId || versions.length === 0) return;
+    
+    const previousData = previousDataRef.current;
+    const timeSinceLastSave = Date.now() - lastAutoSaveRef.current;
+    
+    // Calculate question count difference as a proxy for significant change
+    const previousQuestionCount = previousData.questions?.length || 0;
+    const currentQuestionCount = data.questions?.length || 0;
+    const questionCountDiff = Math.abs(currentQuestionCount - previousQuestionCount);
+    
+    // Check if key fields changed significantly
+    const significantChange = 
+      questionCountDiff > 2 ||
+      previousData.uniqueValueProposition !== data.uniqueValueProposition ||
+      JSON.stringify(previousData.keyStrengths) !== JSON.stringify(data.keyStrengths);
+    
+    if (significantChange && timeSinceLastSave > 30000) {
+      saveVersion(null, data, "regenerated", `Auto-saved after changes`);
+      previousDataRef.current = data;
+      lastAutoSaveRef.current = Date.now();
+    }
+  }, [data, applicationId, versions.length]);
+
+  const handleRestoreVersion = async (version: DocumentVersion) => {
+    const success = await restoreVersion(version);
+    if (success && version.structured_content && onDataChange) {
+      onDataChange(version.structured_content as InterviewPrepData);
+    }
+  };
+
+  const handleSelectVersion = (version: DocumentVersion) => {
+    toast.info(`Viewing version ${version.version_number}. Click "Restore" to apply.`);
+  };
 
   const handleExportPDF = async () => {
     setIsExporting(true);
@@ -617,9 +682,44 @@ const InterviewPrep = ({
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+            
+            {/* Version History Button */}
+            {applicationId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowVersionHistory(!showVersionHistory)}
+              >
+                <History className="w-4 h-4" />
+                Versions ({versions.length})
+              </Button>
+            )}
           </div>
         </div>
       </motion.div>
+
+      {/* Version History Panel */}
+      <AnimatePresence>
+        {showVersionHistory && applicationId && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mb-6 overflow-hidden"
+          >
+            <VersionHistoryPanel
+              versions={versions}
+              currentVersionId={versions.find(v => v.is_current)?.id}
+              documentType="interview_prep"
+              onSelectVersion={handleSelectVersion}
+              onRestoreVersion={handleRestoreVersion}
+              onDeleteVersion={deleteVersion}
+              onRenameVersion={renameVersion}
+              isLoading={isLoadingVersions}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Practice Mode Modal */}
       <AnimatePresence>
