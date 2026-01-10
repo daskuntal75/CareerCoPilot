@@ -13,7 +13,8 @@ import {
   AlertTriangle,
   RefreshCw,
   BarChart3,
-  Briefcase
+  Briefcase,
+  DollarSign
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +33,7 @@ import {
   Legend,
 } from "recharts";
 import UserManagement from "@/components/admin/UserManagement";
+import RevenueAnalytics from "@/components/admin/RevenueAnalytics";
 
 interface UserSummary {
   total_users: number;
@@ -80,15 +82,17 @@ const Admin = () => {
 
   const checkAdminAccess = async () => {
     try {
+      // Check user_roles table for admin role (secure method)
       const { data, error } = await supabase
-        .from("profiles")
-        .select("is_admin")
+        .from("user_roles")
+        .select("role")
         .eq("user_id", user?.id)
-        .single();
+        .eq("role", "admin")
+        .maybeSingle();
 
       if (error) throw error;
 
-      if (data?.is_admin) {
+      if (data) {
         setIsAdmin(true);
         fetchAllData();
       } else {
@@ -303,6 +307,10 @@ const Admin = () => {
                   <Briefcase className="w-4 h-4" />
                   Applications
                 </TabsTrigger>
+                <TabsTrigger value="revenue" className="flex items-center gap-2">
+                  <DollarSign className="w-4 h-4" />
+                  Revenue
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="users">
@@ -421,6 +429,10 @@ const Admin = () => {
                     )}
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              <TabsContent value="revenue">
+                <RevenueAnalytics refreshTrigger={refreshTrigger} />
               </TabsContent>
             </Tabs>
           </motion.div>
