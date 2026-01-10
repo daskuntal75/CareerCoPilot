@@ -22,6 +22,7 @@ const Pricing = lazy(() => import("./pages/Pricing"));
 const HowItWorks = lazy(() => import("./pages/HowItWorks"));
 const Analytics = lazy(() => import("./pages/Analytics"));
 const Settings = lazy(() => import("./pages/Settings"));
+const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,6 +59,7 @@ const App = () => (
                 <Route path="/app" element={<AppPage />} />
                 <Route path="/app/:id" element={<AppPage />} />
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/auth/callback" element={<AuthCallback />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/profile" element={<ProfileSetup />} />
                 <Route path="/analytics" element={<Analytics />} />
