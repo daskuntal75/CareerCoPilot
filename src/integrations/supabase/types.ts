@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      analytics_events: {
+        Row: {
+          created_at: string
+          event_category: string
+          event_data: Json | null
+          event_name: string
+          id: string
+          page_path: string | null
+          session_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_category: string
+          event_data?: Json | null
+          event_name: string
+          id?: string
+          page_path?: string | null
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_category?: string
+          event_data?: Json | null
+          event_name?: string
+          id?: string
+          page_path?: string | null
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       applications: {
         Row: {
           applied_at: string | null
@@ -121,6 +154,47 @@ export type Database = {
           },
         ]
       }
+      email_notifications: {
+        Row: {
+          application_id: string | null
+          id: string
+          metadata: Json | null
+          notification_type: string
+          sent_at: string
+          status: string | null
+          subject: string
+          user_id: string
+        }
+        Insert: {
+          application_id?: string | null
+          id?: string
+          metadata?: Json | null
+          notification_type: string
+          sent_at?: string
+          status?: string | null
+          subject: string
+          user_id: string
+        }
+        Update: {
+          application_id?: string | null
+          id?: string
+          metadata?: Json | null
+          notification_type?: string
+          sent_at?: string
+          status?: string | null
+          subject?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_notifications_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       job_requirements: {
         Row: {
           application_id: string
@@ -166,24 +240,30 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string
+          email_notifications_enabled: boolean | null
           full_name: string | null
           id: string
+          interview_reminder_days: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
           avatar_url?: string | null
           created_at?: string
+          email_notifications_enabled?: boolean | null
           full_name?: string | null
           id?: string
+          interview_reminder_days?: number | null
           updated_at?: string
           user_id: string
         }
         Update: {
           avatar_url?: string | null
           created_at?: string
+          email_notifications_enabled?: boolean | null
           full_name?: string | null
           id?: string
+          interview_reminder_days?: number | null
           updated_at?: string
           user_id?: string
         }
