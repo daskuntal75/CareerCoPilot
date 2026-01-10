@@ -1,10 +1,13 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ChevronDown, ChevronRight, Sparkles, Check, Minus, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, Sparkles, Check, Minus, X, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { AnalysisData, JobData, RequirementMatch } from "@/pages/App";
 import RAGDebugPanel from "./RAGDebugPanel";
+import { useUsageTracking } from "@/hooks/useUsageTracking";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface AnalysisResultsProps {
   data: AnalysisData;
@@ -77,10 +80,17 @@ const RequirementRow = ({ item, index }: { item: RequirementMatch; index: number
 };
 
 const AnalysisResults = ({ data, jobData, onGenerate, onBack, applicationId }: AnalysisResultsProps) => {
+  const { subscription } = useAuth();
+  const { canUseFeature, getRemainingUsage, limits } = useUsageTracking();
+  
   const fitLabel = fitLevelLabels[data.fitLevel];
   const yesCount = data.requirements.filter(r => r.status === "yes").length;
   const partialCount = data.requirements.filter(r => r.status === "partial").length;
   const noCount = data.requirements.filter(r => r.status === "no").length;
+  
+  const canGenerate = canUseFeature("cover_letter");
+  const remaining = getRemainingUsage("cover_letter");
+  const isFreeTier = subscription.tier === "free";
 
   // Calculate circumference for the circular progress
   const radius = 45;
@@ -187,11 +197,36 @@ const AnalysisResults = ({ data, jobData, onGenerate, onBack, applicationId }: A
             </div>
 
             {/* Generate CTA */}
-            <div className="mt-6">
-              <Button variant="hero" className="w-full" onClick={onGenerate}>
-                <Sparkles className="w-4 h-4" />
-                Generate Cover Letter
-              </Button>
+            <div className="mt-6 space-y-3">
+              {isFreeTier && remaining !== null && (
+                <div className={cn(
+                  "flex items-center gap-2 text-sm p-2 rounded-lg",
+                  canGenerate 
+                    ? "bg-accent/10 text-accent" 
+                    : "bg-destructive/10 text-destructive"
+                )}>
+                  <AlertCircle className="w-4 h-4" />
+                  <span>
+                    {canGenerate 
+                      ? `${remaining} of ${limits.cover_letter} free cover letters remaining this month`
+                      : "Monthly limit reached"}
+                  </span>
+                </div>
+              )}
+              
+              {canGenerate ? (
+                <Button variant="hero" className="w-full" onClick={onGenerate}>
+                  <Sparkles className="w-4 h-4" />
+                  Generate Cover Letter
+                </Button>
+              ) : (
+                <Button variant="hero" className="w-full" asChild>
+                  <Link to="/pricing">
+                    <Sparkles className="w-4 h-4" />
+                    Upgrade for Unlimited
+                  </Link>
+                </Button>
+              )}
             </div>
           </div>
         </motion.div>

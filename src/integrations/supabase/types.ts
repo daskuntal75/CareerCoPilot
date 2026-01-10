@@ -439,6 +439,36 @@ export type Database = {
         }
         Relationships: []
       }
+      usage_tracking: {
+        Row: {
+          created_at: string
+          feature_type: string
+          id: string
+          updated_at: string
+          usage_count: number
+          usage_month: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          feature_type: string
+          id?: string
+          updated_at?: string
+          usage_count?: number
+          usage_month: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          feature_type?: string
+          id?: string
+          updated_at?: string
+          usage_count?: number
+          usage_month?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_cover_letter_templates: {
         Row: {
           content: string
