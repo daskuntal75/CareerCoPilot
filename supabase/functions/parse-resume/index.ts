@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { sanitizeResumeForStorage, redactPII, hashString } from "../_shared/security-utils.ts";
+import { createAuditLog } from "../_shared/audit-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -221,7 +223,7 @@ serve(async (req) => {
 
     if (upsertError) throw new Error("Failed to store resume");
 
-    // Simple chunking
+    // Simple chunking with PII redaction for vector storage
     const chunks = chunkText(textContent);
     
     // Delete existing chunks
@@ -231,24 +233,51 @@ serve(async (req) => {
       .eq("user_id", user.id)
       .eq("resume_type", resumeType);
 
-    // Insert chunks in smaller batches to reduce memory
+    // Insert chunks in smaller batches with PII redaction
     const batchSize = 5;
+    let totalPiiRedacted = 0;
+    
     for (let i = 0; i < chunks.length; i += batchSize) {
-      const batch = chunks.slice(i, i + batchSize).map((content, idx) => ({
-        user_id: user.id,
-        application_id: null,
-        resume_type: resumeType,
-        chunk_index: i + idx,
-        content,
-        chunk_type: detectChunkType(content),
-        token_count: Math.ceil(content.split(/\s+/).length / 1.3),
-        metadata: {},
-      }));
+      const batch = chunks.slice(i, i + batchSize).map((content, idx) => {
+        // PRIVACY: Redact PII before vector storage (GDPR Data Minimization)
+        const { redacted, piiTypes, originalHash } = redactPII(content);
+        
+        if (piiTypes.length > 0) {
+          totalPiiRedacted++;
+          console.log(`PII redacted from chunk ${i + idx}: ${piiTypes.join(', ')}`);
+        }
+        
+        return {
+          user_id: user.id,
+          application_id: null,
+          resume_type: resumeType,
+          chunk_index: i + idx,
+          content: redacted, // Store redacted content for vector search
+          chunk_type: detectChunkType(content),
+          token_count: Math.ceil(redacted.split(/\s+/).length / 1.3),
+          metadata: {},
+          pii_redacted: piiTypes.length > 0,
+          original_pii_hash: piiTypes.length > 0 ? originalHash : null,
+        };
+      });
 
       await supabase.from("resume_chunks").insert(batch);
     }
 
-    console.log(`Stored ${chunks.length} chunks for ${resumeType}`);
+    console.log(`Stored ${chunks.length} chunks for ${resumeType}, ${totalPiiRedacted} with PII redacted`);
+    
+    // AUDIT: Log resume parsing action
+    await createAuditLog(supabase, {
+      user_id: user.id,
+      action_type: 'resume_parsed',
+      action_target: fileName,
+      action_data: {
+        resumeType,
+        chunksCount: chunks.length,
+        piiRedactedChunks: totalPiiRedacted,
+      },
+      approval_status: 'approved',
+    });
 
     return new Response(
       JSON.stringify({

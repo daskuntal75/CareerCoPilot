@@ -104,6 +104,48 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_log: {
+        Row: {
+          action_data: Json | null
+          action_target: string | null
+          action_type: string
+          approval_hash: string | null
+          approval_status: string | null
+          approved_at: string | null
+          created_at: string
+          id: string
+          ip_address: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          action_data?: Json | null
+          action_target?: string | null
+          action_type: string
+          approval_hash?: string | null
+          approval_status?: string | null
+          approved_at?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          action_data?: Json | null
+          action_target?: string | null
+          action_type?: string
+          approval_hash?: string | null
+          approval_status?: string | null
+          approved_at?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       document_versions: {
         Row: {
           application_id: string | null
@@ -323,7 +365,10 @@ export type Database = {
           created_at: string
           id: string
           metadata: Json | null
+          original_pii_hash: string | null
+          pii_redacted: boolean | null
           resume_type: string | null
+          search_vector: unknown
           token_count: number | null
           user_id: string
         }
@@ -335,7 +380,10 @@ export type Database = {
           created_at?: string
           id?: string
           metadata?: Json | null
+          original_pii_hash?: string | null
+          pii_redacted?: boolean | null
           resume_type?: string | null
+          search_vector?: unknown
           token_count?: number | null
           user_id: string
         }
@@ -347,7 +395,10 @@ export type Database = {
           created_at?: string
           id?: string
           metadata?: Json | null
+          original_pii_hash?: string | null
+          pii_redacted?: boolean | null
           resume_type?: string | null
+          search_vector?: unknown
           token_count?: number | null
           user_id?: string
         }
@@ -360,6 +411,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      sanitization_log: {
+        Row: {
+          id: string
+          input_type: string
+          original_hash: string
+          sanitized_at: string
+          threats_detected: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          id?: string
+          input_type: string
+          original_hash: string
+          sanitized_at?: string
+          threats_detected?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          id?: string
+          input_type?: string
+          original_hash?: string
+          sanitized_at?: string
+          threats_detected?: Json | null
+          user_id?: string | null
+        }
+        Relationships: []
       }
       user_cover_letter_templates: {
         Row: {
