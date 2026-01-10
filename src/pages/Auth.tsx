@@ -1,15 +1,18 @@
 import { useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { ArrowLeft, Mail, Lock, User, AlertCircle } from "lucide-react";
+import { ArrowLeft, Mail, Lock, User, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { Link } from "react-router-dom";
 import { z } from "zod";
 import { useAnalytics } from "@/hooks/useAnalytics";
+import { PasswordStrengthMeter, isPasswordStrong } from "@/components/auth/PasswordStrengthMeter";
+import { ForgotPasswordForm } from "@/components/auth/ForgotPasswordForm";
+import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm";
 
 // Input validation schemas
 const emailSchema = z.string().trim().email("Invalid email address").max(255, "Email too long");
@@ -20,11 +23,17 @@ const nameSchema = z.string().trim().min(2, "Name must be at least 2 characters"
 const RATE_LIMIT_ATTEMPTS = 5;
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
 
+type AuthMode = "login" | "signup" | "forgot-password" | "reset";
+
 const Auth = () => {
-  const [isLogin, setIsLogin] = useState(true);
+  const [searchParams] = useSearchParams();
+  const initialMode = searchParams.get("mode") as AuthMode || "login";
+  
+  const [mode, setMode] = useState<AuthMode>(initialMode === "reset" ? "reset" : "login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; name?: string }>({});
   const { signIn, signUp, user } = useAuth();
@@ -39,11 +48,19 @@ const Auth = () => {
 
   // Track page view and redirect if already logged in
   useEffect(() => {
-    trackPageView("auth", { mode: isLogin ? "login" : "signup" });
-    if (user) {
+    trackPageView("auth", { mode });
+    if (user && mode !== "reset") {
       navigate("/dashboard");
     }
-  }, [user, navigate]);
+  }, [user, navigate, mode]);
+
+  // Check for reset mode from URL
+  useEffect(() => {
+    const urlMode = searchParams.get("mode");
+    if (urlMode === "reset") {
+      setMode("reset");
+    }
+  }, [searchParams]);
 
   // Rate limit countdown
   useEffect(() => {
@@ -93,13 +110,18 @@ const Auth = () => {
       }
     }
     
-    if (!isLogin) {
+    if (mode === "signup") {
       try {
         nameSchema.parse(fullName);
       } catch (e) {
         if (e instanceof z.ZodError) {
           newErrors.name = e.errors[0].message;
         }
+      }
+      
+      // Enforce password strength on signup
+      if (!isPasswordStrong(password)) {
+        newErrors.password = "Please create a stronger password";
       }
     }
     
@@ -116,7 +138,7 @@ const Auth = () => {
     setLoading(true);
 
     try {
-      if (isLogin) {
+      if (mode === "login") {
         const { error } = await signIn(email.trim(), password);
         if (error) {
           // Don't reveal if email exists or not
@@ -127,7 +149,7 @@ const Auth = () => {
           trackAuthEvent("login_success");
           navigate("/dashboard");
         }
-      } else {
+      } else if (mode === "signup") {
         const { error } = await signUp(email.trim(), password, fullName.trim());
         if (error) {
           toast.error(error.message);
@@ -141,6 +163,164 @@ const Auth = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const renderContent = () => {
+    if (mode === "forgot-password") {
+      return <ForgotPasswordForm onBack={() => setMode("login")} />;
+    }
+
+    if (mode === "reset") {
+      return <ResetPasswordForm />;
+    }
+
+    const isLogin = mode === "login";
+
+    return (
+      <>
+        <div className="text-center mb-8">
+          <h1 className="text-2xl font-bold text-foreground mb-2">
+            {isLogin ? "Welcome back" : "Create your account"}
+          </h1>
+          <p className="text-muted-foreground">
+            {isLogin 
+              ? "Sign in to access your applications" 
+              : "Get started with CareerCopilot AI"}
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {rateLimited && (
+            <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>Too many attempts. Please wait {rateLimitCountdown}s</span>
+            </div>
+          )}
+          
+          {!isLogin && (
+            <div className="space-y-2">
+              <Label htmlFor="fullName">Full Name</Label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  id="fullName"
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => {
+                    setFullName(e.target.value);
+                    setErrors(prev => ({ ...prev, name: undefined }));
+                  }}
+                  placeholder="John Doe"
+                  className={`pl-10 ${errors.name ? "border-destructive" : ""}`}
+                  required={!isLogin}
+                  autoComplete="name"
+                  maxLength={100}
+                />
+              </div>
+              {errors.name && (
+                <p className="text-xs text-destructive">{errors.name}</p>
+              )}
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setErrors(prev => ({ ...prev, email: undefined }));
+                }}
+                placeholder="you@example.com"
+                className={`pl-10 ${errors.email ? "border-destructive" : ""}`}
+                required
+                autoComplete="email"
+                maxLength={255}
+              />
+            </div>
+            {errors.email && (
+              <p className="text-xs text-destructive">{errors.email}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Password</Label>
+              {isLogin && (
+                <button
+                  type="button"
+                  onClick={() => setMode("forgot-password")}
+                  className="text-xs text-accent hover:text-accent/80 transition-colors"
+                >
+                  Forgot password?
+                </button>
+              )}
+            </div>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setErrors(prev => ({ ...prev, password: undefined }));
+                }}
+                placeholder="••••••••"
+                className={`pl-10 pr-10 ${errors.password ? "border-destructive" : ""}`}
+                required
+                autoComplete={isLogin ? "current-password" : "new-password"}
+                minLength={8}
+                maxLength={128}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            {errors.password && (
+              <p className="text-xs text-destructive">{errors.password}</p>
+            )}
+            {!isLogin && <PasswordStrengthMeter password={password} />}
+          </div>
+
+          <Button 
+            type="submit" 
+            variant="hero" 
+            className="w-full" 
+            disabled={loading || rateLimited}
+          >
+            {loading ? (
+              <div className="w-4 h-4 border-2 border-accent-foreground/30 border-t-accent-foreground rounded-full animate-spin" />
+            ) : (
+              isLogin ? "Sign In" : "Create Account"
+            )}
+          </Button>
+        </form>
+
+        <div className="mt-6 text-center">
+          <button
+            type="button"
+            onClick={() => {
+              setMode(isLogin ? "signup" : "login");
+              setErrors({});
+            }}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {isLogin 
+              ? "Don't have an account? Sign up" 
+              : "Already have an account? Sign in"}
+          </button>
+        </div>
+      </>
+    );
   };
 
   return (
@@ -159,133 +339,7 @@ const Auth = () => {
         </Link>
 
         <div className="bg-card border border-border rounded-2xl p-8 shadow-lg">
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-bold text-foreground mb-2">
-              {isLogin ? "Welcome back" : "Create your account"}
-            </h1>
-            <p className="text-muted-foreground">
-              {isLogin 
-                ? "Sign in to access your applications" 
-                : "Get started with CareerCopilot AI"}
-            </p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {rateLimited && (
-              <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span>Too many attempts. Please wait {rateLimitCountdown}s</span>
-              </div>
-            )}
-            
-            {!isLogin && (
-              <div className="space-y-2">
-                <Label htmlFor="fullName">Full Name</Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    id="fullName"
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => {
-                      setFullName(e.target.value);
-                      setErrors(prev => ({ ...prev, name: undefined }));
-                    }}
-                    placeholder="John Doe"
-                    className={`pl-10 ${errors.name ? "border-destructive" : ""}`}
-                    required={!isLogin}
-                    autoComplete="name"
-                    maxLength={100}
-                  />
-                </div>
-                {errors.name && (
-                  <p className="text-xs text-destructive">{errors.name}</p>
-                )}
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    setErrors(prev => ({ ...prev, email: undefined }));
-                  }}
-                  placeholder="you@example.com"
-                  className={`pl-10 ${errors.email ? "border-destructive" : ""}`}
-                  required
-                  autoComplete="email"
-                  maxLength={255}
-                />
-              </div>
-              {errors.email && (
-                <p className="text-xs text-destructive">{errors.email}</p>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    setErrors(prev => ({ ...prev, password: undefined }));
-                  }}
-                  placeholder="••••••••"
-                  className={`pl-10 ${errors.password ? "border-destructive" : ""}`}
-                  required
-                  autoComplete={isLogin ? "current-password" : "new-password"}
-                  minLength={8}
-                  maxLength={128}
-                />
-              </div>
-              {errors.password && (
-                <p className="text-xs text-destructive">{errors.password}</p>
-              )}
-              {!isLogin && (
-                <p className="text-xs text-muted-foreground">
-                  Minimum 8 characters
-                </p>
-              )}
-            </div>
-
-            <Button 
-              type="submit" 
-              variant="hero" 
-              className="w-full" 
-              disabled={loading || rateLimited}
-            >
-              {loading ? (
-                <div className="w-4 h-4 border-2 border-accent-foreground/30 border-t-accent-foreground rounded-full animate-spin" />
-              ) : (
-                isLogin ? "Sign In" : "Create Account"
-              )}
-            </Button>
-          </form>
-
-          <div className="mt-6 text-center">
-            <button
-              type="button"
-              onClick={() => {
-                setIsLogin(!isLogin);
-                setErrors({});
-              }}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {isLogin 
-                ? "Don't have an account? Sign up" 
-                : "Already have an account? Sign in"}
-            </button>
-          </div>
+          {renderContent()}
         </div>
       </motion.div>
     </div>

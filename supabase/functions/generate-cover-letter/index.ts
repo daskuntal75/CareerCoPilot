@@ -6,6 +6,90 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Retry configuration
+const MAX_RETRIES = 3;
+const INITIAL_DELAY_MS = 1000;
+
+// Sleep utility for exponential backoff
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Make AI request with retry logic
+const makeAIRequestWithRetry = async (
+  apiKey: string,
+  systemPrompt: string,
+  userPrompt: string
+): Promise<string> => {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      console.log(`AI request attempt ${attempt + 1}/${MAX_RETRIES}`);
+      
+      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-pro",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+        }),
+      });
+
+      // Don't retry on client errors (4xx) except rate limiting
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('Retry-After');
+        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : INITIAL_DELAY_MS * Math.pow(2, attempt);
+        console.log(`Rate limited, waiting ${waitTime}ms before retry`);
+        await sleep(waitTime);
+        continue;
+      }
+
+      if (response.status === 402) {
+        throw new Error("AI credits depleted. Please add funds to continue.");
+      }
+
+      if (!response.ok) {
+        const text = await response.text();
+        console.error(`AI gateway error (status ${response.status}):`, text);
+        throw new Error(`AI gateway error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content;
+      
+      if (!content) {
+        throw new Error("Empty response from AI");
+      }
+
+      console.log(`Successfully received response on attempt ${attempt + 1}`);
+      return content;
+
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.error(`Attempt ${attempt + 1} failed:`, lastError.message);
+      
+      // Don't retry on certain errors
+      if (lastError.message.includes("credits depleted")) {
+        throw lastError;
+      }
+
+      // Exponential backoff before retry
+      if (attempt < MAX_RETRIES - 1) {
+        const delay = INITIAL_DELAY_MS * Math.pow(2, attempt);
+        console.log(`Waiting ${delay}ms before retry...`);
+        await sleep(delay);
+      }
+    }
+  }
+
+  throw lastError || new Error("All retry attempts failed");
+};
+
 // Section-specific prompts for regeneration
 const sectionPrompts: Record<string, string> = {
   opening: `Focus ONLY on regenerating the opening paragraph. Create an attention-grabbing, professional yet engaging introduction that immediately captures the reader's interest. Return ONLY the new opening paragraph text.`,
@@ -248,41 +332,8 @@ Your final response should contain:
 3. **Job Fit Calculation**: Methodology and percentage`;
     }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits depleted. Please add funds to continue." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      const text = await response.text();
-      console.error("AI gateway error:", response.status, text);
-      throw new Error("AI gateway error");
-    }
-
-    const data = await response.json();
-    const coverLetter = data.choices?.[0]?.message?.content;
+    // Use retry logic for the AI request
+    const coverLetter = await makeAIRequestWithRetry(LOVABLE_API_KEY, systemPrompt, userPrompt);
 
     return new Response(JSON.stringify({ 
       coverLetter,
