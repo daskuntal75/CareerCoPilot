@@ -6,6 +6,74 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Chunk text into overlapping segments
+function chunkText(text: string, chunkSize: number = 500, overlap: number = 100): { content: string; index: number }[] {
+  const chunks: { content: string; index: number }[] = [];
+  const words = text.split(/\s+/);
+  
+  let index = 0;
+  let startWord = 0;
+  
+  while (startWord < words.length) {
+    // Get approximately chunkSize tokens worth of words (estimate ~1.3 words per token)
+    const wordsPerChunk = Math.floor(chunkSize * 1.3);
+    const endWord = Math.min(startWord + wordsPerChunk, words.length);
+    
+    const chunkWords = words.slice(startWord, endWord);
+    const content = chunkWords.join(' ').trim();
+    
+    if (content.length > 50) { // Only add meaningful chunks
+      chunks.push({ content, index });
+      index++;
+    }
+    
+    // Move forward with overlap
+    const overlapWords = Math.floor(overlap * 1.3);
+    startWord = endWord - overlapWords;
+    
+    // Prevent infinite loop
+    if (startWord >= endWord - 1) {
+      startWord = endWord;
+    }
+  }
+  
+  return chunks;
+}
+
+// Detect chunk type based on content
+function detectChunkType(content: string): string {
+  const lowerContent = content.toLowerCase();
+  
+  if (lowerContent.includes('experience') || lowerContent.includes('worked at') || 
+      lowerContent.includes('position') || lowerContent.includes('role') ||
+      /\d{4}\s*[-–—]\s*(present|\d{4})/i.test(content)) {
+    return 'experience';
+  }
+  
+  if (lowerContent.includes('education') || lowerContent.includes('university') || 
+      lowerContent.includes('degree') || lowerContent.includes('bachelor') ||
+      lowerContent.includes('master') || lowerContent.includes('phd')) {
+    return 'education';
+  }
+  
+  if (lowerContent.includes('skills') || lowerContent.includes('technologies') ||
+      lowerContent.includes('proficient') || lowerContent.includes('expertise')) {
+    return 'skills';
+  }
+  
+  if (lowerContent.includes('certif') || lowerContent.includes('award') ||
+      lowerContent.includes('achievement')) {
+    return 'achievements';
+  }
+  
+  return 'general';
+}
+
+// Estimate token count (rough approximation)
+function estimateTokens(text: string): number {
+  return Math.ceil(text.split(/\s+/).length / 1.3);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -14,6 +82,7 @@ serve(async (req) => {
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File;
+    const applicationId = formData.get("applicationId") as string | null;
     
     if (!file) {
       return new Response(
@@ -53,17 +122,16 @@ serve(async (req) => {
 
     // Handle different file types
     if (fileType === "text/plain") {
-      // Plain text - decode directly
       textContent = new TextDecoder().decode(fileBuffer);
-    } else if (fileType === "application/pdf") {
-      // For PDF, use the Lovable AI to extract text
+    } else if (fileType === "application/pdf" || fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+      // Use AI to extract text
       const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
       if (!LOVABLE_API_KEY) {
         throw new Error("LOVABLE_API_KEY is not configured");
       }
 
-      // Convert to base64 for API
       const base64 = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)));
+      const mimeType = fileType === "application/pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
       
       const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
@@ -79,12 +147,12 @@ serve(async (req) => {
               content: [
                 {
                   type: "text",
-                  text: "Extract ALL text content from this resume PDF. Preserve the structure and formatting as much as possible. Return only the extracted text, no commentary.",
+                  text: "Extract ALL text content from this resume document. Preserve the structure and formatting as much as possible. Include all sections like Experience, Education, Skills, etc. Return only the extracted text, no commentary.",
                 },
                 {
                   type: "image_url",
                   image_url: {
-                    url: `data:application/pdf;base64,${base64}`,
+                    url: `data:${mimeType};base64,${base64}`,
                   },
                 },
               ],
@@ -94,53 +162,8 @@ serve(async (req) => {
       });
 
       if (!response.ok) {
-        console.error("PDF parsing error:", await response.text());
-        throw new Error("Failed to parse PDF");
-      }
-
-      const data = await response.json();
-      textContent = data.choices?.[0]?.message?.content || "";
-    } else if (fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
-      // For DOCX, use the Lovable AI to extract text
-      const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-      if (!LOVABLE_API_KEY) {
-        throw new Error("LOVABLE_API_KEY is not configured");
-      }
-
-      // Convert to base64 for API
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)));
-      
-      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          messages: [
-            {
-              role: "user",
-              content: [
-                {
-                  type: "text",
-                  text: "Extract ALL text content from this resume document. Preserve the structure and formatting as much as possible. Return only the extracted text, no commentary.",
-                },
-                {
-                  type: "image_url",
-                  image_url: {
-                    url: `data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${base64}`,
-                  },
-                },
-              ],
-            },
-          ],
-        }),
-      });
-
-      if (!response.ok) {
-        console.error("DOCX parsing error:", await response.text());
-        throw new Error("Failed to parse DOCX");
+        console.error("Document parsing error:", await response.text());
+        throw new Error("Failed to parse document");
       }
 
       const data = await response.json();
@@ -163,14 +186,53 @@ serve(async (req) => {
 
     if (uploadError) {
       console.error("Storage upload error:", uploadError);
-      // Continue anyway - the parsed content is more important
     }
+
+    // Chunk the resume content (500 tokens, 100 overlap as per PRD)
+    const chunks = chunkText(textContent, 500, 100);
+    
+    // Delete existing chunks for this user (if re-uploading)
+    if (applicationId) {
+      await supabase
+        .from("resume_chunks")
+        .delete()
+        .eq("application_id", applicationId);
+    }
+
+    // Store chunks in database
+    const chunksToInsert = chunks.map(chunk => ({
+      user_id: user.id,
+      application_id: applicationId || null,
+      chunk_index: chunk.index,
+      content: chunk.content,
+      chunk_type: detectChunkType(chunk.content),
+      token_count: estimateTokens(chunk.content),
+      metadata: {},
+    }));
+
+    if (chunksToInsert.length > 0) {
+      const { error: insertError } = await supabase
+        .from("resume_chunks")
+        .insert(chunksToInsert);
+
+      if (insertError) {
+        console.error("Error inserting chunks:", insertError);
+      }
+    }
+
+    console.log(`Parsed resume into ${chunks.length} chunks`);
 
     return new Response(
       JSON.stringify({
         fileName,
         content: textContent,
         filePath: uploadError ? null : filePath,
+        chunksCount: chunks.length,
+        chunks: chunks.map(c => ({
+          index: c.index,
+          type: detectChunkType(c.content),
+          preview: c.content.substring(0, 100) + "...",
+        })),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

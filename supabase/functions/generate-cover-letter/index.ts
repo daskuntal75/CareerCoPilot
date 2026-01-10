@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { resumeContent, jobDescription, jobTitle, company, analysisData } = await req.json();
+    const { resumeContent, jobDescription, jobTitle, company, analysisData, applicationId, userId } = await req.json();
     
     if (!resumeContent || !jobDescription) {
       return new Response(
@@ -25,11 +26,57 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const systemPrompt = `You are acting as a senior professional who is considering external opportunities. Your task is to analyze a job posting, compare it against the resume materials, and create a compelling cover letter that demonstrates fit for the role. Maintain a professional yet light-hearted and engaging tone.
+    // Create Supabase client
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-# Truthfulness Constraint:
-You must not invent, infer, or embellish any experience, scope, metrics, or responsibilities that are not explicitly supported by the provided resume. If a job requirement cannot be directly supported by resume evidence, explicitly state "No direct match" in the mapping table and do not imply experience in the cover letter.`;
+    // RAG: Retrieve only verified, matched resume chunks for cover letter generation
+    let verifiedExperience = "";
+    
+    if (applicationId && userId) {
+      // Get matched chunks with high similarity scores
+      const { data: matches } = await supabase
+        .from("requirement_matches")
+        .select(`
+          similarity_score,
+          match_evidence,
+          requirement:job_requirements!inner(requirement_text, application_id),
+          chunk:resume_chunks!inner(content, chunk_type)
+        `)
+        .eq("requirement.application_id", applicationId)
+        .gte("similarity_score", 0.5)
+        .order("similarity_score", { ascending: false });
 
+      if (matches && matches.length > 0) {
+        // Build verified experience from matched chunks
+        const uniqueChunks = new Map<string, string>();
+        const verifiedRequirements: string[] = [];
+
+        for (const match of matches) {
+          const chunk = match.chunk as any;
+          const requirement = match.requirement as any;
+          
+          if (chunk?.content && !uniqueChunks.has(chunk.content)) {
+            uniqueChunks.set(chunk.content, chunk.content);
+          }
+          
+          if (requirement?.requirement_text && match.match_evidence) {
+            verifiedRequirements.push(`- ${requirement.requirement_text}: ${match.match_evidence}`);
+          }
+        }
+
+        verifiedExperience = `
+VERIFIED EXPERIENCE (RAG-Retrieved - USE ONLY THIS):
+${Array.from(uniqueChunks.values()).join('\n\n')}
+
+VERIFIED REQUIREMENT MATCHES:
+${verifiedRequirements.slice(0, 10).join('\n')}
+`;
+      }
+    }
+
+    // Build analysis context from analysisData
     const analysisContext = analysisData ? `
 KEY MATCHES FROM ANALYSIS:
 ${analysisData.requirements
@@ -44,6 +91,14 @@ ${analysisData.requirements
   .join("\n")}
 ` : "";
 
+    const systemPrompt = `You are acting as a senior professional who is considering external opportunities. Your task is to analyze a job posting, compare it against the resume materials, and create a compelling cover letter that demonstrates fit for the role. Maintain a professional yet light-hearted and engaging tone.
+
+# CRITICAL TRUTHFULNESS CONSTRAINT:
+You must not invent, infer, or embellish any experience, scope, metrics, or responsibilities that are not explicitly supported by the provided VERIFIED EXPERIENCE. If a job requirement cannot be directly supported by resume evidence, explicitly state "No direct match" in the mapping table and do not imply experience in the cover letter.
+
+# RAG GROUNDING RULE:
+You MUST ONLY use experiences, metrics, and achievements that appear in the VERIFIED EXPERIENCE section. Do not fabricate or infer any additional qualifications.`;
+
     const userPrompt = `Here is the job posting information:
 
 <job_posting>
@@ -55,10 +110,10 @@ Here is the job title:
 ${jobTitle} at ${company}
 </job_title>
 
-Here is the resume:
+${verifiedExperience || `Here is the resume:
 <resume>
 ${resumeContent}
-</resume>
+</resume>`}
 ${analysisContext}
 
 # Checklist of Sub-Tasks
@@ -66,7 +121,7 @@ ${analysisContext}
 Before beginning substantive work, perform these conceptual sub-tasks:
 
 1. Review the job posting and extract the top 10 specific job requirements
-2. Analyze the resume to identify relevant skills, experiences, and achievements
+2. Analyze the VERIFIED EXPERIENCE to identify relevant skills, experiences, and achievements
 3. Map actual skills and experiences to each of the top 10 job requirements (be honest - do not embellish or fabricate)
 4. Calculate a job fit percentage based on how many requirements are genuinely met
 5. Draft a cover letter that weaves matching qualifications into compelling narratives using STAR + SMART format (without spelling out the acronym)
@@ -75,74 +130,38 @@ Before beginning substantive work, perform these conceptual sub-tasks:
 # Detailed Instructions
 
 ## Step 1: Extract the 10 most decision-critical job requirements
-Focus only on requirements that would materially influence a hiring decision for this role (e.g., ownership scope, leadership level, domain expertise). Exclude generic skills (e.g., "communication", "collaboration") unless they are uniquely emphasized in the posting.
+Focus only on requirements that would materially influence a hiring decision for this role.
 
 ## Step 2: Analyze Qualifications
-Review the resume thoroughly and extract all relevant skills, experiences, achievements, and qualifications that could potentially match the job requirements. Pay special attention to:
-- Specific product/domain experiences
-- Technical skills and domain expertise
-- Leadership and team management examples
+Review the VERIFIED EXPERIENCE thoroughly and extract all relevant skills, experiences, achievements, and qualifications.
 
 ## Step 3: Create Honest Mapping
-For each matched requirement, explicitly name why this experience matters for this specific role, not just what was done previously.
-
-For each of the top 10 job requirements, determine whether there is matching experience from the resume. Be completely honest - only claim matches where there is genuine, documented experience. For each match:
-- Identify the specific resume content that demonstrates this qualification
-- Note any measurable outcomes or metrics
-- Prepare to describe this using STAR + SMART format without spelling out the acronym
+For each matched requirement, explicitly name why this experience matters for this specific role. Only claim matches where there is genuine, documented experience in the VERIFIED EXPERIENCE section.
 
 ## Step 4: Calculate Job Fit Percentage
-Calculate the job fit percentage using this method:
-- Count how many of the top 10 requirements are genuinely met (based on honest mapping)
-- Divide by 10 and multiply by 100 to get the percentage
-- Clearly document this calculation and methodology
+Count how many of the top 10 requirements are genuinely met and calculate percentage.
 
 ## Step 5: Draft the Cover Letter
 
-Write a professional, concise cover letter with the following characteristics:
-
-- **Opening Paragraph**: Make it light-hearted and attention-grabbing while remaining professional. This should stand out from typical cover letters and draw the reader in.
-- **Body Paragraphs**: Focus on the top 3 job requirements and weave matching experiences into compelling, easy-flowing stories. Make the narrative flow naturally rather than feeling like a checklist.
-- **Job Fit Statement**: Explicitly state why this role is a top choice by referencing the calculated fit percentage. Show the calculation method clearly.
-- **Relocation Statement**: Mention willingness to relocate for the right role and incentives, if applicable.
-- **Closing**: Keep it polite, professional, and impactful.
-- **Overall Tone**: Professional yet light-hearted and engaging. Easy to read. Should pass ATS filters by including relevant keywords from the job posting.
+Write a professional, concise cover letter:
+- **Opening Paragraph**: Light-hearted and attention-grabbing while remaining professional
+- **Body Paragraphs**: Focus on the top 3 job requirements using ONLY verified experience
+- **Job Fit Statement**: Reference the calculated fit percentage
+- **Closing**: Polite, professional, and impactful
+- **Tone**: Professional yet engaging, ATS-friendly
 
 ## Step 6: Create Job Requirements Mapping Table
-
-After the cover letter, create a structured table showing:
-- All 10 job requirements
-- Matching skills/experiences for each (or "No direct match" if honest assessment shows no match)
-- Brief supporting evidence from the resume
-- The job fit percentage calculation with clear methodology
+Show all 10 requirements with matching evidence or "No direct match"
 
 ## Step 7: Self-Validation
-
-Before finalizing, check that:
-- Each of the top 10 job requirements has been addressed in the analysis
-- The top 3 requirements are woven into the cover letter body
-- All claims are factually accurate based on the resume provided
-- The job fit calculation is correct and methodology is clearly explained
-- No embellishment or fabrication has occurred
-- The cover letter is concise, clear, and professionally formatted
-- The tone is appropriately light-hearted in the opening while remaining professional throughout
-
-If any requirement is missing or incorrectly mapped, self-correct before providing final output.
+Verify all claims are factually accurate based on VERIFIED EXPERIENCE only.
 
 # Output Format
 
 Your final response should contain:
-
-1. **Professional Cover Letter**: A complete, ready-to-send cover letter following all guidelines above. Format it properly with appropriate spacing and structure.
-
-2. **Job Requirements to Experience Mapping Table**: A clear table showing:
-   - All 10 identified job requirements
-   - Matching qualifications for each
-   - Supporting evidence from resume
-
-3. **Job Fit Calculation**: A clear explanation of methodology and the calculated percentage, showing the work.
-
-Do not include scratchwork, internal deliberations, or step-by-step processing notes in your final output. Provide only the polished final deliverables.`;
+1. **Professional Cover Letter**: Complete, ready-to-send
+2. **Job Requirements to Experience Mapping Table**: 10 requirements with evidence
+3. **Job Fit Calculation**: Methodology and percentage`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
