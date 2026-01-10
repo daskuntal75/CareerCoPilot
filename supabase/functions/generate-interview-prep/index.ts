@@ -5,72 +5,50 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Retry configuration
 const MAX_RETRIES = 3;
 const INITIAL_DELAY_MS = 1000;
 
-// Sleep utility for exponential backoff
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Sanitize JSON string to fix common AI formatting issues
 const sanitizeJson = (str: string): string => {
   return str
-    // Remove control characters except newlines and tabs
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-    // Fix trailing commas before closing brackets
     .replace(/,(\s*[}\]])/g, '$1')
-    // Fix single quotes used as string delimiters (common AI mistake)
     .replace(/:\s*'([^']*)'/g, ': "$1"')
-    // Remove any BOM or zero-width characters
     .replace(/[\uFEFF\u200B-\u200D\u2060]/g, '');
 };
 
-// Parse AI response with multiple fallback strategies
 const parseAIResponse = (content: string): any => {
-  if (!content) {
-    throw new Error("Empty response from AI");
-  }
+  if (!content) throw new Error("Empty response from AI");
 
-  // Extract JSON from response - handle markdown code blocks
   let jsonString = content;
   
-  // Remove markdown code blocks if present
   const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeBlockMatch) {
     jsonString = codeBlockMatch[1].trim();
   } else {
-    // Try to find raw JSON object
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       jsonString = jsonMatch[0];
     }
   }
 
-  // Try parsing with sanitization
   try {
     return JSON.parse(sanitizeJson(jsonString));
-  } catch (parseError) {
-    console.error("Initial parse failed, attempting recovery:", parseError);
-    
-    // Try more aggressive cleanup
+  } catch {
     const aggressiveCleanup = jsonString
-      // Remove all non-printable characters except whitespace
       .replace(/[^\x20-\x7E\s]/g, '')
-      // Fix any remaining issues with quotes
       .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3');
     
     try {
       return JSON.parse(aggressiveCleanup);
-    } catch (secondError) {
-      console.error("JSON parsing failed after cleanup. Raw content length:", content.length);
-      console.error("First 500 chars:", content.substring(0, 500));
-      console.error("Last 500 chars:", content.substring(content.length - 500));
+    } catch {
+      console.error("JSON parse failed. Length:", content.length);
       throw new Error("Failed to parse AI response as valid JSON");
     }
   }
 };
 
-// Make AI request with retry logic - non-streaming
 const makeAIRequestWithRetry = async (
   apiKey: string,
   systemPrompt: string,
@@ -92,7 +70,7 @@ const makeAIRequestWithRetry = async (
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: "google/gemini-3-flash-preview",
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },
@@ -106,7 +84,7 @@ const makeAIRequestWithRetry = async (
       if (response.status === 429) {
         const retryAfter = response.headers.get('Retry-After');
         const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : INITIAL_DELAY_MS * Math.pow(2, attempt);
-        console.log(`Rate limited, waiting ${waitTime}ms before retry`);
+        console.log(`Rate limited, waiting ${waitTime}ms`);
         await sleep(waitTime);
         continue;
       }
@@ -117,32 +95,25 @@ const makeAIRequestWithRetry = async (
 
       if (!response.ok) {
         const text = await response.text();
-        console.error(`AI gateway error (status ${response.status}):`, text);
+        console.error(`AI error ${response.status}:`, text);
         throw new Error(`AI gateway error: ${response.status}`);
       }
 
       const data = await response.json();
       const content = data.choices?.[0]?.message?.content;
-      
       const parsed = parseAIResponse(content);
-      console.log(`Successfully parsed response on attempt ${attempt + 1}`);
+      console.log(`Success on attempt ${attempt + 1}`);
       return parsed;
 
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
       console.error(`Attempt ${attempt + 1} failed:`, lastError.message);
       
-      if (lastError.message.includes("credits depleted")) {
-        throw lastError;
-      }
-      
-      if (lastError.name === "AbortError") {
-        throw new Error("Request timed out after 120 seconds. Please try again.");
-      }
+      if (lastError.message.includes("credits depleted")) throw lastError;
+      if (lastError.name === "AbortError") throw new Error("Request timed out. Please try again.");
 
       if (attempt < MAX_RETRIES - 1) {
         const delay = INITIAL_DELAY_MS * Math.pow(2, attempt);
-        console.log(`Waiting ${delay}ms before retry...`);
         await sleep(delay);
       }
     }
@@ -151,7 +122,6 @@ const makeAIRequestWithRetry = async (
   throw lastError || new Error("All retry attempts failed");
 };
 
-// Make streaming AI request
 const makeStreamingAIRequest = async (
   apiKey: string,
   systemPrompt: string,
@@ -164,7 +134,7 @@ const makeStreamingAIRequest = async (
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-2.5-flash",
+      model: "google/gemini-3-flash-preview",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -174,14 +144,8 @@ const makeStreamingAIRequest = async (
   });
 
   if (!response.ok) {
-    if (response.status === 429) {
-      throw new Error("Rate limits exceeded, please try again later.");
-    }
-    if (response.status === 402) {
-      throw new Error("AI credits depleted. Please add funds to continue.");
-    }
-    const text = await response.text();
-    console.error("AI gateway error:", response.status, text);
+    if (response.status === 429) throw new Error("Rate limits exceeded, please try again later.");
+    if (response.status === 402) throw new Error("AI credits depleted. Please add funds to continue.");
     throw new Error(`AI gateway error: ${response.status}`);
   }
 
@@ -198,7 +162,8 @@ serve(async (req) => {
       resumeContent, 
       jobDescription, 
       jobTitle, 
-      company, 
+      company,
+      interviewGuidance,
       analysisData, 
       sectionToRegenerate, 
       existingData,
@@ -213,159 +178,165 @@ serve(async (req) => {
     }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
+    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const systemPrompt = `You are acting as a senior professional preparing for an interview at a new company. Your task is to conduct comprehensive research, strategic analysis, and interview preparation for a specific role.
+    const systemPrompt = `You are a senior professional preparing for an interview. Your task is to create comprehensive interview preparation materials.
 
 # CRITICAL RULES
+- Base ALL responses ONLY on actual experiences from the provided resume
+- DO NOT fabricate metrics, outcomes, or experiences
+- Maintain complete accuracy to resume content
 
-## Accuracy Requirements:
-- Base ALL interview question responses ONLY on actual experiences, achievements, and metrics from the provided resume
-- DO NOT fabricate, embellish, or invent any metrics, outcomes, or experiences not present in the resume
-- Maintain complete accuracy and truthfulness to the resume content
-
-## Response Behavior:
-- Answer directly using your best judgment
-- Do not ask clarifying questions
-
-## CRITICAL: JSON Output Format
-- You MUST return ONLY a valid JSON object, no markdown, no explanation
-- Ensure all strings are properly escaped (use \\" for quotes inside strings)
-- Do not use trailing commas
-- All property names must be double-quoted
-
-Return your response as a JSON object with this structure:
+# OUTPUT FORMAT
+Return a JSON object with this structure:
 {
-  "applicationContext": "string - brief summary of the role at company",
+  "applicationContext": "Brief summary of role at company",
   "companyIntelligence": {
-    "visionMission": "string - company vision and mission",
-    "industryMarket": "string - sector, position, size",
-    "financialPerformance": "string - recent revenue/performance if known",
-    "productsServices": "string - key offerings"
+    "visionMission": "Company vision/mission",
+    "industryMarket": "Sector, position, ~size",
+    "financialPerformance": "Recent performance if known",
+    "productsServices": "Key offerings"
   },
-  "keyDomainConcepts": ["string - relevant technical/domain concepts to understand"],
+  "keyDomainConcepts": ["Relevant technical concepts"],
   "strategicAnalysis": {
-    "strengths": ["string - company strengths"],
-    "criticalStrength": "string - #1 critical strength",
-    "weaknesses": ["string - company weaknesses"],
-    "criticalWeakness": "string - #1 critical weakness",
-    "opportunities": ["string - company opportunities"],
-    "criticalOpportunity": "string - #1 critical opportunity",
-    "threats": ["string - company threats"],
-    "criticalThreat": "string - #1 critical threat",
-    "competitors": ["string - main competitors"],
-    "competitivePosition": "string - market positioning"
+    "strengths": ["3-5 company strengths"],
+    "criticalStrength": "#1 strength",
+    "weaknesses": ["3-5 weaknesses"],
+    "criticalWeakness": "#1 weakness",
+    "opportunities": ["3-5 opportunities"],
+    "criticalOpportunity": "#1 opportunity",
+    "threats": ["3-5 threats"],
+    "criticalThreat": "#1 threat",
+    "competitors": ["Main competitors"],
+    "competitivePosition": "Market positioning"
   },
   "cultureAndBenefits": {
-    "cultureInsights": ["string - key cultural attributes"],
-    "standoutBenefits": ["string - unique benefits"]
+    "cultureInsights": ["Key cultural attributes"],
+    "standoutBenefits": ["Unique benefits"]
   },
   "interviewStructure": {
-    "coreRequirements": ["string - 3-5 critical requirements"],
-    "keyCompetencies": ["string - traits and skills sought"],
-    "predictedFormat": "string - format prediction"
+    "coreRequirements": ["3-5 critical requirements"],
+    "keyCompetencies": ["Traits sought"],
+    "predictedFormat": "Interview format prediction"
   },
-  "uniqueValueProposition": "string - candidate's unique value prop for this role",
-  "whyThisCompany": "string - compelling reason for choosing this company",
+  "uniqueValueProposition": "Candidate's unique value for this role based on resume",
+  "whyThisCompany": "Compelling reason for choosing this company",
+  "whyLeavingCurrent": "Professional reason for seeking new opportunity",
   "questions": [
     {
-      "question": "string - the interview question",
-      "category": "recruiter" | "hiring_manager" | "peer" | "technical" | "vp" | "panel",
-      "difficulty": "easy" | "medium" | "hard",
-      "whyAsked": "string - why this question is likely",
+      "question": "Interview question",
+      "category": "recruiter|hiring_manager|peer|technical|vp|panel",
+      "difficulty": "easy|medium|hard",
+      "whyAsked": "Why this question is likely",
       "starAnswer": {
-        "situation": "string - specific situation from resume",
-        "task": "string - the challenge from resume",
-        "action": "string - actions taken from resume",
-        "result": "string - SMART outcome from resume"
+        "situation": "Context from resume",
+        "task": "Challenge from resume",
+        "action": "Actions from resume",
+        "result": "SMART outcome from resume"
       },
-      "tips": ["string - additional tips"]
+      "tips": ["Additional tips"]
     }
   ],
   "questionsToAsk": {
-    "forRecruiter": ["string - 3 strategic questions"],
-    "forHiringManager": ["string - 3 strategic questions"],
-    "forPeer": ["string - 3 strategic questions"],
-    "forTechnicalLead": ["string - 3 strategic questions"],
-    "forVP": ["string - 3 strategic questions"]
+    "forRecruiter": ["3 questions"],
+    "forHiringManager": ["3 questions"],
+    "forPeer": ["3 questions"],
+    "forTechnicalLead": ["3 questions"],
+    "forVP": ["3 questions"]
   },
-  "keyStrengths": ["string - strengths to emphasize based on resume"],
-  "potentialConcerns": ["string - concerns to address proactively"]
+  "keyStrengths": ["5-7 strengths to emphasize"],
+  "potentialConcerns": ["3-5 concerns to address"],
+  "followUpTemplates": {
+    "afterRecruiter": "Email template",
+    "afterHiringManager": "Email template",
+    "afterVP": "Email template",
+    "afterTechnical": "Email template"
+  }
 }
 
-Generate 8-12 interview questions covering different interviewer types.`;
+Generate 10-12 interview questions across different interviewer types.
+Return ONLY valid JSON, no markdown.`;
 
     const analysisContext = analysisData ? `
-ANALYSIS SUMMARY:
+ANALYSIS:
 Fit Score: ${analysisData.fitScore}%
-${analysisData.requirements
-  .map((r: any) => `- ${r.requirement}: ${r.status} - ${r.evidence}`)
-  .join("\n")}
+${analysisData.requirements?.map((r: any) => `- ${r.requirement}: ${r.status} - ${r.evidence}`).join("\n") || ""}
 ` : "";
 
-    // Section-specific prompts for regeneration
+    const guidanceContext = interviewGuidance ? `
+INTERVIEW GUIDANCE FROM COMPANY:
+${interviewGuidance}
+` : "";
+
     const sectionPrompts: Record<string, string> = {
-      questions: `Focus ONLY on generating interview questions. Generate 8-12 highly probable, role-specific interview questions segmented by interviewer type with STAR + SMART answers. Return JSON with only the "questions" array.`,
-      keyStrengths: `Focus ONLY on analyzing key strengths to highlight during the interview. Return JSON with only the "keyStrengths" array (5-7 items).`,
-      potentialConcerns: `Focus ONLY on identifying potential concerns the interviewer might have. Return JSON with only the "potentialConcerns" array (3-5 items).`,
-      questionsToAsk: `Focus ONLY on generating strategic questions for the candidate to ask. Return JSON with only the "questionsToAsk" object.`,
-      companyIntelligence: `Focus ONLY on company intelligence research. Return JSON with only the "companyIntelligence" object.`,
-      strategicAnalysis: `Focus ONLY on SWOT strategic analysis. Return JSON with only the "strategicAnalysis" object.`,
-      uniqueValueProposition: `Focus ONLY on crafting a unique value proposition. Return JSON with "uniqueValueProposition" and "whyThisCompany" fields.`,
+      questions: `Generate 10-12 interview questions with STAR answers. Return JSON with only "questions" array.`,
+      keyStrengths: `Analyze key strengths. Return JSON with only "keyStrengths" array (5-7 items).`,
+      potentialConcerns: `Identify concerns. Return JSON with only "potentialConcerns" array (3-5 items).`,
+      questionsToAsk: `Generate strategic questions to ask. Return JSON with only "questionsToAsk" object.`,
+      companyIntelligence: `Research company. Return JSON with only "companyIntelligence" object.`,
+      strategicAnalysis: `SWOT analysis. Return JSON with only "strategicAnalysis" object.`,
+      uniqueValueProposition: `Craft value proposition. Return JSON with "uniqueValueProposition" and "whyThisCompany".`,
     };
 
     const userPrompt = sectionToRegenerate && sectionPrompts[sectionToRegenerate] 
-      ? `Resume:
-<resume>
-${resumeContent}
-</resume>
-
-Job Description:
-<job_description>
-${jobDescription}
-</job_description>
-
+      ? `<resume>${resumeContent}</resume>
+<job_description>${jobDescription}</job_description>
 <job_title>${jobTitle}</job_title>
 <company_name>${company}</company_name>
 ${analysisContext}
+${guidanceContext}
 
-# YOUR TASK
+# TASK
 ${sectionPrompts[sectionToRegenerate]}
 
-Base ALL content ONLY on actual experiences from the resume.
-IMPORTANT: Return ONLY valid JSON, no markdown code blocks.`
-      : `Resume:
-<resume>
-${resumeContent}
-</resume>
-
-Job Description:
-<job_description>
-${jobDescription}
-</job_description>
-
+Base ALL content on actual resume experiences.`
+      : `<resume>${resumeContent}</resume>
+<job_description>${jobDescription}</job_description>
 <job_title>${jobTitle}</job_title>
 <company_name>${company}</company_name>
 ${analysisContext}
+${guidanceContext}
 
-# YOUR TASK
+# TASK
 
-Complete comprehensive interview preparation covering:
+Create comprehensive interview preparation:
 
-1. Company research (vision, market, products)
-2. SWOT strategic analysis
-3. Culture and benefits research
-4. Interview structure prediction
-5. Generate 8-12 interview questions with STAR answers
-6. Strategic questions to ask interviewers
-7. Key strengths and potential concerns
+## Phase 1: Company Research
+- Vision/mission, industry position, products/services
+- Research culture via Glassdoor, LinkedIn insights
 
-Return the complete analysis as a JSON object following the structure in the system prompt.
-IMPORTANT: Return ONLY valid JSON, no markdown code blocks.`;
+## Phase 2: Strategic Analysis
+- SWOT analysis with critical factors
+- Competitive landscape
 
-    // Handle streaming request
+## Phase 3: Interview Preparation
+- Core requirements and competencies
+- Unique Value Proposition based on resume
+- Why this company / Why leaving current role
+- Predict interview structure
+
+## Phase 4: Interview Questions (10-12 total)
+Generate role-specific questions by interviewer type:
+- Recruiter (2-3)
+- Hiring Manager (2-3)
+- Peer (2-3)
+- Technical Lead (2-3)
+- VP/Culture (2-3)
+
+For EACH question, provide STAR answer:
+- Situation: Context from resume
+- Task: Challenge from resume
+- Action: Specific actions from resume
+- Result: SMART outcome with metrics from resume
+
+## Phase 5: Questions to Ask
+3 strategic questions per interviewer type
+
+## Phase 6: Follow-up Templates
+Brief professional email templates for each round
+
+Return complete JSON following system prompt structure.`;
+
     if (stream) {
       try {
         const streamResponse = await makeStreamingAIRequest(LOVABLE_API_KEY, systemPrompt, userPrompt);
@@ -390,7 +361,6 @@ IMPORTANT: Return ONLY valid JSON, no markdown code blocks.`;
       }
     }
 
-    // Non-streaming request with retry logic
     const interviewPrep = await makeAIRequestWithRetry(LOVABLE_API_KEY, systemPrompt, userPrompt);
 
     return new Response(JSON.stringify(interviewPrep), {
