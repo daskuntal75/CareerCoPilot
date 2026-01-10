@@ -120,18 +120,49 @@ serve(async (req) => {
     const fileBuffer = await file.arrayBuffer();
     let textContent = "";
 
-    // Handle different file types
+// Handle different file types
     if (fileType === "text/plain") {
       textContent = new TextDecoder().decode(fileBuffer);
-    } else if (fileType === "application/pdf" || fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
-      // Use AI to extract text
+    } else if (fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+      // Extract text from DOCX (it's a ZIP containing XML)
+      // Import JSZip for DOCX parsing
+      const JSZip = (await import("https://esm.sh/jszip@3.10.1")).default;
+      
+      try {
+        const zip = await JSZip.loadAsync(fileBuffer);
+        const documentXml = await zip.file("word/document.xml")?.async("string");
+        
+        if (!documentXml) {
+          throw new Error("Invalid DOCX file - no document.xml found");
+        }
+        
+        // Extract text from XML by removing tags and cleaning up
+        textContent = documentXml
+          .replace(/<w:p[^>]*>/g, '\n') // Paragraph breaks
+          .replace(/<w:br[^>]*>/g, '\n') // Line breaks
+          .replace(/<w:tab[^>]*>/g, '\t') // Tabs
+          .replace(/<[^>]+>/g, '') // Remove all XML tags
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&amp;/g, '&')
+          .replace(/&quot;/g, '"')
+          .replace(/&apos;/g, "'")
+          .replace(/\n{3,}/g, '\n\n') // Reduce multiple newlines
+          .trim();
+        
+        console.log("Successfully extracted text from DOCX");
+      } catch (docxError) {
+        console.error("DOCX parsing error:", docxError);
+        throw new Error("Failed to parse DOCX file. Please try a PDF or TXT file.");
+      }
+    } else if (fileType === "application/pdf") {
+      // Use AI to extract text from PDF (vision model can read PDFs)
       const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
       if (!LOVABLE_API_KEY) {
         throw new Error("LOVABLE_API_KEY is not configured");
       }
 
       const base64 = btoa(String.fromCharCode(...new Uint8Array(fileBuffer)));
-      const mimeType = fileType === "application/pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
       
       const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
@@ -140,7 +171,7 @@ serve(async (req) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
+          model: "google/gemini-2.5-flash",
           messages: [
             {
               role: "user",
@@ -152,7 +183,7 @@ serve(async (req) => {
                 {
                   type: "image_url",
                   image_url: {
-                    url: `data:${mimeType};base64,${base64}`,
+                    url: `data:application/pdf;base64,${base64}`,
                   },
                 },
               ],
@@ -162,8 +193,8 @@ serve(async (req) => {
       });
 
       if (!response.ok) {
-        console.error("Document parsing error:", await response.text());
-        throw new Error("Failed to parse document");
+        console.error("PDF parsing error:", await response.text());
+        throw new Error("Failed to parse PDF. Please try a DOCX or TXT file.");
       }
 
       const data = await response.json();
