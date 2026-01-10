@@ -286,6 +286,7 @@ export type Database = {
           full_name: string | null
           id: string
           interview_reminder_days: number | null
+          is_admin: boolean | null
           updated_at: string
           user_id: string
         }
@@ -296,6 +297,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           interview_reminder_days?: number | null
+          is_admin?: boolean | null
           updated_at?: string
           user_id: string
         }
@@ -306,6 +308,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           interview_reminder_days?: number | null
+          is_admin?: boolean | null
           updated_at?: string
           user_id?: string
         }
@@ -537,7 +540,34 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_admin_application_stats: {
+        Args: { days_back?: number }
+        Returns: {
+          applications_created: number
+          applications_submitted: number
+          date: string
+          interviews_scheduled: number
+          offers_received: number
+        }[]
+      }
+      get_admin_usage_stats: {
+        Args: { days_back?: number }
+        Returns: {
+          active_users: number
+          cover_letters_generated: number
+          date: string
+          interview_preps_generated: number
+        }[]
+      }
+      get_admin_user_summary: {
+        Args: never
+        Returns: {
+          total_applications: number
+          total_users: number
+          users_this_month: number
+          users_with_applications: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

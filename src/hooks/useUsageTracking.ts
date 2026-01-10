@@ -109,11 +109,18 @@ export function useUsageTracking() {
         if (error) throw error;
       }
 
+      const newCount = usage[featureType] + 1;
+      
       // Update local state
       setUsage((prev) => ({
         ...prev,
-        [featureType]: prev[featureType] + 1,
+        [featureType]: newCount,
       }));
+
+      // Check if user is running low on usage (1 remaining) and send alert
+      if (limit !== -1 && limit - newCount === 1) {
+        sendUsageAlert(featureType, 1, limit);
+      }
 
       return true;
     } catch (error) {
@@ -121,6 +128,46 @@ export function useUsageTracking() {
       return false;
     }
   }, [user, usage, getLimits]);
+
+  const sendUsageAlert = async (featureType: string, remaining: number, limit: number) => {
+    if (!user?.email) return;
+
+    try {
+      // Check if we already sent an alert this month for this feature
+      const currentMonth = getCurrentMonth();
+      const alertKey = `usage_alert_${featureType}_${currentMonth}`;
+      const alreadySent = localStorage.getItem(alertKey);
+      
+      if (alreadySent) return;
+
+      // Get user profile for name
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name, email_notifications_enabled")
+        .eq("user_id", user.id)
+        .single();
+
+      // Only send if notifications are enabled
+      if (profile && !profile.email_notifications_enabled) return;
+
+      await supabase.functions.invoke("send-usage-alert", {
+        body: {
+          userId: user.id,
+          email: user.email,
+          fullName: profile?.full_name,
+          remaining,
+          limit,
+          featureType,
+        },
+      });
+
+      // Mark as sent for this month
+      localStorage.setItem(alertKey, "true");
+      console.log("Usage alert sent for", featureType);
+    } catch (error) {
+      console.error("Failed to send usage alert:", error);
+    }
+  };
 
   const canUseFeature = useCallback((featureType: "cover_letter" | "interview_prep"): boolean => {
     const limits = getLimits();
