@@ -7,76 +7,50 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// File size limits in bytes
+// Reduced file size limits for edge function memory constraints
 const FILE_SIZE_LIMITS = {
-  "application/pdf": 3 * 1024 * 1024, // 3MB for PDFs
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": 2 * 1024 * 1024, // 2MB for DOCX
-  "text/plain": 1 * 1024 * 1024, // 1MB for TXT
+  "application/pdf": 1.5 * 1024 * 1024, // 1.5MB for PDFs
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": 1 * 1024 * 1024, // 1MB for DOCX
+  "text/plain": 500 * 1024, // 500KB for TXT
 };
 
-// Chunk text into overlapping segments
-function chunkText(text: string, chunkSize: number = 500, overlap: number = 100): { content: string; index: number }[] {
-  const chunks: { content: string; index: number }[] = [];
-  const words = text.split(/\s+/);
+// Simple chunking with minimal memory usage
+function chunkText(text: string, maxChunkChars: number = 1500): string[] {
+  const chunks: string[] = [];
+  let start = 0;
   
-  let index = 0;
-  let startWord = 0;
-  
-  while (startWord < words.length) {
-    const wordsPerChunk = Math.floor(chunkSize * 1.3);
-    const endWord = Math.min(startWord + wordsPerChunk, words.length);
+  while (start < text.length) {
+    let end = Math.min(start + maxChunkChars, text.length);
     
-    const chunkWords = words.slice(startWord, endWord);
-    const content = chunkWords.join(' ').trim();
-    
-    if (content.length > 50) {
-      chunks.push({ content, index });
-      index++;
+    // Try to break at a sentence or paragraph
+    if (end < text.length) {
+      const breakPoints = ['\n\n', '\n', '. ', ', '];
+      for (const bp of breakPoints) {
+        const lastBreak = text.lastIndexOf(bp, end);
+        if (lastBreak > start + maxChunkChars / 2) {
+          end = lastBreak + bp.length;
+          break;
+        }
+      }
     }
     
-    const overlapWords = Math.floor(overlap * 1.3);
-    startWord = endWord - overlapWords;
-    
-    if (startWord >= endWord - 1) {
-      startWord = endWord;
+    const chunk = text.slice(start, end).trim();
+    if (chunk.length > 50) {
+      chunks.push(chunk);
     }
+    start = end;
   }
   
   return chunks;
 }
 
-// Detect chunk type based on content
+// Simple chunk type detection
 function detectChunkType(content: string): string {
-  const lowerContent = content.toLowerCase();
-  
-  if (lowerContent.includes('experience') || lowerContent.includes('worked at') || 
-      lowerContent.includes('position') || lowerContent.includes('role') ||
-      /\d{4}\s*[-–—]\s*(present|\d{4})/i.test(content)) {
-    return 'experience';
-  }
-  
-  if (lowerContent.includes('education') || lowerContent.includes('university') || 
-      lowerContent.includes('degree') || lowerContent.includes('bachelor') ||
-      lowerContent.includes('master') || lowerContent.includes('phd')) {
-    return 'education';
-  }
-  
-  if (lowerContent.includes('skills') || lowerContent.includes('technologies') ||
-      lowerContent.includes('proficient') || lowerContent.includes('expertise')) {
-    return 'skills';
-  }
-  
-  if (lowerContent.includes('certif') || lowerContent.includes('award') ||
-      lowerContent.includes('achievement')) {
-    return 'achievements';
-  }
-  
+  const lower = content.toLowerCase();
+  if (/experience|worked at|position|role|\d{4}\s*[-–]\s*(present|\d{4})/i.test(content)) return 'experience';
+  if (lower.includes('education') || lower.includes('university') || lower.includes('degree')) return 'education';
+  if (lower.includes('skills') || lower.includes('technologies')) return 'skills';
   return 'general';
-}
-
-// Estimate token count
-function estimateTokens(text: string): number {
-  return Math.ceil(text.split(/\s+/).length / 1.3);
 }
 
 serve(async (req) => {
@@ -87,7 +61,7 @@ serve(async (req) => {
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File;
-    const resumeType = formData.get("resumeType") as string || "detailed"; // 'detailed' | 'abridged' | 'cover-letter-template'
+    const resumeType = formData.get("resumeType") as string || "detailed";
     
     if (!file) {
       return new Response(
@@ -96,7 +70,6 @@ serve(async (req) => {
       );
     }
 
-    // Validate file type
     const fileType = file.type;
     const validTypes = Object.keys(FILE_SIZE_LIMITS);
     if (!validTypes.includes(fileType)) {
@@ -106,13 +79,12 @@ serve(async (req) => {
       );
     }
 
-    // Validate file size BEFORE reading into memory
     const maxSize = FILE_SIZE_LIMITS[fileType as keyof typeof FILE_SIZE_LIMITS];
     if (file.size > maxSize) {
-      const maxSizeMB = (maxSize / (1024 * 1024)).toFixed(1);
+      const maxSizeKB = Math.round(maxSize / 1024);
       return new Response(
         JSON.stringify({ 
-          error: `File too large. Maximum size for ${fileType.split('/').pop()?.toUpperCase()} files is ${maxSizeMB}MB. Please upload a smaller file.` 
+          error: `File too large (${Math.round(file.size / 1024)}KB). Maximum: ${maxSizeKB}KB. Please compress or use a smaller file.` 
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -142,58 +114,44 @@ serve(async (req) => {
 
     const fileName = file.name;
     let textContent = "";
-    let filePath: string | null = null;
 
-    // Handle different file types
+    // Handle different file types - read buffer once
+    const fileBuffer = await file.arrayBuffer();
+
     if (fileType === "text/plain") {
-      const fileBuffer = await file.arrayBuffer();
       textContent = new TextDecoder().decode(fileBuffer);
     } else if (fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
-      // Dynamically import JSZip only for DOCX files to save memory
       const JSZip = (await import("https://esm.sh/jszip@3.10.1")).default;
       
-      try {
-        const fileBuffer = await file.arrayBuffer();
-        const zip = await JSZip.loadAsync(fileBuffer);
-        const documentXml = await zip.file("word/document.xml")?.async("string");
-        
-        if (!documentXml) {
-          throw new Error("Could not find document.xml in DOCX file");
-        }
-        
-        textContent = documentXml
-          .replace(/<w:p[^>]*>/g, "\n")
-          .replace(/<w:br[^>]*>/g, "\n")
-          .replace(/<w:tab[^>]*>/g, "\t")
-          .replace(/<[^>]+>/g, "")
-          .replace(/&lt;/g, "<")
-          .replace(/&gt;/g, ">")
-          .replace(/&amp;/g, "&")
-          .replace(/&quot;/g, '"')
-          .replace(/&apos;/g, "'")
-          .replace(/\n\s*\n\s*\n/g, "\n\n")
-          .trim();
-        
-        console.log("Successfully extracted text from DOCX using JSZip");
-      } catch (zipError) {
-        console.error("JSZip extraction error:", zipError);
-        throw new Error("Failed to parse DOCX file. Please ensure it's a valid Word document.");
+      const zip = await JSZip.loadAsync(fileBuffer);
+      const documentXml = await zip.file("word/document.xml")?.async("string");
+      
+      if (!documentXml) {
+        throw new Error("Could not find document.xml in DOCX file");
       }
+      
+      textContent = documentXml
+        .replace(/<w:p[^>]*>/g, "\n")
+        .replace(/<w:br[^>]*>/g, "\n")
+        .replace(/<w:tab[^>]*>/g, "\t")
+        .replace(/<[^>]+>/g, "")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&amp;/g, "&")
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/\n\s*\n\s*\n/g, "\n\n")
+        .trim();
+      
+      console.log("Extracted DOCX text, length:", textContent.length);
     } else if (fileType === "application/pdf") {
       const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
       if (!LOVABLE_API_KEY) {
         throw new Error("LOVABLE_API_KEY is not configured");
       }
 
-      // Read file and encode to base64
-      const fileBuffer = await file.arrayBuffer();
-      const bytes = new Uint8Array(fileBuffer);
-      const base64 = base64Encode(bytes.buffer);
-      
-      // Clear bytes reference to free memory
-      // @ts-ignore - allowing null assignment for memory optimization
-      const clearedBytes = null;
-      
+      const base64 = base64Encode(fileBuffer);
+
       const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -208,13 +166,11 @@ serve(async (req) => {
               content: [
                 {
                   type: "text",
-                  text: "Extract ALL text content from this resume document. Preserve the structure and formatting as much as possible. Include all sections like Experience, Education, Skills, etc. Return only the extracted text, no commentary.",
+                  text: "Extract ALL text content from this resume. Preserve structure. Return only extracted text.",
                 },
                 {
                   type: "image_url",
-                  image_url: {
-                    url: `data:application/pdf;base64,${base64}`,
-                  },
+                  image_url: { url: `data:application/pdf;base64,${base64}` },
                 },
               ],
             },
@@ -223,140 +179,88 @@ serve(async (req) => {
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error("PDF parsing error:", errorText);
-        throw new Error("Failed to parse PDF. Please try a different file or a smaller PDF.");
+        throw new Error("Failed to parse PDF");
       }
 
       const data = await response.json();
       textContent = data.choices?.[0]?.message?.content || "";
-      console.log("Successfully extracted text from PDF using AI");
-    }
-
-    // Skip storage upload for memory optimization - store content directly in DB
-    // Optional: Upload file for smaller files only
-    if (file.size < 1 * 1024 * 1024) { // Only upload files under 1MB
-      try {
-        const fileBuffer = await file.arrayBuffer();
-        filePath = `${user.id}/${resumeType}/${Date.now()}_${fileName}`;
-        const { error: uploadError } = await supabase.storage
-          .from("resumes")
-          .upload(filePath, fileBuffer, {
-            contentType: fileType,
-            upsert: true,
-          });
-        
-        if (uploadError) {
-          console.error("Storage upload error:", uploadError);
-          filePath = null;
-        }
-      } catch (uploadErr) {
-        console.error("File upload skipped due to memory constraints");
-        filePath = null;
-      }
+      console.log("Extracted PDF text, length:", textContent.length);
     }
 
     // Store in appropriate table based on resumeType
     if (resumeType === "cover-letter-template") {
-      // Store in user_cover_letter_templates
       const { error: upsertError } = await supabase
         .from("user_cover_letter_templates")
         .upsert({
           user_id: user.id,
           file_name: fileName,
-          file_path: filePath,
+          file_path: null,
           content: textContent,
           updated_at: new Date().toISOString(),
-        }, {
-          onConflict: "user_id",
-        });
+        }, { onConflict: "user_id" });
 
-      if (upsertError) {
-        console.error("Error storing cover letter template:", upsertError);
-        throw new Error("Failed to store cover letter template");
-      }
+      if (upsertError) throw new Error("Failed to store cover letter template");
 
       return new Response(
-        JSON.stringify({
-          fileName,
-          content: textContent,
-          filePath,
-          type: "cover-letter-template",
-        }),
+        JSON.stringify({ fileName, content: textContent, type: "cover-letter-template" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Store resume in user_resumes table (detailed or abridged)
+    // Store resume
     const { error: upsertError } = await supabase
       .from("user_resumes")
       .upsert({
         user_id: user.id,
         resume_type: resumeType,
         file_name: fileName,
-        file_path: filePath,
+        file_path: null,
         content: textContent,
         updated_at: new Date().toISOString(),
-      }, {
-        onConflict: "user_id,resume_type",
-      });
+      }, { onConflict: "user_id,resume_type" });
 
-    if (upsertError) {
-      console.error("Error storing resume:", upsertError);
-      throw new Error("Failed to store resume");
-    }
+    if (upsertError) throw new Error("Failed to store resume");
 
-    // Chunk the resume content
-    const chunks = chunkText(textContent, 500, 100);
+    // Simple chunking
+    const chunks = chunkText(textContent);
     
-    // Delete existing chunks for this user and resume type
+    // Delete existing chunks
     await supabase
       .from("resume_chunks")
       .delete()
       .eq("user_id", user.id)
       .eq("resume_type", resumeType);
 
-    // Store chunks in database
-    const chunksToInsert = chunks.map(chunk => ({
-      user_id: user.id,
-      application_id: null,
-      resume_type: resumeType,
-      chunk_index: chunk.index,
-      content: chunk.content,
-      chunk_type: detectChunkType(chunk.content),
-      token_count: estimateTokens(chunk.content),
-      metadata: {},
-    }));
+    // Insert chunks in smaller batches to reduce memory
+    const batchSize = 5;
+    for (let i = 0; i < chunks.length; i += batchSize) {
+      const batch = chunks.slice(i, i + batchSize).map((content, idx) => ({
+        user_id: user.id,
+        application_id: null,
+        resume_type: resumeType,
+        chunk_index: i + idx,
+        content,
+        chunk_type: detectChunkType(content),
+        token_count: Math.ceil(content.split(/\s+/).length / 1.3),
+        metadata: {},
+      }));
 
-    if (chunksToInsert.length > 0) {
-      const { error: insertError } = await supabase
-        .from("resume_chunks")
-        .insert(chunksToInsert);
-
-      if (insertError) {
-        console.error("Error inserting chunks:", insertError);
-      }
+      await supabase.from("resume_chunks").insert(batch);
     }
 
-    console.log(`Parsed ${resumeType} resume into ${chunks.length} chunks`);
+    console.log(`Stored ${chunks.length} chunks for ${resumeType}`);
 
     return new Response(
       JSON.stringify({
         fileName,
-        content: textContent,
-        filePath,
+        content: textContent.substring(0, 500) + "...",
         resumeType,
         chunksCount: chunks.length,
-        chunks: chunks.map(c => ({
-          index: c.index,
-          type: detectChunkType(c.content),
-          preview: c.content.substring(0, 100) + "...",
-        })),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Error in parse-resume:", error);
+    console.error("Error:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
