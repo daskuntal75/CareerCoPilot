@@ -1,9 +1,11 @@
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Rocket, Menu, X, LogOut, LayoutDashboard } from "lucide-react";
+import { Rocket, Menu, X, LogOut, LayoutDashboard, FileText } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUserProfile } from "@/hooks/useUserProfile";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +18,7 @@ const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
   const { user, signOut } = useAuth();
+  const { isProfileComplete } = useUserProfile();
 
   const handleSignOut = async () => {
     await signOut();
@@ -42,9 +45,21 @@ const Header = () => {
               <Button variant="ghost" size="sm">Home</Button>
             </Link>
             {user && (
-              <Link to="/dashboard">
-                <Button variant="ghost" size="sm">Dashboard</Button>
-              </Link>
+              <>
+                <Link to="/dashboard">
+                  <Button variant="ghost" size="sm">Dashboard</Button>
+                </Link>
+                <Link to="/profile">
+                  <Button variant="ghost" size="sm" className="relative">
+                    Career Documents
+                    {!isProfileComplete && (
+                      <Badge variant="destructive" className="absolute -top-1 -right-1 h-4 w-4 p-0 flex items-center justify-center text-[10px]">
+                        !
+                      </Badge>
+                    )}
+                  </Button>
+                </Link>
+              </>
             )}
           </nav>
 
@@ -71,6 +86,18 @@ const Header = () => {
                       Dashboard
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link to="/profile" className="flex items-center">
+                      <FileText className="w-4 h-4 mr-2" />
+                      Career Documents
+                      {!isProfileComplete && (
+                        <Badge variant="destructive" className="ml-2 h-4 px-1 text-[10px]">
+                          Incomplete
+                        </Badge>
+                      )}
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut}>
                     <LogOut className="w-4 h-4 mr-2" />
                     Sign Out
@@ -118,9 +145,21 @@ const Header = () => {
                 <Button variant="ghost" className="w-full justify-start">Home</Button>
               </Link>
               {user && (
-                <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)}>
-                  <Button variant="ghost" className="w-full justify-start">Dashboard</Button>
-                </Link>
+                <>
+                  <Link to="/dashboard" onClick={() => setMobileMenuOpen(false)}>
+                    <Button variant="ghost" className="w-full justify-start">Dashboard</Button>
+                  </Link>
+                  <Link to="/profile" onClick={() => setMobileMenuOpen(false)}>
+                    <Button variant="ghost" className="w-full justify-start">
+                      Career Documents
+                      {!isProfileComplete && (
+                        <Badge variant="destructive" className="ml-2 h-4 px-1 text-[10px]">
+                          !
+                        </Badge>
+                      )}
+                    </Button>
+                  </Link>
+                </>
               )}
               <div className="border-t border-border my-2" />
               {user ? (
