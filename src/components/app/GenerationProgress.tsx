@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
-import { Check, Loader2, RefreshCw, AlertTriangle } from "lucide-react";
+import { Check, Loader2, RefreshCw, AlertTriangle, X, Shield, Lock, Eye } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 export type GenerationStage = "analyzing" | "drafting" | "refining" | "complete";
 
@@ -15,6 +16,9 @@ interface GenerationProgressProps {
   currentStage: GenerationStage;
   type: "cover-letter" | "interview-prep";
   retryInfo?: RetryInfo;
+  onCancel?: () => void;
+  streamingContent?: string;
+  progress?: number;
 }
 
 const stageConfig = {
@@ -32,11 +36,25 @@ const stageConfig = {
   },
 };
 
+const securityFeatures = [
+  { icon: Shield, text: "Zero-retention AI processing" },
+  { icon: Lock, text: "End-to-end encryption" },
+  { icon: Eye, text: "PII automatically redacted" },
+];
+
 const stages: GenerationStage[] = ["analyzing", "drafting", "refining", "complete"];
 
-const GenerationProgress = ({ currentStage, type, retryInfo }: GenerationProgressProps) => {
+const GenerationProgress = ({ 
+  currentStage, 
+  type, 
+  retryInfo, 
+  onCancel,
+  streamingContent,
+  progress: externalProgress 
+}: GenerationProgressProps) => {
   const config = stageConfig[type];
   const currentIndex = stages.indexOf(currentStage);
+  const calculatedProgress = externalProgress ?? ((currentIndex + 1) / 3) * 100;
 
   return (
     <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center">
@@ -63,9 +81,25 @@ const GenerationProgress = ({ currentStage, type, retryInfo }: GenerationProgres
             {type === "cover-letter" ? "Generating Cover Letter" : "Preparing Interview Guide"}
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Using Gemini 2.5 Pro for enhanced accuracy
+            Using Gemini 2.5 Flash for fast, accurate results
           </p>
         </div>
+
+        {/* Security Features Banner */}
+        <motion.div
+          initial={{ opacity: 0, y: 5 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4 p-3 rounded-lg bg-success/5 border border-success/20"
+        >
+          <div className="flex items-center justify-center gap-4 text-xs text-success">
+            {securityFeatures.map((feature, index) => (
+              <div key={index} className="flex items-center gap-1.5">
+                <feature.icon className="w-3.5 h-3.5" />
+                <span>{feature.text}</span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
 
         {/* Retry Status Banner */}
         {retryInfo && retryInfo.attempt > 1 && (
@@ -95,6 +129,20 @@ const GenerationProgress = ({ currentStage, type, retryInfo }: GenerationProgres
                 <p>Recovered after {retryInfo.attempt - 1} retry attempt(s)</p>
               </>
             )}
+          </motion.div>
+        )}
+
+        {/* Streaming Content Preview */}
+        {streamingContent && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mb-4 p-3 rounded-lg bg-muted/30 border border-border max-h-32 overflow-y-auto"
+          >
+            <p className="text-xs text-muted-foreground font-mono whitespace-pre-wrap">
+              {streamingContent.slice(-500)}
+              <span className="animate-pulse">▊</span>
+            </p>
           </motion.div>
         )}
 
@@ -167,11 +215,31 @@ const GenerationProgress = ({ currentStage, type, retryInfo }: GenerationProgres
                 retryInfo?.isRetrying ? "bg-warning" : "bg-accent"
               )}
               initial={{ width: "0%" }}
-              animate={{ width: `${((currentIndex + 1) / 3) * 100}%` }}
+              animate={{ width: `${calculatedProgress}%` }}
               transition={{ duration: 0.5 }}
             />
           </div>
         </div>
+
+        {/* Cancel Button */}
+        {onCancel && currentStage !== "complete" && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.5 }}
+            className="mt-4 flex justify-center"
+          >
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onCancel}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <X className="w-4 h-4 mr-2" />
+              Cancel Generation
+            </Button>
+          </motion.div>
+        )}
       </motion.div>
     </div>
   );
