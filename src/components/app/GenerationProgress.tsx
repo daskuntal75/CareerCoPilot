@@ -1,12 +1,20 @@
 import { motion } from "framer-motion";
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2, RefreshCw, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type GenerationStage = "analyzing" | "drafting" | "refining" | "complete";
 
+interface RetryInfo {
+  attempt: number;
+  maxAttempts: number;
+  isRetrying: boolean;
+  lastError?: string;
+}
+
 interface GenerationProgressProps {
   currentStage: GenerationStage;
   type: "cover-letter" | "interview-prep";
+  retryInfo?: RetryInfo;
 }
 
 const stageConfig = {
@@ -26,7 +34,7 @@ const stageConfig = {
 
 const stages: GenerationStage[] = ["analyzing", "drafting", "refining", "complete"];
 
-const GenerationProgress = ({ currentStage, type }: GenerationProgressProps) => {
+const GenerationProgress = ({ currentStage, type, retryInfo }: GenerationProgressProps) => {
   const config = stageConfig[type];
   const currentIndex = stages.indexOf(currentStage);
 
@@ -45,6 +53,8 @@ const GenerationProgress = ({ currentStage, type }: GenerationProgressProps) => 
           >
             {currentStage === "complete" ? (
               <Check className="w-8 h-8 text-success" />
+            ) : retryInfo?.isRetrying ? (
+              <RefreshCw className="w-8 h-8 text-warning" />
             ) : (
               <Loader2 className="w-8 h-8 text-accent" />
             )}
@@ -56,6 +66,37 @@ const GenerationProgress = ({ currentStage, type }: GenerationProgressProps) => 
             Using Gemini 2.5 Pro for enhanced accuracy
           </p>
         </div>
+
+        {/* Retry Status Banner */}
+        {retryInfo && retryInfo.attempt > 1 && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            className={cn(
+              "mb-4 p-3 rounded-lg flex items-center gap-3 text-sm",
+              retryInfo.isRetrying 
+                ? "bg-warning/10 border border-warning/20 text-warning" 
+                : "bg-muted/50 border border-border text-muted-foreground"
+            )}
+          >
+            {retryInfo.isRetrying ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin flex-shrink-0" />
+                <div>
+                  <p className="font-medium">Retrying... (Attempt {retryInfo.attempt}/{retryInfo.maxAttempts})</p>
+                  {retryInfo.lastError && (
+                    <p className="text-xs opacity-80 mt-0.5">{retryInfo.lastError}</p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                <p>Recovered after {retryInfo.attempt - 1} retry attempt(s)</p>
+              </>
+            )}
+          </motion.div>
+        )}
 
         <div className="space-y-4">
           {stages.slice(0, -1).map((stage, index) => {
@@ -113,11 +154,18 @@ const GenerationProgress = ({ currentStage, type }: GenerationProgressProps) => 
         <div className="mt-6 pt-4 border-t border-border">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>Step {Math.min(currentIndex + 1, 3)} of 3</span>
-            <span>This may take up to a minute</span>
+            <span>
+              {retryInfo?.isRetrying 
+                ? `Retry ${retryInfo.attempt}/${retryInfo.maxAttempts}` 
+                : "This may take up to a minute"}
+            </span>
           </div>
           <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
             <motion.div
-              className="h-full bg-accent rounded-full"
+              className={cn(
+                "h-full rounded-full",
+                retryInfo?.isRetrying ? "bg-warning" : "bg-accent"
+              )}
               initial={{ width: "0%" }}
               animate={{ width: `${((currentIndex + 1) / 3) * 100}%` }}
               transition={{ duration: 0.5 }}

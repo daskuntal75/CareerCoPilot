@@ -6,6 +6,127 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Retry configuration
+const MAX_RETRIES = 3;
+const INITIAL_DELAY_MS = 1000;
+
+// Sleep utility for exponential backoff
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Sanitize JSON string to fix common AI formatting issues
+const sanitizeJson = (str: string): string => {
+  return str
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .replace(/,(\s*[}\]])/g, '$1')
+    .replace(/:\s*'([^']*)'/g, ': "$1"')
+    .replace(/[\uFEFF\u200B-\u200D\u2060]/g, '');
+};
+
+// Parse AI response with multiple fallback strategies
+const parseAIResponse = (content: string): any => {
+  if (!content) {
+    throw new Error("Empty response from AI");
+  }
+
+  let jsonString = content;
+  
+  const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    jsonString = codeBlockMatch[1].trim();
+  } else {
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      jsonString = jsonMatch[0];
+    }
+  }
+
+  try {
+    return JSON.parse(sanitizeJson(jsonString));
+  } catch (parseError) {
+    console.error("Initial parse failed, attempting recovery:", parseError);
+    
+    const aggressiveCleanup = jsonString
+      .replace(/[^\x20-\x7E\s]/g, '')
+      .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3');
+    
+    try {
+      return JSON.parse(aggressiveCleanup);
+    } catch (secondError) {
+      console.error("JSON parsing failed after cleanup");
+      throw new Error("Failed to parse AI response as valid JSON");
+    }
+  }
+};
+
+// Make AI request with retry logic
+const makeAIRequestWithRetry = async (
+  apiKey: string,
+  prompt: string
+): Promise<any> => {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      console.log(`AI request attempt ${attempt + 1}/${MAX_RETRIES}`);
+      
+      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-3-flash-preview",
+          messages: [
+            { role: "user", content: prompt },
+          ],
+        }),
+      });
+
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('Retry-After');
+        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : INITIAL_DELAY_MS * Math.pow(2, attempt);
+        console.log(`Rate limited, waiting ${waitTime}ms before retry`);
+        await sleep(waitTime);
+        continue;
+      }
+
+      if (response.status === 402) {
+        throw new Error("AI credits depleted. Please add funds to continue.");
+      }
+
+      if (!response.ok) {
+        const text = await response.text();
+        console.error(`AI gateway error (status ${response.status}):`, text);
+        throw new Error(`AI gateway error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content;
+      
+      const parsed = parseAIResponse(content);
+      console.log(`Successfully parsed response on attempt ${attempt + 1}`);
+      return parsed;
+
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.error(`Attempt ${attempt + 1} failed:`, lastError.message);
+      
+      if (lastError.message.includes("credits depleted")) {
+        throw lastError;
+      }
+
+      if (attempt < MAX_RETRIES - 1) {
+        const delay = INITIAL_DELAY_MS * Math.pow(2, attempt);
+        console.log(`Waiting ${delay}ms before retry...`);
+        await sleep(delay);
+      }
+    }
+  }
+
+  throw lastError || new Error("All retry attempts failed");
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -55,46 +176,8 @@ Return a JSON array of exactly 10 requirements in this format:
 
 Only return the JSON, no other text.`;
 
-    const extractResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "user", content: extractPrompt },
-        ],
-      }),
-    });
-
-    if (!extractResponse.ok) {
-      if (extractResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (extractResponse.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits depleted. Please add funds to continue." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      throw new Error("Failed to extract requirements");
-    }
-
-    const extractData = await extractResponse.json();
-    const extractContent = extractData.choices?.[0]?.message?.content || "";
-    
-    // Parse requirements
-    const jsonMatch = extractContent.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("Failed to parse requirements JSON");
-    }
-    
-    const { requirements: extractedRequirements } = JSON.parse(jsonMatch[0]);
+    const extractedData = await makeAIRequestWithRetry(LOVABLE_API_KEY, extractPrompt);
+    const extractedRequirements = extractedData.requirements;
 
     // Store requirements in database if applicationId provided
     if (applicationId) {
@@ -178,45 +261,8 @@ Return JSON in this format:
 
 Only return the JSON.`;
 
-    const matchResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "user", content: matchPrompt },
-        ],
-      }),
-    });
-
-    if (!matchResponse.ok) {
-      if (matchResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (matchResponse.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits depleted. Please add funds to continue." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      throw new Error("Failed to perform semantic matching");
-    }
-
-    const matchData = await matchResponse.json();
-    const matchContent = matchData.choices?.[0]?.message?.content || "";
-    
-    const matchJsonMatch = matchContent.match(/\{[\s\S]*\}/);
-    if (!matchJsonMatch) {
-      throw new Error("Failed to parse matching JSON");
-    }
-    
-    const { matches } = JSON.parse(matchJsonMatch[0]);
+    const matchData = await makeAIRequestWithRetry(LOVABLE_API_KEY, matchPrompt);
+    const matches = matchData.matches;
 
     // Store matches in database if applicationId provided
     if (applicationId) {
