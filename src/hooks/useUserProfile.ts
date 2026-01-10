@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -35,14 +35,19 @@ export function useUserProfile() {
   const [abridgedResume, setAbridgedResume] = useState<UserResume | null>(null);
   const [coverLetterTemplate, setCoverLetterTemplate] = useState<UserCoverLetterTemplate | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const hasFetchedRef = useRef(false);
 
-  const fetchProfile = useCallback(async () => {
+  const fetchProfile = useCallback(async (showLoading = true) => {
     if (!user) {
       setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
+    // Only show loading on initial fetch, not on refetches
+    if (showLoading && !hasFetchedRef.current) {
+      setIsLoading(true);
+    }
+    
     try {
       // Fetch resumes
       const { data: resumes, error: resumesError } = await supabase
@@ -71,6 +76,8 @@ export function useUserProfile() {
       } else {
         setCoverLetterTemplate(template as UserCoverLetterTemplate | null);
       }
+      
+      hasFetchedRef.current = true;
     } catch (error) {
       console.error("Error fetching user profile:", error);
     } finally {
@@ -83,7 +90,7 @@ export function useUserProfile() {
   }, [fetchProfile]);
 
   const refreshProfile = useCallback(() => {
-    return fetchProfile();
+    return fetchProfile(false); // Don't show loading on manual refresh
   }, [fetchProfile]);
 
   // Profile is complete if detailed resume exists (required)
