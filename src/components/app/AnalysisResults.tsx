@@ -4,12 +4,14 @@ import { ArrowLeft, ChevronDown, ChevronRight, Sparkles, Check, Minus, X } from 
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { AnalysisData, JobData, RequirementMatch } from "@/pages/App";
+import RAGDebugPanel from "./RAGDebugPanel";
 
 interface AnalysisResultsProps {
   data: AnalysisData;
   jobData: JobData;
   onGenerate: () => void;
   onBack: () => void;
+  applicationId: string | null;
 }
 
 const fitLevelLabels = {
@@ -74,7 +76,7 @@ const RequirementRow = ({ item, index }: { item: RequirementMatch; index: number
   );
 };
 
-const AnalysisResults = ({ data, jobData, onGenerate, onBack }: AnalysisResultsProps) => {
+const AnalysisResults = ({ data, jobData, onGenerate, onBack, applicationId }: AnalysisResultsProps) => {
   const fitLabel = fitLevelLabels[data.fitLevel];
   const yesCount = data.requirements.filter(r => r.status === "yes").length;
   const partialCount = data.requirements.filter(r => r.status === "partial").length;
@@ -217,6 +219,9 @@ const AnalysisResults = ({ data, jobData, onGenerate, onBack }: AnalysisResultsP
           </div>
         </motion.div>
       </div>
+
+      {/* RAG Debug Panel */}
+      <RAGDebugPanel applicationId={applicationId} />
     </div>
   );
 };
