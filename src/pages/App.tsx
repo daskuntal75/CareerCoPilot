@@ -179,13 +179,15 @@ const AppPage = () => {
     setIsLoading(true);
 
     try {
-      // Call AI for job fit analysis
+      // Call AI for job fit analysis with RAG support
       const response = await supabase.functions.invoke("analyze-job-fit", {
         body: {
           resumeContent: resumeData?.content,
           jobDescription: data.description,
           jobTitle: data.title,
           company: data.company,
+          applicationId: applicationId,
+          userId: user?.id,
         },
       });
 
@@ -224,6 +226,7 @@ const AppPage = () => {
     setIsLoading(true);
     
     try {
+      // RAG-grounded cover letter generation using only verified resume chunks
       const response = await supabase.functions.invoke("generate-cover-letter", {
         body: {
           resumeContent: resumeData.content,
@@ -231,6 +234,8 @@ const AppPage = () => {
           jobTitle: jobData.title,
           company: jobData.company,
           analysisData,
+          applicationId: applicationId,
+          userId: user?.id,
         },
       });
 
