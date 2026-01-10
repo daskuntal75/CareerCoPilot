@@ -5,6 +5,7 @@ import { ArrowLeft, Download, Copy, RefreshCw, Check, FileText, FileType, Messag
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { Document, Packer, Paragraph, TextRun, HeadingLevel } from "docx";
 import type { JobData } from "@/pages/App";
 
 interface CoverLetterEditorProps {
@@ -28,10 +29,21 @@ const CoverLetterEditor = ({ content, jobData, onContentChange, onBack, onGenera
   };
 
   const handleDownloadPDF = async () => {
+    if (!content || content.trim().length === 0) {
+      toast.error("No content to export");
+      return;
+    }
+    
     setIsExporting(true);
     try {
       const response = await supabase.functions.invoke("export-pdf", {
-        body: { content, title: jobData.title, company: jobData.company, jobTitle: jobData.title },
+        body: { 
+          content, 
+          title: jobData.title, 
+          company: jobData.company, 
+          jobTitle: jobData.title,
+          type: "cover-letter"
+        },
       });
       
       if (response.error) throw new Error(response.error.message);
@@ -61,15 +73,76 @@ const CoverLetterEditor = ({ content, jobData, onContentChange, onBack, onGenera
     }
   };
 
-  const handleDownloadDOCX = () => {
-    const blob = new Blob([content], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `CoverLetter_${jobData.company.replace(/\s+/g, "_")}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("Document downloaded!");
+  const handleDownloadDOCX = async () => {
+    if (!content || content.trim().length === 0) {
+      toast.error("No content to export");
+      return;
+    }
+    
+    setIsExporting(true);
+    try {
+      // Parse content into paragraphs
+      const lines = content.split('\n');
+      const paragraphs: Paragraph[] = [];
+      
+      for (const line of lines) {
+        if (line.trim() === '') {
+          paragraphs.push(new Paragraph({ text: '' }));
+        } else if (line.startsWith('## ')) {
+          // Section header
+          paragraphs.push(new Paragraph({
+            text: line.replace('## ', ''),
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 200, after: 100 },
+          }));
+        } else if (line.startsWith('# ')) {
+          // Main header
+          paragraphs.push(new Paragraph({
+            text: line.replace('# ', ''),
+            heading: HeadingLevel.HEADING_1,
+            spacing: { before: 200, after: 100 },
+          }));
+        } else if (line.startsWith('• ') || line.startsWith('- ')) {
+          // Bullet point
+          paragraphs.push(new Paragraph({
+            children: [new TextRun({ text: line.replace(/^[•-]\s*/, ''), size: 24 })],
+            bullet: { level: 0 },
+          }));
+        } else if (line.startsWith('**') && line.endsWith('**')) {
+          // Bold text
+          paragraphs.push(new Paragraph({
+            children: [new TextRun({ text: line.replace(/\*\*/g, ''), bold: true, size: 24 })],
+          }));
+        } else {
+          // Regular paragraph
+          paragraphs.push(new Paragraph({
+            children: [new TextRun({ text: line, size: 24 })],
+            spacing: { after: 100 },
+          }));
+        }
+      }
+      
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: paragraphs,
+        }],
+      });
+      
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `CoverLetter_${jobData.company.replace(/\s+/g, "_")}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("DOCX downloaded!");
+    } catch (error) {
+      console.error("DOCX export error:", error);
+      toast.error("Failed to export DOCX");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const handleRegenerate = async () => {
