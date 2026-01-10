@@ -5,6 +5,146 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Retry configuration
+const MAX_RETRIES = 3;
+const INITIAL_DELAY_MS = 1000;
+
+// Sleep utility for exponential backoff
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Sanitize JSON string to fix common AI formatting issues
+const sanitizeJson = (str: string): string => {
+  return str
+    // Remove control characters except newlines and tabs
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    // Fix trailing commas before closing brackets
+    .replace(/,(\s*[}\]])/g, '$1')
+    // Fix single quotes used as string delimiters (common AI mistake)
+    .replace(/:\s*'([^']*)'/g, ': "$1"')
+    // Remove any BOM or zero-width characters
+    .replace(/[\uFEFF\u200B-\u200D\u2060]/g, '');
+};
+
+// Parse AI response with multiple fallback strategies
+const parseAIResponse = (content: string): any => {
+  if (!content) {
+    throw new Error("Empty response from AI");
+  }
+
+  // Extract JSON from response - handle markdown code blocks
+  let jsonString = content;
+  
+  // Remove markdown code blocks if present
+  const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    jsonString = codeBlockMatch[1].trim();
+  } else {
+    // Try to find raw JSON object
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      jsonString = jsonMatch[0];
+    }
+  }
+
+  // Try parsing with sanitization
+  try {
+    return JSON.parse(sanitizeJson(jsonString));
+  } catch (parseError) {
+    console.error("Initial parse failed, attempting recovery:", parseError);
+    
+    // Try more aggressive cleanup
+    const aggressiveCleanup = jsonString
+      // Remove all non-printable characters except whitespace
+      .replace(/[^\x20-\x7E\s]/g, '')
+      // Fix any remaining issues with quotes
+      .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3');
+    
+    try {
+      return JSON.parse(aggressiveCleanup);
+    } catch (secondError) {
+      console.error("JSON parsing failed after cleanup. Raw content length:", content.length);
+      console.error("First 500 chars:", content.substring(0, 500));
+      console.error("Last 500 chars:", content.substring(content.length - 500));
+      throw new Error("Failed to parse AI response as valid JSON");
+    }
+  }
+};
+
+// Make AI request with retry logic
+const makeAIRequestWithRetry = async (
+  apiKey: string,
+  systemPrompt: string,
+  userPrompt: string
+): Promise<any> => {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      console.log(`AI request attempt ${attempt + 1}/${MAX_RETRIES}`);
+      
+      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-pro",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+        }),
+      });
+
+      // Don't retry on client errors (4xx) except rate limiting
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('Retry-After');
+        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : INITIAL_DELAY_MS * Math.pow(2, attempt);
+        console.log(`Rate limited, waiting ${waitTime}ms before retry`);
+        await sleep(waitTime);
+        continue;
+      }
+
+      if (response.status === 402) {
+        throw new Error("AI credits depleted. Please add funds to continue.");
+      }
+
+      if (!response.ok) {
+        const text = await response.text();
+        console.error(`AI gateway error (status ${response.status}):`, text);
+        throw new Error(`AI gateway error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content;
+      
+      // Try to parse the response
+      const parsed = parseAIResponse(content);
+      console.log(`Successfully parsed response on attempt ${attempt + 1}`);
+      return parsed;
+
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.error(`Attempt ${attempt + 1} failed:`, lastError.message);
+      
+      // Don't retry on certain errors
+      if (lastError.message.includes("credits depleted")) {
+        throw lastError;
+      }
+
+      // Exponential backoff before retry
+      if (attempt < MAX_RETRIES - 1) {
+        const delay = INITIAL_DELAY_MS * Math.pow(2, attempt);
+        console.log(`Waiting ${delay}ms before retry...`);
+        await sleep(delay);
+      }
+    }
+  }
+
+  throw lastError || new Error("All retry attempts failed");
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -39,6 +179,12 @@ serve(async (req) => {
 - Answer directly using your best judgment
 - Do not ask clarifying questions unless absolutely necessary
 - If the job description is empty, missing, or inaccessible, immediately state: "I need the full job description text to proceed."
+
+## CRITICAL: JSON Output Format
+- You MUST return ONLY a valid JSON object, no markdown, no explanation
+- Ensure all strings are properly escaped (use \\" for quotes inside strings)
+- Do not use trailing commas
+- All property names must be double-quoted
 
 Return your response as a JSON object with this structure:
 {
@@ -147,7 +293,8 @@ ${analysisContext}
 
 ${sectionPrompts[sectionToRegenerate]}
 
-Base ALL content ONLY on actual experiences from the resume. Do not fabricate or embellish.`
+Base ALL content ONLY on actual experiences from the resume. Do not fabricate or embellish.
+IMPORTANT: Return ONLY valid JSON, no markdown code blocks.`
       : `Here is the resume containing actual skills, experiences, and achievements:
 
 <resume>
@@ -221,100 +368,11 @@ Develop 3 insightful, strategic questions for the candidate to ask at each stage
 - Questions for Technical Lead/Engineering mgr
 - Questions for VP (assessing culture fit)
 
-Return the complete analysis as a JSON object following the structure in the system prompt.`;
+Return the complete analysis as a JSON object following the structure in the system prompt.
+IMPORTANT: Return ONLY valid JSON, no markdown code blocks.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-      }),
-    });
-
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits depleted. Please add funds to continue." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      const text = await response.text();
-      console.error("AI gateway error:", response.status, text);
-      throw new Error("AI gateway error");
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-    
-    if (!content) {
-      throw new Error("Empty response from AI");
-    }
-
-    // Extract JSON from response - handle markdown code blocks
-    let jsonString = content;
-    
-    // Remove markdown code blocks if present
-    const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (codeBlockMatch) {
-      jsonString = codeBlockMatch[1].trim();
-    } else {
-      // Try to find raw JSON object
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        jsonString = jsonMatch[0];
-      }
-    }
-
-    // Sanitize the JSON string to fix common AI formatting issues
-    const sanitizeJson = (str: string): string => {
-      return str
-        // Remove control characters except newlines and tabs
-        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-        // Fix unescaped newlines in strings (replace with \n)
-        .replace(/(?<!\\)\\n/g, '\\n')
-        // Fix trailing commas before closing brackets
-        .replace(/,(\s*[}\]])/g, '$1')
-        // Fix single quotes used as string delimiters (common AI mistake)
-        .replace(/:\s*'([^']*)'/g, ': "$1"')
-        // Remove any BOM or zero-width characters
-        .replace(/[\uFEFF\u200B-\u200D\u2060]/g, '');
-    };
-
-    let interviewPrep;
-    try {
-      interviewPrep = JSON.parse(sanitizeJson(jsonString));
-    } catch (parseError) {
-      console.error("Initial parse failed, attempting recovery:", parseError);
-      
-      // Try more aggressive cleanup
-      const aggressiveCleanup = jsonString
-        // Remove all non-printable characters except whitespace
-        .replace(/[^\x20-\x7E\s]/g, '')
-        // Fix any remaining issues with quotes
-        .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3');
-      
-      try {
-        interviewPrep = JSON.parse(aggressiveCleanup);
-      } catch (secondError) {
-        console.error("JSON parsing failed after cleanup. Raw content length:", content.length);
-        console.error("First 500 chars:", content.substring(0, 500));
-        console.error("Last 500 chars:", content.substring(content.length - 500));
-        throw new Error("Failed to parse AI response as valid JSON");
-      }
-    }
+    // Use retry logic for the AI request
+    const interviewPrep = await makeAIRequestWithRetry(LOVABLE_API_KEY, systemPrompt, userPrompt);
 
     return new Response(JSON.stringify(interviewPrep), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
