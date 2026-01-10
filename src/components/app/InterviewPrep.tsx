@@ -1,12 +1,27 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ChevronDown, ChevronRight, MessageCircle, Lightbulb, AlertTriangle, HelpCircle, Building, Target, TrendingUp, Users, Briefcase, RefreshCw, Download, Play } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { 
+  ArrowLeft, ChevronDown, ChevronRight, MessageCircle, Lightbulb, AlertTriangle, 
+  HelpCircle, Building, Target, TrendingUp, Users, Briefcase, RefreshCw, 
+  Download, Play, FileEdit, FileType, Sparkles
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
 import type { JobData } from "@/pages/App";
 import InterviewPractice from "./InterviewPractice";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -71,7 +86,6 @@ export interface InterviewPrepData {
   keyStrengths: string[];
   potentialConcerns: string[];
   questionsToAsk: string[] | QuestionsToAsk;
-  // Enhanced PRD fields
   applicationContext?: string;
   companyIntelligence?: CompanyIntelligence;
   keyDomainConcepts?: string[];
@@ -89,8 +103,9 @@ interface InterviewPrepProps {
   data: InterviewPrepData;
   jobData: JobData;
   onBack: () => void;
-  onRegenerateSection?: (section: string) => void;
+  onRegenerateSection?: (section: string, feedback: string, tips: string[]) => void;
   isRegenerating?: boolean;
+  onGoToCoverLetter?: () => void;
 }
 
 const categoryConfig: Record<string, { label: string; color: string }> = {
@@ -110,6 +125,27 @@ const difficultyConfig = {
   medium: { label: "Medium", color: "text-warning" },
   hard: { label: "Hard", color: "text-destructive" },
 };
+
+const regenerationSections = [
+  { key: "questions", label: "Interview Questions", description: "Regenerate predicted questions & STAR answers" },
+  { key: "keyStrengths", label: "Key Strengths", description: "Regenerate strengths to highlight" },
+  { key: "potentialConcerns", label: "Concerns to Address", description: "Regenerate potential concerns" },
+  { key: "questionsToAsk", label: "Questions to Ask", description: "Regenerate questions for interviewers" },
+  { key: "companyIntelligence", label: "Company Intelligence", description: "Regenerate company research" },
+  { key: "strategicAnalysis", label: "SWOT Analysis", description: "Regenerate strategic analysis" },
+  { key: "uniqueValueProposition", label: "Value Proposition", description: "Regenerate your unique value prop" },
+];
+
+const regenerationTips = [
+  { id: "more_specific", label: "More specific examples", description: "Include concrete details" },
+  { id: "deeper_research", label: "Deeper company research", description: "More industry insights" },
+  { id: "harder_questions", label: "Include harder questions", description: "Challenge me more" },
+  { id: "different_angle", label: "Different perspective", description: "Try a new approach" },
+  { id: "more_metrics", label: "Add more metrics", description: "Quantify with numbers" },
+  { id: "simpler", label: "Simplify language", description: "Make it easier to remember" },
+  { id: "executive_focus", label: "Executive-level focus", description: "C-suite considerations" },
+  { id: "technical_depth", label: "More technical depth", description: "Deeper technical details" },
+];
 
 const QuestionCard = ({ question, index }: { question: InterviewQuestion; index: number }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -158,42 +194,43 @@ const QuestionCard = ({ question, index }: { question: InterviewQuestion; index:
             className="overflow-hidden"
           >
             <div className="px-4 pb-4 space-y-4">
-              {/* Why This Question */}
-              <div className="bg-secondary/30 rounded-lg p-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-foreground mb-2">
-                  <HelpCircle className="w-4 h-4 text-accent" />
-                  Why they might ask this
+              {question.whyAsked && (
+                <div className="bg-secondary/30 rounded-lg p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium text-foreground mb-2">
+                    <HelpCircle className="w-4 h-4 text-accent" />
+                    Why they might ask this
+                  </div>
+                  <p className="text-sm text-muted-foreground">{question.whyAsked}</p>
                 </div>
-                <p className="text-sm text-muted-foreground">{question.whyAsked}</p>
-              </div>
+              )}
 
-              {/* STAR Answer */}
-              <div className="bg-accent/5 rounded-lg p-4 border border-accent/20">
-                <div className="flex items-center gap-2 text-sm font-medium text-foreground mb-3">
-                  <MessageCircle className="w-4 h-4 text-accent" />
-                  STAR + SMART Answer Framework
+              {question.starAnswer && (
+                <div className="bg-accent/5 rounded-lg p-4 border border-accent/20">
+                  <div className="flex items-center gap-2 text-sm font-medium text-foreground mb-3">
+                    <MessageCircle className="w-4 h-4 text-accent" />
+                    STAR + SMART Answer Framework
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="text-xs font-semibold text-accent uppercase tracking-wider mb-1">Situation</div>
+                      <p className="text-sm text-foreground">{question.starAnswer.situation}</p>
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-accent uppercase tracking-wider mb-1">Task</div>
+                      <p className="text-sm text-foreground">{question.starAnswer.task}</p>
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-accent uppercase tracking-wider mb-1">Action</div>
+                      <p className="text-sm text-foreground">{question.starAnswer.action}</p>
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-accent uppercase tracking-wider mb-1">Result (SMART)</div>
+                      <p className="text-sm text-foreground">{question.starAnswer.result}</p>
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-3">
-                  <div>
-                    <div className="text-xs font-semibold text-accent uppercase tracking-wider mb-1">Situation</div>
-                    <p className="text-sm text-foreground">{question.starAnswer.situation}</p>
-                  </div>
-                  <div>
-                    <div className="text-xs font-semibold text-accent uppercase tracking-wider mb-1">Task</div>
-                    <p className="text-sm text-foreground">{question.starAnswer.task}</p>
-                  </div>
-                  <div>
-                    <div className="text-xs font-semibold text-accent uppercase tracking-wider mb-1">Action</div>
-                    <p className="text-sm text-foreground">{question.starAnswer.action}</p>
-                  </div>
-                  <div>
-                    <div className="text-xs font-semibold text-accent uppercase tracking-wider mb-1">Result (SMART)</div>
-                    <p className="text-sm text-foreground">{question.starAnswer.result}</p>
-                  </div>
-                </div>
-              </div>
+              )}
 
-              {/* Tips */}
               {question.tips && question.tips.length > 0 && (
                 <div>
                   <div className="flex items-center gap-2 text-sm font-medium text-foreground mb-2">
@@ -218,20 +255,21 @@ const QuestionCard = ({ question, index }: { question: InterviewQuestion; index:
   );
 };
 
-const InterviewPrep = ({ data, jobData, onBack, onRegenerateSection, isRegenerating }: InterviewPrepProps) => {
+const InterviewPrep = ({ 
+  data, 
+  jobData, 
+  onBack, 
+  onRegenerateSection, 
+  isRegenerating,
+  onGoToCoverLetter,
+}: InterviewPrepProps) => {
   const [activeTab, setActiveTab] = useState<"questions" | "research" | "strategy">("questions");
   const [showPracticeMode, setShowPracticeMode] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-
-  const regenerationSections = [
-    { key: "questions", label: "Interview Questions", description: "Regenerate predicted questions & STAR answers" },
-    { key: "keyStrengths", label: "Key Strengths", description: "Regenerate strengths to highlight" },
-    { key: "potentialConcerns", label: "Concerns to Address", description: "Regenerate potential concerns" },
-    { key: "questionsToAsk", label: "Questions to Ask", description: "Regenerate questions for interviewers" },
-    { key: "companyIntelligence", label: "Company Intelligence", description: "Regenerate company research" },
-    { key: "strategicAnalysis", label: "SWOT Analysis", description: "Regenerate strategic analysis" },
-    { key: "uniqueValueProposition", label: "Value Proposition", description: "Regenerate your unique value prop" },
-  ];
+  const [showRegenerateDialog, setShowRegenerateDialog] = useState(false);
+  const [selectedSection, setSelectedSection] = useState<string | null>(null);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [selectedTips, setSelectedTips] = useState<string[]>([]);
 
   const handleExportPDF = async () => {
     setIsExporting(true);
@@ -248,6 +286,11 @@ const InterviewPrep = ({ data, jobData, onBack, onRegenerateSection, isRegenerat
       if (response.error) throw new Error(response.error.message);
 
       const { pdf, filename } = response.data;
+      
+      if (!pdf) {
+        throw new Error("No PDF data received");
+      }
+      
       const byteCharacters = atob(pdf);
       const byteNumbers = new Array(byteCharacters.length);
       for (let i = 0; i < byteCharacters.length; i++) {
@@ -270,6 +313,154 @@ const InterviewPrep = ({ data, jobData, onBack, onRegenerateSection, isRegenerat
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleExportDOCX = async () => {
+    setIsExporting(true);
+    try {
+      const paragraphs: Paragraph[] = [];
+      
+      // Title
+      paragraphs.push(new Paragraph({
+        children: [new TextRun({ text: `Interview Prep: ${jobData.title} at ${jobData.company}`, bold: true, size: 36 })],
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 400 },
+      }));
+      
+      // Overview section
+      if (data.applicationContext) {
+        paragraphs.push(new Paragraph({
+          children: [new TextRun({ text: "Application Context", bold: true, size: 28 })],
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: 300, after: 150 },
+        }));
+        paragraphs.push(new Paragraph({
+          children: [new TextRun({ text: data.applicationContext, size: 24 })],
+          spacing: { after: 200 },
+        }));
+      }
+      
+      if (data.uniqueValueProposition) {
+        paragraphs.push(new Paragraph({
+          children: [new TextRun({ text: "Your Unique Value Proposition", bold: true, size: 28 })],
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: 300, after: 150 },
+        }));
+        paragraphs.push(new Paragraph({
+          children: [new TextRun({ text: data.uniqueValueProposition, size: 24 })],
+          spacing: { after: 200 },
+        }));
+      }
+      
+      // Key Strengths
+      if (data.keyStrengths?.length > 0) {
+        paragraphs.push(new Paragraph({
+          children: [new TextRun({ text: "Key Strengths to Highlight", bold: true, size: 28 })],
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: 300, after: 150 },
+        }));
+        data.keyStrengths.forEach(s => {
+          paragraphs.push(new Paragraph({
+            children: [new TextRun({ text: s, size: 24 })],
+            bullet: { level: 0 },
+            spacing: { after: 80 },
+          }));
+        });
+      }
+      
+      // Interview Questions
+      if (data.questions?.length > 0) {
+        paragraphs.push(new Paragraph({
+          children: [new TextRun({ text: "Interview Questions", bold: true, size: 32 })],
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: 400, after: 200 },
+        }));
+        
+        data.questions.forEach((q, i) => {
+          paragraphs.push(new Paragraph({
+            children: [new TextRun({ text: `Q${i + 1}: ${q.question}`, bold: true, size: 26 })],
+            spacing: { before: 250, after: 100 },
+          }));
+          
+          paragraphs.push(new Paragraph({
+            children: [new TextRun({ text: `Category: ${q.category} | Difficulty: ${q.difficulty}`, italics: true, size: 22 })],
+            spacing: { after: 100 },
+          }));
+          
+          if (q.starAnswer) {
+            paragraphs.push(new Paragraph({
+              children: [new TextRun({ text: "SITUATION: ", bold: true, size: 24 }), new TextRun({ text: q.starAnswer.situation, size: 24 })],
+              spacing: { after: 100 },
+            }));
+            paragraphs.push(new Paragraph({
+              children: [new TextRun({ text: "TASK: ", bold: true, size: 24 }), new TextRun({ text: q.starAnswer.task, size: 24 })],
+              spacing: { after: 100 },
+            }));
+            paragraphs.push(new Paragraph({
+              children: [new TextRun({ text: "ACTION: ", bold: true, size: 24 }), new TextRun({ text: q.starAnswer.action, size: 24 })],
+              spacing: { after: 100 },
+            }));
+            paragraphs.push(new Paragraph({
+              children: [new TextRun({ text: "RESULT: ", bold: true, size: 24 }), new TextRun({ text: q.starAnswer.result, size: 24 })],
+              spacing: { after: 150 },
+            }));
+          }
+        });
+      }
+      
+      const doc = new Document({
+        sections: [{
+          properties: {
+            page: { margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } },
+          },
+          children: paragraphs,
+        }],
+      });
+      
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `InterviewPrep_${jobData.company.replace(/\s+/g, "_")}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("DOCX downloaded!");
+    } catch (error) {
+      console.error("DOCX export error:", error);
+      toast.error("Failed to export DOCX");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleOpenRegenerateDialog = (sectionKey: string) => {
+    setSelectedSection(sectionKey);
+    setFeedbackText("");
+    setSelectedTips([]);
+    setShowRegenerateDialog(true);
+  };
+
+  const handleRegenerateSubmit = () => {
+    if (!feedbackText.trim() && selectedTips.length === 0) {
+      toast.error("Please provide feedback or select at least one improvement tip");
+      return;
+    }
+    
+    if (onRegenerateSection && selectedSection) {
+      onRegenerateSection(selectedSection, feedbackText, selectedTips);
+      setShowRegenerateDialog(false);
+      setSelectedSection(null);
+      setFeedbackText("");
+      setSelectedTips([]);
+    }
+  };
+
+  const toggleTip = (tipId: string) => {
+    setSelectedTips(prev => 
+      prev.includes(tipId) 
+        ? prev.filter(t => t !== tipId)
+        : [...prev, tipId]
+    );
   };
 
   // Handle both old format (string[]) and new format (object with categories)
@@ -344,6 +535,18 @@ const InterviewPrep = ({ data, jobData, onBack, onRegenerateSection, isRegenerat
           </div>
           
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Navigate to Cover Letter */}
+            {onGoToCoverLetter && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onGoToCoverLetter}
+              >
+                <FileEdit className="w-4 h-4" />
+                View Cover Letter
+              </Button>
+            )}
+            
             <Button
               variant="hero"
               size="sm"
@@ -354,19 +557,29 @@ const InterviewPrep = ({ data, jobData, onBack, onRegenerateSection, isRegenerat
               Practice Mode
             </Button>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportPDF}
-              disabled={isExporting}
-            >
-              {isExporting ? (
-                <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-              ) : (
-                <Download className="w-4 h-4" />
-              )}
-              Export PDF
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={isExporting}>
+                  {isExporting ? (
+                    <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  Export
+                  <ChevronDown className="w-4 h-4 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleExportPDF}>
+                  <Download className="w-4 h-4 mr-2" />
+                  Download PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportDOCX}>
+                  <FileType className="w-4 h-4 mr-2" />
+                  Download DOCX
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             {onRegenerateSection && (
               <DropdownMenu>
@@ -387,7 +600,7 @@ const InterviewPrep = ({ data, jobData, onBack, onRegenerateSection, isRegenerat
                   {regenerationSections.map((section) => (
                     <DropdownMenuItem
                       key={section.key}
-                      onClick={() => onRegenerateSection(section.key)}
+                      onClick={() => handleOpenRegenerateDialog(section.key)}
                       className="flex flex-col items-start gap-0.5 cursor-pointer"
                     >
                       <span className="font-medium">{section.label}</span>
@@ -410,6 +623,7 @@ const InterviewPrep = ({ data, jobData, onBack, onRegenerateSection, isRegenerat
           />
         )}
       </AnimatePresence>
+      
       {/* Tabs */}
       <div className="flex gap-2 mb-6 border-b border-border">
         <button
@@ -523,6 +737,31 @@ const InterviewPrep = ({ data, jobData, onBack, onRegenerateSection, isRegenerat
               </div>
               {renderQuestionsToAsk()}
             </motion.div>
+
+            {/* Quick Improvements */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className="bg-card border border-border rounded-xl p-5"
+            >
+              <div className="flex items-center gap-2 text-foreground font-semibold mb-3">
+                <Sparkles className="w-5 h-5 text-accent" />
+                Quick Improvements
+              </div>
+              <div className="space-y-2">
+                {regenerationTips.slice(0, 4).map((tip) => (
+                  <button
+                    key={tip.id}
+                    onClick={() => handleOpenRegenerateDialog("questions")}
+                    className="w-full text-left text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 p-2 rounded-lg transition-colors flex items-start gap-2"
+                  >
+                    <Target className="w-3 h-3 mt-0.5 flex-shrink-0 text-accent" />
+                    {tip.label}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
           </div>
         </div>
       )}
@@ -629,7 +868,6 @@ const InterviewPrep = ({ data, jobData, onBack, onRegenerateSection, isRegenerat
                 </div>
               </div>
 
-              {/* Competitive Landscape */}
               {(data.strategicAnalysis.competitors || data.strategicAnalysis.competitivePosition) && (
                 <div className="mt-4 pt-4 border-t border-border">
                   <div className="text-xs font-semibold text-accent uppercase tracking-wider mb-2">Competitive Landscape</div>
@@ -805,6 +1043,77 @@ const InterviewPrep = ({ data, jobData, onBack, onRegenerateSection, isRegenerat
           )}
         </div>
       )}
+
+      {/* Regeneration Dialog */}
+      <Dialog open={showRegenerateDialog} onOpenChange={setShowRegenerateDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileEdit className="w-5 h-5 text-accent" />
+              Regenerate {selectedSection ? regenerationSections.find(s => s.key === selectedSection)?.label : "Section"}
+            </DialogTitle>
+            <DialogDescription>
+              Help us understand what you'd like to improve. Your feedback is required to ensure we generate content that meets your expectations.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-2 block">
+                What would you like to change? <span className="text-destructive">*</span>
+              </label>
+              <Textarea
+                value={feedbackText}
+                onChange={(e) => setFeedbackText(e.target.value)}
+                placeholder="Please describe what wasn't working and what you'd like instead. Be as specific as possible..."
+                className="min-h-[100px]"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium text-foreground mb-3 block">
+                Select improvement areas (optional but recommended)
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {regenerationTips.map((tip) => (
+                  <label
+                    key={tip.id}
+                    className={`flex items-start gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
+                      selectedTips.includes(tip.id) 
+                        ? "border-accent bg-accent/5" 
+                        : "border-border hover:border-accent/50"
+                    }`}
+                  >
+                    <Checkbox
+                      checked={selectedTips.includes(tip.id)}
+                      onCheckedChange={() => toggleTip(tip.id)}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <div className="text-sm font-medium">{tip.label}</div>
+                      <div className="text-xs text-muted-foreground">{tip.description}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRegenerateDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              variant="hero" 
+              onClick={handleRegenerateSubmit}
+              disabled={!feedbackText.trim() && selectedTips.length === 0}
+            >
+              <RefreshCw className="w-4 h-4" />
+              Regenerate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
