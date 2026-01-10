@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { toast } from "sonner";
+import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
 
 interface AnalyticsData {
   totalEvents: number;
@@ -367,6 +368,11 @@ const Analytics = () => {
         <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
       </div>
     );
+  }
+
+  // Check if email is verified
+  if (!user.email_confirmed_at) {
+    return <EmailVerificationRequired email={user.email || ""} />;
   }
 
   return (

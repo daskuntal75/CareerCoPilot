@@ -18,6 +18,7 @@ import { useAnalytics } from "@/hooks/useAnalytics";
 import { ChangePasswordForm } from "@/components/auth/ChangePasswordForm";
 import { TwoFactorSetup } from "@/components/auth/TwoFactorSetup";
 import { BiometricLogin } from "@/components/auth/BiometricLogin";
+import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
 
 interface ProfileSettings {
   full_name: string | null;
@@ -113,6 +114,11 @@ const Settings = () => {
         <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
       </div>
     );
+  }
+
+  // Check if email is verified
+  if (!user.email_confirmed_at) {
+    return <EmailVerificationRequired email={user.email || ""} />;
   }
 
   return (
