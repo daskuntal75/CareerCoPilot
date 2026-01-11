@@ -176,12 +176,12 @@ const Dashboard = () => {
             className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8"
           >
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Applications</h1>
-              <p className="text-muted-foreground">Track and manage your job applications</p>
+              <h1 className="text-3xl font-bold text-foreground">Job Applications</h1>
+              <p className="text-muted-foreground">Track and manage your executive job applications</p>
             </div>
             <Button variant="hero" onClick={() => navigate("/app")}>
               <Plus className="w-4 h-4" />
-              New Application
+              New Job Application
             </Button>
           </motion.div>
 
@@ -196,7 +196,7 @@ const Dashboard = () => {
             <div className="lg:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-card border border-border rounded-xl p-4">
                 <div className="text-2xl font-bold text-foreground">{stats.total}</div>
-                <div className="text-sm text-muted-foreground">Total Applications</div>
+                <div className="text-sm text-muted-foreground">Total Job Applications</div>
               </div>
               <div className="bg-card border border-border rounded-xl p-4">
                 <div className="text-2xl font-bold text-blue-600">{stats.applied}</div>
@@ -233,13 +233,13 @@ const Dashboard = () => {
                 <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-secondary flex items-center justify-center">
                   <Briefcase className="w-8 h-8 text-muted-foreground" />
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">No applications yet</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-2">No job applications yet</h3>
                 <p className="text-muted-foreground mb-6">
                   Start by uploading your resume and adding a job description
                 </p>
                 <Button variant="hero" onClick={() => navigate("/app")}>
                   <Plus className="w-4 h-4" />
-                  Create Your First Application
+                  Create Your First Job Application
                 </Button>
               </div>
             ) : (

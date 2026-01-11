@@ -181,6 +181,22 @@ const Auth = () => {
     }
   };
 
+  // Log authentication attempt to backend for IP-based tracking
+  const logAuthAttempt = async (action: "log_failure" | "log_success", userEmail: string, userId?: string) => {
+    try {
+      await supabase.functions.invoke("auth-rate-limit", {
+        body: {
+          action,
+          email: userEmail,
+          userId,
+          userAgent: navigator.userAgent,
+        },
+      });
+    } catch (error) {
+      console.error("Failed to log auth attempt:", error);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -195,10 +211,16 @@ const Auth = () => {
         if (error) {
           toast.error("Invalid email or password");
           trackAuthEvent("login_failed");
-          // Failed attempt already tracked by checkLimit call
+          
+          // Log failed attempt to backend for IP-based rate limiting
+          await logAuthAttempt("log_failure", email.trim());
         } else {
           // Success - reset rate limiter
           rateLimiter.resetOnSuccess();
+          
+          // Log successful login
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          await logAuthAttempt("log_success", email.trim(), currentUser?.id);
           
           // Check if MFA is required
           const mfaRequired = await checkMfaRequired();

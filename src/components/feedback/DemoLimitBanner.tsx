@@ -23,7 +23,7 @@ const DemoLimitBanner = ({ supportEmail, applicationCount, demoLimit }: DemoLimi
       <AlertTitle className="text-lg">Demo Limit Reached</AlertTitle>
       <AlertDescription className="mt-2">
         <p className="mb-3">
-          You've used all {demoLimit} demo applications ({applicationCount} created). 
+          You've used all {demoLimit} demo job applications ({applicationCount} created). 
           To continue using TailoredApply with unlimited access, please contact our support team.
         </p>
         <Button 

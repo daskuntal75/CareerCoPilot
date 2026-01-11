@@ -111,6 +111,6 @@ export function useDemoLimit() {
     demoLimit: DEMO_APP_LIMIT,
     supportEmail: SUPPORT_EMAIL,
     refreshCount,
-    remainingApps: Math.max(0, DEMO_APP_LIMIT - state.applicationCount),
+    remainingJobApplications: Math.max(0, DEMO_APP_LIMIT - state.applicationCount),
   };
 }
