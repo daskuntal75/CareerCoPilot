@@ -16,7 +16,8 @@ import {
   Briefcase,
   DollarSign,
   Settings,
-  LogIn
+  LogIn,
+  Sparkles
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ import RevenueAnalytics from "@/components/admin/RevenueAnalytics";
 import AdminSettings from "@/components/admin/AdminSettings";
 import DemoWhitelistManagement from "@/components/admin/DemoWhitelistManagement";
 import DemoModeStats from "@/components/admin/DemoModeStats";
+import EarlyAdoptersManagement from "@/components/admin/EarlyAdoptersManagement";
 
 interface UserSummary {
   total_users: number;
@@ -331,6 +333,10 @@ const Admin = () => {
                   <Shield className="w-4 h-4" />
                   Demo Whitelist
                 </TabsTrigger>
+                <TabsTrigger value="early-adopters" className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  Early Adopters
+                </TabsTrigger>
                 <TabsTrigger value="settings" className="flex items-center gap-2">
                   <Settings className="w-4 h-4" />
                   Settings
@@ -461,6 +467,10 @@ const Admin = () => {
 
               <TabsContent value="whitelist">
                 <DemoWhitelistManagement refreshTrigger={refreshTrigger} />
+              </TabsContent>
+
+              <TabsContent value="early-adopters">
+                <EarlyAdoptersManagement refreshTrigger={refreshTrigger} />
               </TabsContent>
 
               <TabsContent value="settings">

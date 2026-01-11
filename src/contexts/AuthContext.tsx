@@ -137,14 +137,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       },
     });
 
-    // Notify admin of new signup (fire and forget)
+    // Notify admin of new signup and send welcome email (fire and forget)
     if (data?.user && !error) {
+      // Notify admin
       supabase.functions.invoke("notify-admin-signup", {
         body: {
           userId: data.user.id,
           email: data.user.email,
           fullName,
           signupMethod: "email",
+        },
+      }).catch(console.error);
+
+      // Send welcome email to the new user
+      supabase.functions.invoke("send-welcome-email", {
+        body: {
+          email: data.user.email,
+          firstName: fullName.split(" ")[0],
+          fullName,
         },
       }).catch(console.error);
     }
