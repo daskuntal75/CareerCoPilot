@@ -31,7 +31,7 @@ const DemoUsageIndicator = () => {
           <p className="text-xs text-muted-foreground">
             {isAtLimit 
               ? "Limit reached. Contact support for full access."
-              : `${remaining} application${remaining !== 1 ? 's' : ''} remaining`
+              : `${remaining} job application${remaining !== 1 ? 's' : ''} remaining`
             }
           </p>
         </TooltipContent>

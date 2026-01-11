@@ -35,9 +35,9 @@ const Hero = () => {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-tight mb-6"
           >
-            Stop Sending Generic Apps.
+            Executive-Level Applications.
             <br />
-            <span className="text-accent">Get Callbacks.</span>
+            <span className="text-accent">Tailored to Perfection.</span>
           </motion.h1>
 
           {/* Subheadline */}
@@ -47,8 +47,8 @@ const Hero = () => {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8"
           >
-            Generate tailored, truthful application materials in under 5 minutes. 
-            Our AI maps your experience to job requirements—no fabrication, no fluff.
+            Generate sophisticated, tailored job application materials in under 5 minutes. 
+            Our AI precisely maps your experience to job requirements—with integrity and precision.
           </motion.p>
 
           {/* Early Adopter Badge */}
@@ -91,7 +91,7 @@ const Hero = () => {
             transition={{ duration: 0.5, delay: 0.35 }}
             className="text-sm text-muted-foreground mb-8"
           >
-            Sign up to try 3 free applications. Provide feedback for discounted pricing!
+            Sign up to try 3 free job applications. Provide feedback for discounted pricing!
           </motion.p>
 
           {/* Trust indicators */}
@@ -103,15 +103,15 @@ const Hero = () => {
           >
             <div className="flex items-center gap-2">
               <Shield className="w-4 h-4 text-success" />
-              <span>Zero hallucinations</span>
+              <span>Integrity-first approach</span>
             </div>
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-warning" />
-              <span>5 min to cover letter</span>
+              <span>5 min to polished materials</span>
             </div>
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-accent" />
-              <span>25%+ more callbacks</span>
+              <span>Executive-quality results</span>
             </div>
           </motion.div>
         </div>
