@@ -177,7 +177,7 @@ const Dashboard = () => {
           >
             <div>
               <h1 className="text-3xl font-bold text-foreground">Job Applications</h1>
-              <p className="text-muted-foreground">Track and manage your executive job applications</p>
+              <p className="text-muted-foreground">Track and manage your job applications</p>
             </div>
             <Button variant="hero" onClick={() => navigate("/app")}>
               <Plus className="w-4 h-4" />

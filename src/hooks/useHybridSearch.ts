@@ -27,7 +27,7 @@ const DEFAULT_OPTIONS: HybridSearchOptions = {
 
 /**
  * Hook for hybrid search combining semantic and keyword matching
- * Implements performance optimization for executive-level searches
+ * Implements performance optimization for comprehensive job searches
  */
 export function useHybridSearch() {
   const { user } = useAuth();

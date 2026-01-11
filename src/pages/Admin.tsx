@@ -43,6 +43,8 @@ import DemoWhitelistManagement from "@/components/admin/DemoWhitelistManagement"
 import DemoModeStats from "@/components/admin/DemoModeStats";
 import EarlyAdoptersManagement from "@/components/admin/EarlyAdoptersManagement";
 import FeedbackAnalytics from "@/components/admin/FeedbackAnalytics";
+import AdminSecurityDashboard from "@/components/admin/AdminSecurityDashboard";
+import Admin2FAEnforcement from "@/components/admin/Admin2FAEnforcement";
 
 interface UserSummary {
   total_users: number;
@@ -207,6 +209,7 @@ const Admin = () => {
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
       
+      <Admin2FAEnforcement>
       <main className="flex-1 pt-24 pb-12">
         <div className="container mx-auto px-4 lg:px-8">
           {/* Header */}
@@ -342,6 +345,10 @@ const Admin = () => {
                 <TabsTrigger value="feedback" className="flex items-center gap-2">
                   <MessageSquare className="w-4 h-4" />
                   Feedback
+                </TabsTrigger>
+                <TabsTrigger value="security" className="flex items-center gap-2">
+                  <Shield className="w-4 h-4" />
+                  Security
                 </TabsTrigger>
                 <TabsTrigger value="settings" className="flex items-center gap-2">
                   <Settings className="w-4 h-4" />
@@ -483,6 +490,10 @@ const Admin = () => {
                 <FeedbackAnalytics refreshTrigger={refreshTrigger} />
               </TabsContent>
 
+              <TabsContent value="security">
+                <AdminSecurityDashboard refreshTrigger={refreshTrigger} />
+              </TabsContent>
+
               <TabsContent value="settings">
                 <AdminSettings />
               </TabsContent>
@@ -490,6 +501,7 @@ const Admin = () => {
           </motion.div>
         </div>
       </main>
+      </Admin2FAEnforcement>
 
       <Footer />
     </div>

@@ -6,7 +6,7 @@
 
 @layer base {
   :root {
-    /* TailoredApply Design System - Executive, Professional, Distinguished */
+    /* TailoredApply Design System - Professional, Polished, Trustworthy */
     --background: 220 15% 97%;
     --foreground: 220 30% 12%;
 
@@ -20,7 +20,7 @@
     --primary: 220 30% 12%;
     --primary-foreground: 0 0% 100%;
 
-    /* Rich Slate Blue - Refined Action, Executive Presence */
+    /* Rich Slate Blue - Refined Action, Professional Authority */
     --accent: 215 60% 42%;
     --accent-foreground: 0 0% 100%;
 
@@ -48,7 +48,7 @@
 
     --radius: 0.5rem;
 
-    /* Executive Gradients */
+    /* Professional Gradients */
     --gradient-primary: linear-gradient(135deg, hsl(220, 30%, 12%) 0%, hsl(220, 30%, 22%) 100%);
     --gradient-accent: linear-gradient(135deg, hsl(215, 60%, 42%) 0%, hsl(215, 60%, 35%) 100%);
     --gradient-hero: linear-gradient(180deg, hsl(220, 15%, 97%) 0%, hsl(220, 18%, 94%) 100%);

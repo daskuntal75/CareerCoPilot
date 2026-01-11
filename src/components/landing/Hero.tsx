@@ -35,7 +35,7 @@ const Hero = () => {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-tight mb-6"
           >
-            Executive-Level Applications.
+            Perfect Applications, Every Time.
             <br />
             <span className="text-accent">Tailored to Perfection.</span>
           </motion.h1>
@@ -111,7 +111,7 @@ const Hero = () => {
             </div>
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-accent" />
-              <span>Executive-quality results</span>
+              <span>Professional-quality results</span>
             </div>
           </motion.div>
         </div>
