@@ -173,6 +173,48 @@ export type Database = {
         }
         Relationships: []
       }
+      demo_feedback: {
+        Row: {
+          application_count: number | null
+          company: string | null
+          created_at: string
+          email: string | null
+          feedback: string | null
+          feedback_type: string | null
+          id: string
+          job_title: string | null
+          rating: number | null
+          user_id: string | null
+          would_recommend: string | null
+        }
+        Insert: {
+          application_count?: number | null
+          company?: string | null
+          created_at?: string
+          email?: string | null
+          feedback?: string | null
+          feedback_type?: string | null
+          id?: string
+          job_title?: string | null
+          rating?: number | null
+          user_id?: string | null
+          would_recommend?: string | null
+        }
+        Update: {
+          application_count?: number | null
+          company?: string | null
+          created_at?: string
+          email?: string | null
+          feedback?: string | null
+          feedback_type?: string | null
+          id?: string
+          job_title?: string | null
+          rating?: number | null
+          user_id?: string | null
+          would_recommend?: string | null
+        }
+        Relationships: []
+      }
       demo_whitelist: {
         Row: {
           created_at: string

@@ -17,7 +17,8 @@ import {
   DollarSign,
   Settings,
   LogIn,
-  Sparkles
+  Sparkles,
+  MessageSquare
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,7 @@ import AdminSettings from "@/components/admin/AdminSettings";
 import DemoWhitelistManagement from "@/components/admin/DemoWhitelistManagement";
 import DemoModeStats from "@/components/admin/DemoModeStats";
 import EarlyAdoptersManagement from "@/components/admin/EarlyAdoptersManagement";
+import FeedbackAnalytics from "@/components/admin/FeedbackAnalytics";
 
 interface UserSummary {
   total_users: number;
@@ -337,6 +339,10 @@ const Admin = () => {
                   <Sparkles className="w-4 h-4" />
                   Early Adopters
                 </TabsTrigger>
+                <TabsTrigger value="feedback" className="flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4" />
+                  Feedback
+                </TabsTrigger>
                 <TabsTrigger value="settings" className="flex items-center gap-2">
                   <Settings className="w-4 h-4" />
                   Settings
@@ -471,6 +477,10 @@ const Admin = () => {
 
               <TabsContent value="early-adopters">
                 <EarlyAdoptersManagement refreshTrigger={refreshTrigger} />
+              </TabsContent>
+
+              <TabsContent value="feedback">
+                <FeedbackAnalytics refreshTrigger={refreshTrigger} />
               </TabsContent>
 
               <TabsContent value="settings">

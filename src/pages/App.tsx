@@ -220,12 +220,26 @@ const AppPage = () => {
           requirements_analysis: analysis,
         });
 
-        // Refresh application count and show feedback modal for demo users
+        // Handle demo mode triggers for new applications
         if (isDemoMode && newAppId && !id) {
           refreshCount();
-          // Show feedback modal after completing an application (especially the 3rd one)
-          if (applicationCount + 1 >= 1) {
-            // Delay showing the modal slightly so user can see the analysis first
+          const newAppCount = applicationCount + 1;
+          
+          // Send reminder email when user completes their 2nd application
+          if (newAppCount === 2) {
+            supabase.functions.invoke("send-demo-reminder", {
+              body: {
+                email: user.email,
+                firstName: user.user_metadata?.full_name?.split(" ")[0],
+                fullName: user.user_metadata?.full_name,
+                applicationsUsed: 2,
+                applicationsRemaining: 1,
+              },
+            }).catch(console.error);
+          }
+          
+          // Show feedback modal after completing the 3rd (final) demo application
+          if (newAppCount === 3) {
             setTimeout(() => setShowFeedbackModal(true), 1500);
           }
         }
