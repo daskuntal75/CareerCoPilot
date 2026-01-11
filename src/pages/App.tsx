@@ -8,6 +8,7 @@ import CoverLetterEditor from "@/components/app/CoverLetterEditor";
 import InterviewPrep, { InterviewPrepData } from "@/components/app/InterviewPrep";
 import AppStepper from "@/components/app/AppStepper";
 import GenerationProgress, { GenerationStage } from "@/components/app/GenerationProgress";
+import FeedbackCollectionModal from "@/components/feedback/FeedbackCollectionModal";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUserProfile } from "@/hooks/useUserProfile";
@@ -60,6 +61,7 @@ const AppPage = () => {
   const [generationStage, setGenerationStage] = useState<GenerationStage>("analyzing");
   const [generationType, setGenerationType] = useState<"cover-letter" | "interview-prep">("cover-letter");
   const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   // Load existing application if ID provided and track page view
   useEffect(() => {
@@ -209,7 +211,7 @@ const AppPage = () => {
       });
 
       if (user) {
-        await saveApplication({
+        const newAppId = await saveApplication({
           company: data.company,
           job_title: data.title,
           job_description: data.description,
@@ -217,6 +219,16 @@ const AppPage = () => {
           fit_level: analysis.fitLevel,
           requirements_analysis: analysis,
         });
+
+        // Refresh application count and show feedback modal for demo users
+        if (isDemoMode && newAppId && !id) {
+          refreshCount();
+          // Show feedback modal after completing an application (especially the 3rd one)
+          if (applicationCount + 1 >= 1) {
+            // Delay showing the modal slightly so user can see the analysis first
+            setTimeout(() => setShowFeedbackModal(true), 1500);
+          }
+        }
       }
     } catch (error) {
       console.error("Error analyzing job fit:", error);
@@ -643,6 +655,15 @@ const AppPage = () => {
               <span className="text-sm text-muted-foreground">Saving...</span>
             </div>
           )}
+
+          {/* Feedback Collection Modal */}
+          <FeedbackCollectionModal
+            open={showFeedbackModal}
+            onOpenChange={setShowFeedbackModal}
+            applicationCount={applicationCount + 1}
+            company={jobData?.company}
+            jobTitle={jobData?.title}
+          />
         </div>
       </main>
 
