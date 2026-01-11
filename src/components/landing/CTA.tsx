@@ -15,27 +15,29 @@ const CTA = () => {
           className="max-w-3xl mx-auto text-center"
         >
           <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            Ready to Land Your Next Role?
+            Become an Early Adopter
           </h2>
-          <p className="text-lg opacity-80 mb-8">
-            Join thousands of senior professionals who've transformed their job search. 
-            Your first cover letter is free.
+          <p className="text-lg opacity-80 mb-4">
+            Sign up now to try our demo and help shape the future of job applications.
+          </p>
+          <p className="text-base opacity-90 mb-8 font-medium">
+            🎁 Early adopters who provide feedback get discounted pricing when we launch!
           </p>
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link to="/app">
+            <Link to="/auth?mode=signup">
               <Button 
                 size="xl" 
                 className="bg-accent hover:bg-accent/90 text-accent-foreground shadow-lg hover:shadow-xl transition-all group"
               >
-                Start Free Analysis
+                Join Early Access
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             </Link>
           </div>
           
           <p className="text-sm opacity-60 mt-6">
-            No credit card required. 3 free analyses per month.
+            No credit card required. Try 3 applications free in demo mode.
           </p>
         </motion.div>
       </div>

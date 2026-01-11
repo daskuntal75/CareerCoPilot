@@ -51,16 +51,29 @@ const Hero = () => {
             Our AI maps your experience to job requirements—no fabrication, no fluff.
           </motion.p>
 
+          {/* Early Adopter Badge */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.25 }}
+            className="mb-6"
+          >
+            <div className="inline-flex items-center gap-2 bg-success/10 text-success px-4 py-2 rounded-full text-sm font-medium border border-success/20">
+              <Sparkles className="w-4 h-4" />
+              Early adopters get discounted pricing when we launch!
+            </div>
+          </motion.div>
+
           {/* CTAs */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.3 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12"
+            className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8"
           >
-            <Link to="/app">
+            <Link to="/auth?mode=signup">
               <Button variant="hero" size="xl" className="group">
-                Get Started Free
+                Try Demo Free
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             </Link>
@@ -70,6 +83,16 @@ const Hero = () => {
               </Button>
             </Link>
           </motion.div>
+
+          {/* Demo limit notice */}
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.35 }}
+            className="text-sm text-muted-foreground mb-8"
+          >
+            Sign up to try 3 free applications. Provide feedback for discounted pricing!
+          </motion.p>
 
           {/* Trust indicators */}
           <motion.div

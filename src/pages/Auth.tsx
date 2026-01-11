@@ -3,10 +3,11 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { ArrowLeft, Mail, Lock, User, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Mail, Lock, User, AlertCircle, Eye, EyeOff, Building, MapPin, Target, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { z } from "zod";
 import { useAnalytics } from "@/hooks/useAnalytics";
@@ -21,7 +22,10 @@ import { supabase } from "@/integrations/supabase/client";
 // Input validation schemas
 const emailSchema = z.string().trim().email("Invalid email address").max(255, "Email too long");
 const passwordSchema = z.string().min(8, "Password must be at least 8 characters").max(128, "Password too long");
-const nameSchema = z.string().trim().min(2, "Name must be at least 2 characters").max(100, "Name too long");
+const nameSchema = z.string().trim().min(1, "Required").max(100, "Too long");
+const purposeSchema = z.string().trim().min(10, "Please describe your purpose (min 10 characters)").max(500, "Purpose too long");
+const companySchema = z.string().trim().min(1, "Company is required").max(100, "Company name too long");
+const zipCodeSchema = z.string().trim().min(3, "Invalid zip code").max(20, "Zip code too long");
 
 // Rate limiting
 const RATE_LIMIT_ATTEMPTS = 5;
@@ -36,10 +40,22 @@ const Auth = () => {
   const [mode, setMode] = useState<AuthMode>(initialMode === "reset" ? "reset" : "login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [purpose, setPurpose] = useState("");
+  const [company, setCompany] = useState("");
+  const [zipCode, setZipCode] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string; name?: string }>({});
+  const [errors, setErrors] = useState<{ 
+    email?: string; 
+    password?: string; 
+    firstName?: string;
+    lastName?: string;
+    purpose?: string;
+    company?: string;
+    zipCode?: string;
+  }>({});
   const [pendingMfa, setPendingMfa] = useState(false);
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
@@ -120,10 +136,42 @@ const Auth = () => {
     
     if (mode === "signup") {
       try {
-        nameSchema.parse(fullName);
+        nameSchema.parse(firstName);
       } catch (e) {
         if (e instanceof z.ZodError) {
-          newErrors.name = e.errors[0].message;
+          newErrors.firstName = e.errors[0].message;
+        }
+      }
+      
+      try {
+        nameSchema.parse(lastName);
+      } catch (e) {
+        if (e instanceof z.ZodError) {
+          newErrors.lastName = e.errors[0].message;
+        }
+      }
+      
+      try {
+        purposeSchema.parse(purpose);
+      } catch (e) {
+        if (e instanceof z.ZodError) {
+          newErrors.purpose = e.errors[0].message;
+        }
+      }
+      
+      try {
+        companySchema.parse(company);
+      } catch (e) {
+        if (e instanceof z.ZodError) {
+          newErrors.company = e.errors[0].message;
+        }
+      }
+      
+      try {
+        zipCodeSchema.parse(zipCode);
+      } catch (e) {
+        if (e instanceof z.ZodError) {
+          newErrors.zipCode = e.errors[0].message;
         }
       }
       
@@ -176,14 +224,26 @@ const Auth = () => {
           }
         }
       } else if (mode === "signup") {
-        const { error } = await signUp(email.trim(), password, fullName.trim());
+        const fullName = `${firstName.trim()} ${lastName.trim()}`;
+        const { error } = await signUp(email.trim(), password, fullName);
         if (error) {
           toast.error(error.message);
           trackAuthEvent("signup_failed", { error: error.message });
         } else {
-          toast.success("Check your email to verify your account!");
+          // Update profile with additional fields
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            await supabase.from("profiles").update({
+              first_name: firstName.trim(),
+              last_name: lastName.trim(),
+              purpose: purpose.trim(),
+              company: company.trim(),
+              zip_code: zipCode.trim(),
+              is_early_adopter: true,
+            }).eq("user_id", user.id);
+          }
+          toast.success("Welcome! Check your email to verify your account.");
           trackAuthEvent("signup_success");
-          // Don't redirect - show message about email verification
         }
       }
     } finally {
@@ -231,15 +291,21 @@ const Auth = () => {
 
     return (
       <>
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <h1 className="text-2xl font-bold text-foreground mb-2">
-            {isLogin ? "Welcome back" : "Create your account"}
+            {isLogin ? "Welcome back" : "Join as an Early Adopter"}
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             {isLogin 
               ? "Sign in to access your applications" 
-              : "Get started with CareerCopilot AI"}
+              : "Try our demo with 3 free applications"}
           </p>
+          {!isLogin && (
+            <div className="mt-3 flex items-center justify-center gap-2 text-xs text-accent bg-accent/10 px-3 py-2 rounded-full">
+              <Sparkles className="w-3 h-3" />
+              <span>Early adopters get discounted pricing!</span>
+            </div>
+          )}
         </div>
 
         {/* Biometric Login - only show on login mode */}
@@ -269,29 +335,124 @@ const Auth = () => {
           )}
           
           {!isLogin && (
-            <div className="space-y-2">
-              <Label htmlFor="fullName">Full Name</Label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  id="fullName"
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => {
-                    setFullName(e.target.value);
-                    setErrors(prev => ({ ...prev, name: undefined }));
-                  }}
-                  placeholder="John Doe"
-                  className={`pl-10 ${errors.name ? "border-destructive" : ""}`}
-                  required={!isLogin}
-                  autoComplete="name"
-                  maxLength={100}
-                />
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="firstName">First Name</Label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="firstName"
+                      type="text"
+                      value={firstName}
+                      onChange={(e) => {
+                        setFirstName(e.target.value);
+                        setErrors(prev => ({ ...prev, firstName: undefined }));
+                      }}
+                      placeholder="John"
+                      className={`pl-10 ${errors.firstName ? "border-destructive" : ""}`}
+                      required
+                      autoComplete="given-name"
+                      maxLength={100}
+                    />
+                  </div>
+                  {errors.firstName && (
+                    <p className="text-xs text-destructive">{errors.firstName}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName">Last Name</Label>
+                  <Input
+                    id="lastName"
+                    type="text"
+                    value={lastName}
+                    onChange={(e) => {
+                      setLastName(e.target.value);
+                      setErrors(prev => ({ ...prev, lastName: undefined }));
+                    }}
+                    placeholder="Doe"
+                    className={`${errors.lastName ? "border-destructive" : ""}`}
+                    required
+                    autoComplete="family-name"
+                    maxLength={100}
+                  />
+                  {errors.lastName && (
+                    <p className="text-xs text-destructive">{errors.lastName}</p>
+                  )}
+                </div>
               </div>
-              {errors.name && (
-                <p className="text-xs text-destructive">{errors.name}</p>
-              )}
-            </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="company">Company</Label>
+                  <div className="relative">
+                    <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="company"
+                      type="text"
+                      value={company}
+                      onChange={(e) => {
+                        setCompany(e.target.value);
+                        setErrors(prev => ({ ...prev, company: undefined }));
+                      }}
+                      placeholder="Acme Inc."
+                      className={`pl-10 ${errors.company ? "border-destructive" : ""}`}
+                      required
+                      autoComplete="organization"
+                      maxLength={100}
+                    />
+                  </div>
+                  {errors.company && (
+                    <p className="text-xs text-destructive">{errors.company}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="zipCode">Zip Code</Label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="zipCode"
+                      type="text"
+                      value={zipCode}
+                      onChange={(e) => {
+                        setZipCode(e.target.value);
+                        setErrors(prev => ({ ...prev, zipCode: undefined }));
+                      }}
+                      placeholder="12345"
+                      className={`pl-10 ${errors.zipCode ? "border-destructive" : ""}`}
+                      required
+                      autoComplete="postal-code"
+                      maxLength={20}
+                    />
+                  </div>
+                  {errors.zipCode && (
+                    <p className="text-xs text-destructive">{errors.zipCode}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="purpose">What do you want to use CareerCopilot for?</Label>
+                <div className="relative">
+                  <Target className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+                  <Textarea
+                    id="purpose"
+                    value={purpose}
+                    onChange={(e) => {
+                      setPurpose(e.target.value);
+                      setErrors(prev => ({ ...prev, purpose: undefined }));
+                    }}
+                    placeholder="I'm looking for a new role as a Product Manager and want to create tailored cover letters..."
+                    className={`pl-10 min-h-[80px] ${errors.purpose ? "border-destructive" : ""}`}
+                    required
+                    maxLength={500}
+                  />
+                </div>
+                {errors.purpose && (
+                  <p className="text-xs text-destructive">{errors.purpose}</p>
+                )}
+              </div>
+            </>
           )}
 
           <div className="space-y-2">
