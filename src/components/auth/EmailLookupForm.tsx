@@ -49,7 +49,7 @@ export function EmailLookupForm({ onBack }: EmailLookupFormProps) {
           <div className="p-4 bg-muted/50 border border-border rounded-lg">
             <h3 className="font-medium mb-1">Check your email inbox</h3>
             <p className="text-sm text-muted-foreground">
-              Search for "CareerCopilot" or "welcome" in your email accounts to find the signup confirmation.
+              Search for "TailoredApply" or "welcome" in your email accounts to find the signup confirmation.
             </p>
           </div>
 

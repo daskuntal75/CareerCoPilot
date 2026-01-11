@@ -38,9 +38,9 @@ serve(async (req) => {
     logStep("Sending welcome email", { email, displayName });
 
     const emailResponse = await resend.emails.send({
-      from: "CareerCopilot <onboarding@resend.dev>",
+      from: "TailoredApply <onboarding@resend.dev>",
       to: [email],
-      subject: "🎉 Welcome to CareerCopilot - You're an Early Adopter!",
+      subject: "🎉 Welcome to TailoredApply - You're an Early Adopter!",
       html: `
         <!DOCTYPE html>
         <html>
@@ -183,7 +183,7 @@ serve(async (req) => {
             <div class="container">
               <div class="header">
                 <h1>🚀 Welcome, ${displayName}!</h1>
-                <p>You're now an official CareerCopilot Early Adopter</p>
+                <p>You're now an official TailoredApply Early Adopter</p>
               </div>
               
               <div class="content">
@@ -227,7 +227,7 @@ serve(async (req) => {
                 </div>
 
                 <div style="text-align: center; margin-top: 30px;">
-                  <a href="https://careercopilot.lovable.app/app" class="cta-button">
+                  <a href="https://tailoredapply.lovable.app/app" class="cta-button">
                     Start Your First Application →
                   </a>
                 </div>
@@ -235,15 +235,15 @@ serve(async (req) => {
                 <div class="demo-info">
                   <h4>📊 Your Demo Access</h4>
                   <p>
-                    You have <strong>3 free applications</strong> to explore CareerCopilot. 
+                    You have <strong>3 free applications</strong> to explore TailoredApply. 
                     Make the most of them and share your feedback with us!
                   </p>
                 </div>
               </div>
               
               <div class="footer">
-                <p>Questions? Reply to this email or contact us at daskuntal@gmail.com</p>
-                <p>© ${new Date().getFullYear()} CareerCopilot. All rights reserved.</p>
+                <p>Questions? Reply to this email or contact us at support@tailoredapply.com</p>
+                <p>© ${new Date().getFullYear()} TailoredApply. All rights reserved.</p>
               </div>
             </div>
           </body>

@@ -36,7 +36,7 @@ const Header = () => {
               <Rocket className="w-5 h-5 text-accent-foreground" />
             </div>
             <span className="font-bold text-lg text-foreground">
-              CareerCopilot
+              TailoredApply
             </span>
           </Link>
 

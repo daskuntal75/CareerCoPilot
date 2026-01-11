@@ -94,7 +94,7 @@ export function BiometricLogin({ onSuccess, mode = "login" }: BiometricLoginProp
         publicKey: {
           challenge: challenge.buffer as ArrayBuffer,
           rp: {
-            name: "CareerCopilot AI",
+            name: "TailoredApply",
             id: window.location.hostname,
           },
           user: {

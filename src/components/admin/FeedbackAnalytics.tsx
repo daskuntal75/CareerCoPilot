@@ -46,6 +46,10 @@ interface FeedbackStats {
   recommendDistribution: { name: string; value: number }[];
   recentFeedback: FeedbackEntry[];
   commonWords: { word: string; count: number }[];
+  npsScore: number;
+  npsPromoters: number;
+  npsPassives: number;
+  npsDetractors: number;
 }
 
 interface FeedbackAnalyticsProps {
@@ -91,15 +95,27 @@ const FeedbackAnalytics = ({ refreshTrigger }: FeedbackAnalyticsProps) => {
         count,
       }));
 
-      // Recommend distribution
+      // Recommend distribution and NPS calculation
+      // NPS: Promoters (yes) - Detractors (no), Passives (maybe) are neutral
       const recommendCounts: Record<string, number> = { yes: 0, maybe: 0, no: 0 };
       feedback.forEach(f => {
         if (f.would_recommend) recommendCounts[f.would_recommend]++;
       });
+      
+      const totalResponders = recommendCounts.yes + recommendCounts.maybe + recommendCounts.no;
+      const npsPromoters = recommendCounts.yes;
+      const npsPassives = recommendCounts.maybe;
+      const npsDetractors = recommendCounts.no;
+      
+      // NPS = (% Promoters - % Detractors) * 100
+      const npsScore = totalResponders > 0 
+        ? Math.round(((npsPromoters - npsDetractors) / totalResponders) * 100)
+        : 0;
+      
       const recommendDistribution = [
-        { name: "Yes", value: recommendCounts.yes },
-        { name: "Maybe", value: recommendCounts.maybe },
-        { name: "No", value: recommendCounts.no },
+        { name: "Promoters (Yes)", value: recommendCounts.yes },
+        { name: "Passives (Maybe)", value: recommendCounts.maybe },
+        { name: "Detractors (No)", value: recommendCounts.no },
       ].filter(d => d.value > 0);
 
       // Extract common words from feedback text
@@ -141,6 +157,10 @@ const FeedbackAnalytics = ({ refreshTrigger }: FeedbackAnalyticsProps) => {
         recommendDistribution,
         recentFeedback: feedback.slice(0, 10) as FeedbackEntry[],
         commonWords,
+        npsScore,
+        npsPromoters,
+        npsPassives,
+        npsDetractors,
       });
     } catch (error) {
       console.error("Error fetching feedback stats:", error);
@@ -175,7 +195,7 @@ const FeedbackAnalytics = ({ refreshTrigger }: FeedbackAnalyticsProps) => {
   return (
     <div className="space-y-6">
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
@@ -208,6 +228,22 @@ const FeedbackAnalytics = ({ refreshTrigger }: FeedbackAnalyticsProps) => {
           </CardContent>
         </Card>
 
+        <Card className={stats.npsScore >= 50 ? "border-green-500/30" : stats.npsScore >= 0 ? "border-yellow-500/30" : "border-red-500/30"}>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4">
+              <div className={`p-3 rounded-xl ${stats.npsScore >= 50 ? "bg-green-500/10" : stats.npsScore >= 0 ? "bg-yellow-500/10" : "bg-red-500/10"}`}>
+                <TrendingUp className={`w-6 h-6 ${stats.npsScore >= 50 ? "text-green-500" : stats.npsScore >= 0 ? "text-yellow-500" : "text-red-500"}`} />
+              </div>
+              <div>
+                <div className={`text-2xl font-bold ${stats.npsScore >= 50 ? "text-green-500" : stats.npsScore >= 0 ? "text-yellow-500" : "text-red-500"}`}>
+                  {stats.npsScore > 0 ? "+" : ""}{stats.npsScore}
+                </div>
+                <div className="text-sm text-muted-foreground">NPS Score</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
@@ -216,9 +252,9 @@ const FeedbackAnalytics = ({ refreshTrigger }: FeedbackAnalyticsProps) => {
               </div>
               <div>
                 <div className="text-2xl font-bold text-foreground">
-                  {stats.recommendDistribution.find(d => d.name === "Yes")?.value || 0}
+                  {stats.npsPromoters}
                 </div>
-                <div className="text-sm text-muted-foreground">Would Recommend</div>
+                <div className="text-sm text-muted-foreground">Promoters</div>
               </div>
             </div>
           </CardContent>
@@ -228,18 +264,77 @@ const FeedbackAnalytics = ({ refreshTrigger }: FeedbackAnalyticsProps) => {
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
               <div className="p-3 rounded-xl bg-blue-500/10">
-                <TrendingUp className="w-6 h-6 text-blue-500" />
+                <Users className="w-6 h-6 text-blue-500" />
               </div>
               <div>
                 <div className="text-2xl font-bold text-foreground">
-                  {stats.averageRating >= 4 ? "Positive" : stats.averageRating >= 3 ? "Neutral" : "Needs Work"}
+                  {stats.npsPassives + stats.npsDetractors}
                 </div>
-                <div className="text-sm text-muted-foreground">Sentiment</div>
+                <div className="text-sm text-muted-foreground">Passives + Detractors</div>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* NPS Breakdown Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="w-5 h-5" />
+            Net Promoter Score (NPS) Breakdown
+          </CardTitle>
+          <CardDescription>
+            NPS = % Promoters - % Detractors (Range: -100 to +100)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="p-4 rounded-lg bg-muted/50 text-center">
+              <div className={`text-3xl font-bold mb-1 ${
+                stats.npsScore >= 70 ? "text-green-500" :
+                stats.npsScore >= 50 ? "text-green-400" :
+                stats.npsScore >= 0 ? "text-yellow-500" :
+                "text-red-500"
+              }`}>
+                {stats.npsScore > 0 ? "+" : ""}{stats.npsScore}
+              </div>
+              <div className="text-sm text-muted-foreground">NPS Score</div>
+              <div className="text-xs mt-1 text-muted-foreground">
+                {stats.npsScore >= 70 ? "Excellent" :
+                 stats.npsScore >= 50 ? "Great" :
+                 stats.npsScore >= 0 ? "Good" :
+                 stats.npsScore >= -50 ? "Needs Improvement" :
+                 "Critical"}
+              </div>
+            </div>
+            
+            <div className="p-4 rounded-lg bg-green-500/10 text-center">
+              <div className="text-2xl font-bold text-green-500 mb-1">
+                {stats.npsPromoters}
+              </div>
+              <div className="text-sm text-muted-foreground">Promoters</div>
+              <div className="text-xs mt-1 text-green-600">Would recommend</div>
+            </div>
+            
+            <div className="p-4 rounded-lg bg-yellow-500/10 text-center">
+              <div className="text-2xl font-bold text-yellow-500 mb-1">
+                {stats.npsPassives}
+              </div>
+              <div className="text-sm text-muted-foreground">Passives</div>
+              <div className="text-xs mt-1 text-yellow-600">Maybe recommend</div>
+            </div>
+            
+            <div className="p-4 rounded-lg bg-red-500/10 text-center">
+              <div className="text-2xl font-bold text-red-500 mb-1">
+                {stats.npsDetractors}
+              </div>
+              <div className="text-sm text-muted-foreground">Detractors</div>
+              <div className="text-xs mt-1 text-red-600">Wouldn't recommend</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -281,9 +376,9 @@ const FeedbackAnalytics = ({ refreshTrigger }: FeedbackAnalyticsProps) => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Users className="w-5 h-5" />
-              Would Recommend
+              Recommendation Distribution
             </CardTitle>
-            <CardDescription>Net promoter indication</CardDescription>
+            <CardDescription>Breakdown by NPS category</CardDescription>
           </CardHeader>
           <CardContent>
             {stats.recommendDistribution.length > 0 ? (
