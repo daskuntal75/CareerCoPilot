@@ -38,6 +38,7 @@ import UserManagement from "@/components/admin/UserManagement";
 import RevenueAnalytics from "@/components/admin/RevenueAnalytics";
 import AdminSettings from "@/components/admin/AdminSettings";
 import DemoWhitelistManagement from "@/components/admin/DemoWhitelistManagement";
+import DemoModeStats from "@/components/admin/DemoModeStats";
 
 interface UserSummary {
   total_users: number;
@@ -226,6 +227,9 @@ const Admin = () => {
               Refresh Data
             </Button>
           </motion.div>
+
+          {/* Demo Mode Quick Stats */}
+          <DemoModeStats refreshTrigger={refreshTrigger} />
 
           {/* Summary Stats */}
           <motion.div

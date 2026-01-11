@@ -128,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [session, refreshSubscription]);
 
   const signUp = async (email: string, password: string, fullName: string) => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -136,6 +136,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         emailRedirectTo: `${window.location.origin}/auth/callback`,
       },
     });
+
+    // Notify admin of new signup (fire and forget)
+    if (data?.user && !error) {
+      supabase.functions.invoke("notify-admin-signup", {
+        body: {
+          userId: data.user.id,
+          email: data.user.email,
+          fullName,
+          signupMethod: "email",
+        },
+      }).catch(console.error);
+    }
+
     return { error: error ? new Error(error.message) : null };
   };
 
