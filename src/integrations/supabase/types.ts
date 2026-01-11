@@ -173,6 +173,36 @@ export type Database = {
         }
         Relationships: []
       }
+      demo_whitelist: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          reason: string | null
+          updated_at: string
+          user_id: string
+          whitelisted_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          reason?: string | null
+          updated_at?: string
+          user_id: string
+          whitelisted_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          reason?: string | null
+          updated_at?: string
+          user_id?: string
+          whitelisted_by?: string | null
+        }
+        Relationships: []
+      }
       document_versions: {
         Row: {
           application_id: string | null

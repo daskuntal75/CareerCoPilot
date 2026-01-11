@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import DemoUsageIndicator from "./DemoUsageIndicator";
 
 const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -68,6 +69,9 @@ const Header = () => {
 
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-3">
+            {/* Demo Usage Indicator */}
+            {user && <DemoUsageIndicator />}
+            
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -185,8 +189,9 @@ const Header = () => {
               <div className="border-t border-border my-2" />
               {user ? (
                 <>
-                  <div className="px-4 py-2 text-sm text-muted-foreground">
-                    {user.email}
+                  <div className="px-4 py-2 flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">{user.email}</span>
+                    <DemoUsageIndicator />
                   </div>
                   <Button variant="ghost" className="w-full justify-start" onClick={handleSignOut}>
                     <LogOut className="w-4 h-4 mr-2" />

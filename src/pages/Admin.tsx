@@ -37,6 +37,7 @@ import {
 import UserManagement from "@/components/admin/UserManagement";
 import RevenueAnalytics from "@/components/admin/RevenueAnalytics";
 import AdminSettings from "@/components/admin/AdminSettings";
+import DemoWhitelistManagement from "@/components/admin/DemoWhitelistManagement";
 
 interface UserSummary {
   total_users: number;
@@ -322,6 +323,10 @@ const Admin = () => {
                   <DollarSign className="w-4 h-4" />
                   Revenue
                 </TabsTrigger>
+                <TabsTrigger value="whitelist" className="flex items-center gap-2">
+                  <Shield className="w-4 h-4" />
+                  Demo Whitelist
+                </TabsTrigger>
                 <TabsTrigger value="settings" className="flex items-center gap-2">
                   <Settings className="w-4 h-4" />
                   Settings
@@ -448,6 +453,10 @@ const Admin = () => {
 
               <TabsContent value="revenue">
                 <RevenueAnalytics refreshTrigger={refreshTrigger} />
+              </TabsContent>
+
+              <TabsContent value="whitelist">
+                <DemoWhitelistManagement refreshTrigger={refreshTrigger} />
               </TabsContent>
 
               <TabsContent value="settings">
