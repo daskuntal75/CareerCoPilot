@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useUsageTracking } from "@/hooks/useUsageTracking";
 import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
+import { useDemoLimit } from "@/hooks/useDemoLimit";
+import { DemoLimitBanner } from "@/components/feedback";
 
 export type AppStep = "job" | "analysis" | "editor" | "interview";
 
@@ -46,7 +48,7 @@ const AppPage = () => {
   const { detailedResume, isProfileComplete, isLoading: isProfileLoading } = useUserProfile();
   const { trackPageView, trackApplicationEvent, trackCoverLetterEvent, trackInterviewPrepEvent } = useAnalytics();
   const { canUseFeature, incrementUsage, getRemainingUsage, limits } = useUsageTracking();
-  
+  const { isLimitReached, isDemoMode, demoLimit, supportEmail, applicationCount, refreshCount } = useDemoLimit();
   const [currentStep, setCurrentStep] = useState<AppStep>("job");
   const [jobData, setJobData] = useState<JobData | null>(null);
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
@@ -159,6 +161,12 @@ const AppPage = () => {
   };
 
   const handleJobSubmit = async (data: JobData) => {
+    // Check demo limit before allowing new application (only for new apps, not existing ones)
+    if (!applicationId && isDemoMode && isLimitReached) {
+      toast.error("Demo limit reached. Please contact support for full access.");
+      return;
+    }
+
     if (!detailedResume) {
       toast.error("Please upload your resume in Career Documents first");
       navigate("/profile");
@@ -520,6 +528,15 @@ const AppPage = () => {
       
       <main className="flex-1 pt-24 pb-12">
         <div className="container mx-auto px-4 lg:px-8">
+          {/* Demo Limit Banner */}
+          {isDemoMode && isLimitReached && !applicationId && (
+            <DemoLimitBanner 
+              supportEmail={supportEmail} 
+              applicationCount={applicationCount} 
+              demoLimit={demoLimit} 
+            />
+          )}
+
           {/* Stepper */}
           <div className="mb-8">
             <AppStepper currentStep={currentStep} onStepClick={goToStep} />
