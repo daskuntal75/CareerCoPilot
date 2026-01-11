@@ -30,7 +30,7 @@ const handler = async (req: Request): Promise<Response> => {
     const featureLabel = featureType === "cover_letter" ? "cover letters" : "interview prep sessions";
 
     const emailResponse = await resend.emails.send({
-      from: "CareerCopilot <notifications@resend.dev>",
+      from: "TailoredApply <notifications@resend.dev>",
       to: [email],
       subject: `⚠️ You have ${remaining} ${featureLabel} remaining this month`,
       html: `
@@ -70,11 +70,11 @@ const handler = async (req: Request): Promise<Response> => {
                 <li>Priority support</li>
               </ul>
               
-              <a href="https://careercopilot.ai/pricing" class="cta-button">Upgrade to Pro →</a>
+              <a href="https://tailoredapply.lovable.app/pricing" class="cta-button">Upgrade to Pro →</a>
               
               <div class="footer">
                 <p>Keep crushing your job search! 💪</p>
-                <p>The CareerCopilot Team</p>
+                <p>The TailoredApply Team</p>
               </div>
             </div>
           </div>

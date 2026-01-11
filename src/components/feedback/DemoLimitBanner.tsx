@@ -10,9 +10,9 @@ interface DemoLimitBannerProps {
 
 const DemoLimitBanner = ({ supportEmail, applicationCount, demoLimit }: DemoLimitBannerProps) => {
   const handleContactSupport = () => {
-    const subject = encodeURIComponent("Request to Enable Full Access - CareerCopilot");
+    const subject = encodeURIComponent("Request to Enable Full Access - TailoredApply");
     const body = encodeURIComponent(
-      `Hi,\n\nI've been using CareerCopilot in demo mode and have reached the ${demoLimit} application limit. I would like to request full access to continue using the platform.\n\nThank you!`
+      `Hi,\n\nI've been using TailoredApply in demo mode and have reached the ${demoLimit} application limit. I would like to request full access to continue using the platform.\n\nThank you!`
     );
     window.location.href = `mailto:${supportEmail}?subject=${subject}&body=${body}`;
   };
@@ -24,7 +24,7 @@ const DemoLimitBanner = ({ supportEmail, applicationCount, demoLimit }: DemoLimi
       <AlertDescription className="mt-2">
         <p className="mb-3">
           You've used all {demoLimit} demo applications ({applicationCount} created). 
-          To continue using CareerCopilot with unlimited access, please contact our support team.
+          To continue using TailoredApply with unlimited access, please contact our support team.
         </p>
         <Button 
           onClick={handleContactSupport}

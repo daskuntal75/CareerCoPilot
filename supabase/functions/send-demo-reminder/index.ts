@@ -40,7 +40,7 @@ serve(async (req) => {
     logStep("Sending demo reminder email", { email, applicationsUsed, applicationsRemaining });
 
     const emailResponse = await resend.emails.send({
-      from: "CareerCopilot <onboarding@resend.dev>",
+      from: "TailoredApply <onboarding@resend.dev>",
       to: [email],
       subject: `⏰ You have ${applicationsRemaining} demo application${applicationsRemaining !== 1 ? 's' : ''} left!`,
       html: `
@@ -194,7 +194,7 @@ serve(async (req) => {
                     <div class="progress-fill"></div>
                   </div>
                   <p class="progress-text">
-                    ${applicationsRemaining} more ${applicationsRemaining === 1 ? 'opportunity' : 'opportunities'} to experience CareerCopilot
+                    ${applicationsRemaining} more ${applicationsRemaining === 1 ? 'opportunity' : 'opportunities'} to experience TailoredApply
                   </p>
                 </div>
 
@@ -207,7 +207,7 @@ serve(async (req) => {
                 </div>
 
                 <div style="text-align: center; margin-top: 30px;">
-                  <a href="https://careercopilot.lovable.app/app" class="cta-button">
+                  <a href="https://tailoredapply.lovable.app/app" class="cta-button">
                     Use Your ${applicationsRemaining === 1 ? 'Final' : 'Next'} Application →
                   </a>
                 </div>
@@ -221,8 +221,8 @@ serve(async (req) => {
               </div>
               
               <div class="footer">
-                <p>Questions? Reply to this email or contact us at daskuntal@gmail.com</p>
-                <p>© ${new Date().getFullYear()} CareerCopilot. All rights reserved.</p>
+                <p>Questions? Reply to this email or contact us at support@tailoredapply.com</p>
+                <p>© ${new Date().getFullYear()} TailoredApply. All rights reserved.</p>
               </div>
             </div>
           </body>

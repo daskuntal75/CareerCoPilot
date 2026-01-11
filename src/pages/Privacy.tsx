@@ -83,7 +83,7 @@ const Privacy = () => {
               <section>
                 <h2 className="text-2xl font-semibold text-foreground mb-4">6. Contact Us</h2>
                 <p className="text-muted-foreground">
-                  If you have questions about this Privacy Policy, please contact us at privacy@careercopilot.ai
+                  If you have questions about this Privacy Policy, please contact us at privacy@tailoredapply.com
                 </p>
               </section>
             </div>

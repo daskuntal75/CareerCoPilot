@@ -19,7 +19,7 @@ const Terms = () => {
               <section>
                 <h2 className="text-2xl font-semibold text-foreground mb-4">1. Acceptance of Terms</h2>
                 <p className="text-muted-foreground">
-                  By accessing or using CareerCopilot AI, you agree to be bound by these Terms of Service 
+                  By accessing or using TailoredApply, you agree to be bound by these Terms of Service 
                   and our Privacy Policy. If you do not agree to these terms, please do not use our services.
                 </p>
               </section>
@@ -27,7 +27,7 @@ const Terms = () => {
               <section>
                 <h2 className="text-2xl font-semibold text-foreground mb-4">2. Description of Service</h2>
                 <p className="text-muted-foreground">
-                  CareerCopilot AI provides AI-powered tools to help job seekers create tailored application 
+                  TailoredApply provides AI-powered tools to help job seekers create tailored application 
                   materials including cover letters, resume analysis, and interview preparation guides.
                 </p>
               </section>
@@ -64,7 +64,7 @@ const Terms = () => {
               <section>
                 <h2 className="text-2xl font-semibold text-foreground mb-4">6. Limitation of Liability</h2>
                 <p className="text-muted-foreground">
-                  CareerCopilot AI is provided "as is" without warranties of any kind. We are not liable 
+                  TailoredApply is provided "as is" without warranties of any kind. We are not liable 
                   for any indirect, incidental, or consequential damages arising from your use of the service.
                 </p>
               </section>
@@ -88,7 +88,7 @@ const Terms = () => {
               <section>
                 <h2 className="text-2xl font-semibold text-foreground mb-4">9. Contact</h2>
                 <p className="text-muted-foreground">
-                  For questions about these Terms, please contact us at legal@careercopilot.ai
+                  For questions about these Terms, please contact us at legal@tailoredapply.com
                 </p>
               </section>
             </div>

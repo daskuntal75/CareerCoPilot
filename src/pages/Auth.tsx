@@ -432,7 +432,7 @@ const Auth = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="purpose">What do you want to use CareerCopilot for?</Label>
+                <Label htmlFor="purpose">What do you want to use TailoredApply for?</Label>
                 <div className="relative">
                   <Target className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
                   <Textarea
