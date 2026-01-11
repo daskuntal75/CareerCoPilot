@@ -121,7 +121,7 @@ const categoryConfig: Record<string, { label: string; color: string }> = {
   recruiter: { label: "Recruiter", color: "bg-sky-100 text-sky-700" },
   hiring_manager: { label: "Hiring Manager", color: "bg-indigo-100 text-indigo-700" },
   peer: { label: "Peer", color: "bg-teal-100 text-teal-700" },
-  vp: { label: "VP/Executive", color: "bg-rose-100 text-rose-700" },
+  vp: { label: "Senior Leadership", color: "bg-rose-100 text-rose-700" },
   panel: { label: "Panel", color: "bg-orange-100 text-orange-700" },
 };
 
@@ -148,7 +148,7 @@ const regenerationTips = [
   { id: "different_angle", label: "Different perspective", description: "Try a new approach" },
   { id: "more_metrics", label: "Add more metrics", description: "Quantify with numbers" },
   { id: "simpler", label: "Simplify language", description: "Make it easier to remember" },
-  { id: "executive_focus", label: "Executive-level focus", description: "C-suite considerations" },
+  { id: "leadership_focus", label: "Leadership focus", description: "Management considerations" },
   { id: "technical_depth", label: "More technical depth", description: "Deeper technical details" },
 ];
 
@@ -550,7 +550,7 @@ const InterviewPrep = ({
       { key: "forHiringManager", label: "For Hiring Manager" },
       { key: "forPeer", label: "For Peer/Director" },
       { key: "forTechnicalLead", label: "For Technical Lead" },
-      { key: "forVP", label: "For VP/Executive" },
+      { key: "forVP", label: "For Senior Leadership" },
     ] as const;
 
     return (
