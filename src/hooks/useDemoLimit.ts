@@ -21,6 +21,7 @@ export function useDemoLimit() {
     canCreateApplication: true,
   });
   const [isDemoMode, setIsDemoMode] = useState(false);
+  const [isWhitelisted, setIsWhitelisted] = useState(false);
 
   const checkDemoMode = useCallback(async () => {
     try {
@@ -30,6 +31,28 @@ export function useDemoLimit() {
       console.error("Error checking demo mode:", error);
     }
   }, []);
+
+  const checkWhitelist = useCallback(async () => {
+    if (!user?.email) return;
+
+    try {
+      // Check if user is in whitelist by email
+      const { data, error } = await supabase
+        .from("demo_whitelist")
+        .select("id")
+        .eq("email", user.email.toLowerCase())
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error checking whitelist:", error);
+        return;
+      }
+
+      setIsWhitelisted(!!data);
+    } catch (error) {
+      console.error("Error checking whitelist:", error);
+    }
+  }, [user?.email]);
 
   const fetchApplicationCount = useCallback(async () => {
     if (!user?.id) {
@@ -46,29 +69,36 @@ export function useDemoLimit() {
       if (error) throw error;
 
       const appCount = count || 0;
-      const limitReached = isDemoMode && appCount >= DEMO_APP_LIMIT;
+      // User can bypass limit if whitelisted
+      const limitReached = isDemoMode && !isWhitelisted && appCount >= DEMO_APP_LIMIT;
 
       setState({
         applicationCount: appCount,
         isLimitReached: limitReached,
         loading: false,
-        canCreateApplication: !isDemoMode || appCount < DEMO_APP_LIMIT,
+        canCreateApplication: !isDemoMode || isWhitelisted || appCount < DEMO_APP_LIMIT,
       });
     } catch (error) {
       console.error("Error fetching application count:", error);
       setState(prev => ({ ...prev, loading: false }));
     }
-  }, [user?.id, isDemoMode]);
+  }, [user?.id, isDemoMode, isWhitelisted]);
 
   useEffect(() => {
     checkDemoMode();
   }, [checkDemoMode]);
 
   useEffect(() => {
+    if (user?.email) {
+      checkWhitelist();
+    }
+  }, [user?.email, checkWhitelist]);
+
+  useEffect(() => {
     if (isDemoMode !== undefined) {
       fetchApplicationCount();
     }
-  }, [fetchApplicationCount, isDemoMode]);
+  }, [fetchApplicationCount, isDemoMode, isWhitelisted]);
 
   const refreshCount = useCallback(() => {
     fetchApplicationCount();
@@ -77,6 +107,7 @@ export function useDemoLimit() {
   return {
     ...state,
     isDemoMode,
+    isWhitelisted,
     demoLimit: DEMO_APP_LIMIT,
     supportEmail: SUPPORT_EMAIL,
     refreshCount,
