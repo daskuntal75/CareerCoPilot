@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.revoke-user-session]
 verify_jwt = false
+
+[functions.check-login-anomaly]
+verify_jwt = false

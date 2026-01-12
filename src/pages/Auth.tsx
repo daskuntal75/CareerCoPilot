@@ -17,8 +17,11 @@ import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm";
 import { TwoFactorVerify } from "@/components/auth/TwoFactorVerify";
 import { BiometricLogin } from "@/components/auth/BiometricLogin";
 import { EmailLookupForm } from "@/components/auth/EmailLookupForm";
+import { PasswordBreachWarning } from "@/components/auth/PasswordBreachWarning";
 import { supabase } from "@/integrations/supabase/client";
 import { useRateLimiter } from "@/hooks/useRateLimiter";
+import { useDeviceFingerprint } from "@/hooks/useDeviceFingerprint";
+import { usePasswordBreachCheck } from "@/hooks/usePasswordBreachCheck";
 
 // Input validation schemas
 const emailSchema = z.string().trim().email("Invalid email address").max(255, "Email too long");
@@ -54,9 +57,16 @@ const Auth = () => {
     zipCode?: string;
   }>({});
   const [pendingMfa, setPendingMfa] = useState(false);
+  const [breachWarning, setBreachWarning] = useState<{ isBreached: boolean; occurrences: number }>({ isBreached: false, occurrences: 0 });
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
   const { trackAuthEvent, trackPageView } = useAnalytics();
+  
+  // Device fingerprinting
+  const { fingerprint, markAsTrusted, isTrusted } = useDeviceFingerprint();
+  
+  // Password breach checking
+  const { checkPassword, checking: checkingBreach } = usePasswordBreachCheck();
   
   // Enhanced rate limiting with exponential backoff
   const rateLimiter = useRateLimiter({
@@ -181,7 +191,7 @@ const Auth = () => {
     }
   };
 
-  // Log authentication attempt to backend for IP-based tracking
+  // Log authentication attempt to backend for IP-based tracking and anomaly detection
   const logAuthAttempt = async (action: "log_failure" | "log_success", userEmail: string, userId?: string) => {
     try {
       await supabase.functions.invoke("auth-rate-limit", {
@@ -190,10 +200,46 @@ const Auth = () => {
           email: userEmail,
           userId,
           userAgent: navigator.userAgent,
+          deviceFingerprint: fingerprint,
         },
       });
+      
+      // For successful logins, check for anomalies
+      if (action === "log_success" && userId) {
+        const { data: anomalyData } = await supabase.functions.invoke("check-login-anomaly", {
+          body: {
+            userId,
+            email: userEmail,
+            userAgent: navigator.userAgent,
+            deviceFingerprint: fingerprint,
+          },
+        });
+        
+        // If anomaly detected but not super high risk, show a warning
+        if (anomalyData?.isAnomalous && anomalyData?.riskScore < 70) {
+          toast.warning("New login detected from an unfamiliar device or location.", {
+            description: anomalyData.riskSummary || "Check your email for details.",
+            duration: 8000,
+          });
+        }
+        
+        // Mark device as trusted on successful login
+        markAsTrusted();
+      }
     } catch (error) {
       console.error("Failed to log auth attempt:", error);
+    }
+  };
+  
+  // Check password against breach database when password changes
+  const handlePasswordChange = async (newPassword: string) => {
+    setPassword(newPassword);
+    setErrors(prev => ({ ...prev, password: undefined }));
+    
+    // Only check for breaches during signup
+    if (mode === "signup" && newPassword.length >= 8) {
+      const result = await checkPassword(newPassword);
+      setBreachWarning({ isBreached: result.isBreached, occurrences: result.occurrences });
     }
   };
 
@@ -521,10 +567,7 @@ const Auth = () => {
                 id="password"
                 type={showPassword ? "text" : "password"}
                 value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  setErrors(prev => ({ ...prev, password: undefined }));
-                }}
+                onChange={(e) => handlePasswordChange(e.target.value)}
                 placeholder="••••••••"
                 className={`pl-10 pr-10 ${errors.password ? "border-destructive" : ""}`}
                 required
@@ -544,6 +587,13 @@ const Auth = () => {
               <p className="text-xs text-destructive">{errors.password}</p>
             )}
             {!isLogin && <PasswordStrengthMeter password={password} />}
+            {!isLogin && (
+              <PasswordBreachWarning 
+                checking={checkingBreach} 
+                isBreached={breachWarning.isBreached} 
+                occurrences={breachWarning.occurrences} 
+              />
+            )}
           </div>
 
           <Button 

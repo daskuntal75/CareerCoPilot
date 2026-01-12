@@ -7,6 +7,8 @@ export interface GeoLocation {
   countryCode: string | null;
   timezone: string | null;
   isp: string | null;
+  lat: number | null;
+  lon: number | null;
   formatted: string;
 }
 
@@ -18,6 +20,8 @@ export async function getLocationFromIP(ip: string): Promise<GeoLocation> {
     countryCode: null,
     timezone: null,
     isp: null,
+    lat: null,
+    lon: null,
     formatted: "Unknown location",
   };
 
@@ -37,7 +41,7 @@ export async function getLocationFromIP(ip: string): Promise<GeoLocation> {
   try {
     // Using ip-api.com (free tier, 45 requests/minute)
     const response = await fetch(
-      `http://ip-api.com/json/${ip}?fields=status,message,country,countryCode,region,regionName,city,timezone,isp`,
+      `http://ip-api.com/json/${ip}?fields=status,message,country,countryCode,region,regionName,city,timezone,isp,lat,lon`,
       { 
         signal: AbortSignal.timeout(5000) // 5 second timeout
       }
@@ -62,6 +66,8 @@ export async function getLocationFromIP(ip: string): Promise<GeoLocation> {
       countryCode: data.countryCode || null,
       timezone: data.timezone || null,
       isp: data.isp || null,
+      lat: data.lat || null,
+      lon: data.lon || null,
       formatted: formatLocation(data.city, data.regionName, data.country),
     };
 
