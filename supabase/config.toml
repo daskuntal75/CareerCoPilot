@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.send-lockout-notification]
 verify_jwt = false
+
+[functions.send-new-device-notification]
+verify_jwt = false
+
+[functions.revoke-user-session]
+verify_jwt = false

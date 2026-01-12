@@ -45,6 +45,7 @@ import EarlyAdoptersManagement from "@/components/admin/EarlyAdoptersManagement"
 import FeedbackAnalytics from "@/components/admin/FeedbackAnalytics";
 import AdminSecurityDashboard from "@/components/admin/AdminSecurityDashboard";
 import Admin2FAEnforcement from "@/components/admin/Admin2FAEnforcement";
+import SessionManagement from "@/components/admin/SessionManagement";
 
 interface UserSummary {
   total_users: number;
@@ -491,7 +492,10 @@ const Admin = () => {
               </TabsContent>
 
               <TabsContent value="security">
-                <AdminSecurityDashboard refreshTrigger={refreshTrigger} />
+                <div className="space-y-6">
+                  <AdminSecurityDashboard refreshTrigger={refreshTrigger} />
+                  <SessionManagement refreshTrigger={refreshTrigger} />
+                </div>
               </TabsContent>
 
               <TabsContent value="settings">
