@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { Lock, Loader2, Eye, EyeOff, CheckCircle } from "lucide-react";
 import { PasswordStrengthMeter, isPasswordStrong } from "./PasswordStrengthMeter";
+import { PasswordBreachWarning } from "./PasswordBreachWarning";
+import { usePasswordBreachCheck } from "@/hooks/usePasswordBreachCheck";
 import { z } from "zod";
 
 const passwordSchema = z.string().min(8, "Password must be at least 8 characters").max(128, "Password too long");
@@ -23,6 +25,21 @@ export function ChangePasswordForm({ onSuccess }: ChangePasswordFormProps) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [errors, setErrors] = useState<{ current?: string; new?: string; confirm?: string }>({});
+  const [breachWarning, setBreachWarning] = useState<{ isBreached: boolean; occurrences: number }>({ isBreached: false, occurrences: 0 });
+  
+  const { checkPassword, checking: checkingBreach } = usePasswordBreachCheck();
+
+  const handleNewPasswordChange = async (password: string) => {
+    setNewPassword(password);
+    setErrors(prev => ({ ...prev, new: undefined }));
+    
+    if (password.length >= 8) {
+      const result = await checkPassword(password);
+      setBreachWarning({ isBreached: result.isBreached, occurrences: result.occurrences });
+    } else {
+      setBreachWarning({ isBreached: false, occurrences: 0 });
+    }
+  };
 
   const validateForm = (): boolean => {
     const newErrors: typeof errors = {};
@@ -153,28 +170,30 @@ export function ChangePasswordForm({ onSuccess }: ChangePasswordFormProps) {
         {errors.current && <p className="text-xs text-destructive">{errors.current}</p>}
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="new-password-change">New password</Label>
-        <div className="relative">
-          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            id="new-password-change"
-            type={showPasswords ? "text" : "password"}
-            value={newPassword}
-            onChange={(e) => {
-              setNewPassword(e.target.value);
-              setErrors((prev) => ({ ...prev, new: undefined }));
-            }}
-            placeholder="••••••••"
-            className={`pl-10 ${errors.new ? "border-destructive" : ""}`}
-            required
-            autoComplete="new-password"
-            maxLength={128}
+        <div className="space-y-2">
+          <Label htmlFor="new-password-change">New password</Label>
+          <div className="relative">
+            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              id="new-password-change"
+              type={showPasswords ? "text" : "password"}
+              value={newPassword}
+              onChange={(e) => handleNewPasswordChange(e.target.value)}
+              placeholder="••••••••"
+              className={`pl-10 ${errors.new ? "border-destructive" : ""}`}
+              required
+              autoComplete="new-password"
+              maxLength={128}
+            />
+          </div>
+          {errors.new && <p className="text-xs text-destructive">{errors.new}</p>}
+          <PasswordStrengthMeter password={newPassword} showRequirements={newPassword.length > 0} />
+          <PasswordBreachWarning 
+            checking={checkingBreach} 
+            isBreached={breachWarning.isBreached} 
+            occurrences={breachWarning.occurrences} 
           />
         </div>
-        {errors.new && <p className="text-xs text-destructive">{errors.new}</p>}
-        <PasswordStrengthMeter password={newPassword} showRequirements={newPassword.length > 0} />
-      </div>
 
       <div className="space-y-2">
         <Label htmlFor="confirm-password-change">Confirm new password</Label>
