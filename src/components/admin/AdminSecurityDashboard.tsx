@@ -17,7 +17,8 @@ import {
   CheckCircle,
   AlertCircle,
   User,
-  Globe
+  Globe,
+  MapPin
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import type { Json } from "@/integrations/supabase/types";
@@ -342,6 +343,12 @@ const AdminSecurityDashboard = ({ refreshTrigger }: AdminSecurityDashboardProps)
                         <div className="flex items-center gap-1">
                           <Globe className="w-3 h-3" />
                           <span>{event.ip_address}</span>
+                        </div>
+                      )}
+                      {(event.action_data as any)?.location && (
+                        <div className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
+                          <span>{(event.action_data as any).location}</span>
                         </div>
                       )}
                       {(event.action_data as any)?.reason && (

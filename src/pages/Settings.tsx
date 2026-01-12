@@ -5,7 +5,7 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
-import { User, Bell, Mail, Clock, Save, Check, Lock, Shield, Fingerprint, ShieldCheck, CreditCard } from "lucide-react";
+import { User, Bell, Mail, Clock, Save, Check, Lock, Shield, Fingerprint, ShieldCheck, CreditCard, Monitor } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ import { BiometricLogin } from "@/components/auth/BiometricLogin";
 import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
 import SecurityPrivacyDashboard from "@/components/settings/SecurityPrivacyDashboard";
 import SubscriptionManagement from "@/components/settings/SubscriptionManagement";
+import UserSessionManagement from "@/components/settings/UserSessionManagement";
 
 interface ProfileSettings {
   full_name: string | null;
@@ -384,6 +385,9 @@ const Settings = () => {
                       <BiometricLogin mode="setup" />
                     </CardContent>
                   </Card>
+
+                  {/* Active Sessions */}
+                  <UserSessionManagement />
                 </TabsContent>
 
                 {/* Privacy Tab */}

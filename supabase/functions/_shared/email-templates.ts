@@ -240,6 +240,7 @@ export interface LockoutEmailData {
   userAgent?: string;
   timestamp: string;
   appUrl: string;
+  location?: string;
 }
 
 export const generateLockoutEmail = (data: LockoutEmailData): string => {
@@ -272,6 +273,12 @@ export const generateLockoutEmail = (data: LockoutEmailData): string => {
           <span class="info-label">IP Address</span>
           <span class="info-value">${data.ipAddress}</span>
         </div>
+        ${data.location ? `
+        <div class="info-row">
+          <span class="info-label">Location</span>
+          <span class="info-value">${data.location}</span>
+        </div>
+        ` : ''}
         <div class="info-row">
           <span class="info-label">Failed Attempts</span>
           <span class="info-value">${data.attemptCount}</span>
