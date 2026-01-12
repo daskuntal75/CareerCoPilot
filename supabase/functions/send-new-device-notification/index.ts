@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
-import { generateLockoutEmail } from "../_shared/email-templates.ts";
+import { generateNewDeviceEmail } from "../_shared/email-templates.ts";
 
 const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
 
@@ -9,11 +9,31 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface LockoutNotificationRequest {
+interface NewDeviceNotificationRequest {
   email: string;
   ipAddress: string;
-  attemptCount: number;
-  userAgent?: string;
+  userAgent: string;
+  location?: string;
+}
+
+function parseUserAgent(userAgent: string): string {
+  // Simple device type detection
+  if (/mobile|android|iphone|ipad|ipod/i.test(userAgent)) {
+    if (/iphone|ipad|ipod/i.test(userAgent)) {
+      return "iOS Device";
+    }
+    return "Android Device";
+  }
+  if (/windows/i.test(userAgent)) {
+    return "Windows Computer";
+  }
+  if (/macintosh|mac os/i.test(userAgent)) {
+    return "Mac Computer";
+  }
+  if (/linux/i.test(userAgent)) {
+    return "Linux Computer";
+  }
+  return "Unknown Device";
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -22,7 +42,7 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { email, ipAddress, attemptCount, userAgent }: LockoutNotificationRequest = await req.json();
+    const { email, ipAddress, userAgent, location }: NewDeviceNotificationRequest = await req.json();
 
     const timestamp = new Date().toLocaleString("en-US", {
       weekday: "long",
@@ -34,25 +54,27 @@ const handler = async (req: Request): Promise<Response> => {
       timeZoneName: "short",
     });
 
+    const deviceType = parseUserAgent(userAgent);
     const appUrl = Deno.env.get("APP_URL") || "https://tailoredapply.lovable.app";
 
-    const htmlContent = generateLockoutEmail({
+    const htmlContent = generateNewDeviceEmail({
       email,
       ipAddress,
-      attemptCount,
       userAgent,
+      location,
       timestamp,
       appUrl,
+      deviceType,
     });
 
     const emailResponse = await resend.emails.send({
       from: "TailoredApply Security <security@resend.dev>",
       to: [email],
-      subject: "🔒 Security Alert: Account Access Temporarily Locked",
+      subject: "📱 New Device Sign-In to Your Account",
       html: htmlContent,
     });
 
-    console.log("Lockout notification sent:", emailResponse);
+    console.log("New device notification sent:", emailResponse);
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
@@ -60,7 +82,7 @@ const handler = async (req: Request): Promise<Response> => {
     });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    console.error("Error sending lockout notification:", errorMessage);
+    console.error("Error sending new device notification:", errorMessage);
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
