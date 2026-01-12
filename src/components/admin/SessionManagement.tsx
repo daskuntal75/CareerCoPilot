@@ -28,7 +28,8 @@ import {
   Clock,
   User,
   Shield,
-  AlertTriangle
+  AlertTriangle,
+  MapPin
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 
@@ -42,6 +43,7 @@ interface ActiveUser {
   last_activity: string | null;
   ip_address: string | null;
   user_agent: string | null;
+  location: string | null;
 }
 
 interface SessionManagementProps {
@@ -89,15 +91,18 @@ const SessionManagement = ({ refreshTrigger }: SessionManagementProps) => {
         ip_address: string | null;
         user_agent: string | null;
         email: string | null;
+        location: string | null;
       }>();
 
       loginEvents?.forEach(event => {
         if (!userActivityMap.has(event.user_id)) {
+          const actionData = event.action_data as Record<string, unknown>;
           userActivityMap.set(event.user_id, {
             last_activity: event.created_at,
             ip_address: event.ip_address,
             user_agent: event.user_agent,
-            email: (event.action_data as any)?.email || null,
+            email: actionData?.email as string || null,
+            location: actionData?.location as string || null,
           });
         }
       });
@@ -115,6 +120,7 @@ const SessionManagement = ({ refreshTrigger }: SessionManagementProps) => {
           last_activity: activity?.last_activity || null,
           ip_address: activity?.ip_address || null,
           user_agent: activity?.user_agent || null,
+          location: activity?.location || null,
         };
       }).filter(user => user.last_activity !== null) || [];
 
@@ -303,21 +309,27 @@ const SessionManagement = ({ refreshTrigger }: SessionManagementProps) => {
                     </div>
                     
                     <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mb-2">
-                      <div className="flex items-center gap-1">
-                        <User className="w-3 h-3" />
-                        <span className="truncate max-w-[180px]">{user.email}</span>
-                      </div>
-                      {user.ip_address && (
                         <div className="flex items-center gap-1">
-                          <Globe className="w-3 h-3" />
-                          <span>{user.ip_address}</span>
+                          <User className="w-3 h-3" />
+                          <span className="truncate max-w-[180px]">{user.email}</span>
                         </div>
-                      )}
-                      <div className="flex items-center gap-1">
-                        {device.icon}
-                        <span>{device.name}</span>
+                        {user.ip_address && (
+                          <div className="flex items-center gap-1">
+                            <Globe className="w-3 h-3" />
+                            <span>{user.ip_address}</span>
+                          </div>
+                        )}
+                        {user.location && (
+                          <div className="flex items-center gap-1">
+                            <MapPin className="w-3 h-3" />
+                            <span>{user.location}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-1">
+                          {device.icon}
+                          <span>{device.name}</span>
+                        </div>
                       </div>
-                    </div>
                     
                     {user.last_activity && (
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">

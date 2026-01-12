@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { getLocationFromIP } from "../_shared/geolocation.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -126,6 +127,9 @@ const handler = async (req: Request): Promise<Response> => {
       const attemptCount = (recentAttempts?.length || 0) + 1;
       const triggersLockout = attemptCount >= CONFIG.maxAttempts;
 
+      // Get geolocation for the IP
+      const geoLocation = await getLocationFromIP(realIp);
+
       // Log the failed attempt to audit_log
       const { error: logError } = await supabaseClient.from("audit_log").insert({
         user_id: userId || "00000000-0000-0000-0000-000000000000", // Anonymous user placeholder
@@ -138,6 +142,11 @@ const handler = async (req: Request): Promise<Response> => {
           attempt_number: attemptCount,
           lockout_triggered: triggersLockout,
           timestamp: new Date().toISOString(),
+          location: geoLocation.formatted,
+          city: geoLocation.city,
+          region: geoLocation.region,
+          country: geoLocation.country,
+          country_code: geoLocation.countryCode,
         },
         ip_address: realIp,
         user_agent: userAgent,
@@ -182,6 +191,9 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     if (action === "log_success") {
+      // Get geolocation for the IP
+      const geoLocation = await getLocationFromIP(realIp);
+
       // Log successful login
       const { error: logError } = await supabaseClient.from("audit_log").insert({
         user_id: userId || "00000000-0000-0000-0000-000000000000",
@@ -192,6 +204,11 @@ const handler = async (req: Request): Promise<Response> => {
           ip_address: realIp,
           user_agent: userAgent,
           timestamp: new Date().toISOString(),
+          location: geoLocation.formatted,
+          city: geoLocation.city,
+          region: geoLocation.region,
+          country: geoLocation.country,
+          country_code: geoLocation.countryCode,
         },
         ip_address: realIp,
         user_agent: userAgent,
@@ -203,7 +220,7 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       return new Response(
-        JSON.stringify({ logged: true }),
+        JSON.stringify({ logged: true, location: geoLocation.formatted }),
         { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
