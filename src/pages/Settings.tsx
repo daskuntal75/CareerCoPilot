@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
-import { User, Bell, Mail, Clock, Save, Check, Lock, Shield, Fingerprint, ShieldCheck, CreditCard, Monitor } from "lucide-react";
+import { User, Bell, Mail, Clock, Save, Check, Lock, Shield, Fingerprint, ShieldCheck, CreditCard, Monitor, Zap } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,9 @@ import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRe
 import SecurityPrivacyDashboard from "@/components/settings/SecurityPrivacyDashboard";
 import SubscriptionManagement from "@/components/settings/SubscriptionManagement";
 import UserSessionManagement from "@/components/settings/UserSessionManagement";
+import SecurityScoreDashboard from "@/components/settings/SecurityScoreDashboard";
+import SecurityNotificationsPreferences from "@/components/settings/SecurityNotificationsPreferences";
+import TrustedDevicesManagement from "@/components/settings/TrustedDevicesManagement";
 
 interface ProfileSettings {
   full_name: string | null;
@@ -35,6 +38,9 @@ const Settings = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { trackPageView } = useAnalytics();
+  const [activeTab, setActiveTab] = useState("account");
+  const devicesRef = useRef<HTMLDivElement>(null);
+  const notificationsRef = useRef<HTMLDivElement>(null);
   
   const [settings, setSettings] = useState<ProfileSettings>({
     full_name: "",
@@ -45,6 +51,22 @@ const Settings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  const handleNavigateToSection = (section: string) => {
+    if (section === "security") {
+      setActiveTab("security");
+    } else if (section === "devices") {
+      setActiveTab("security");
+      setTimeout(() => {
+        devicesRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+    } else if (section === "notifications") {
+      setActiveTab("security");
+      setTimeout(() => {
+        notificationsRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+    }
+  };
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -151,7 +173,7 @@ const Settings = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
             >
-              <Tabs defaultValue="account" className="space-y-6">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
                 <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger value="account" className="flex items-center gap-2">
                     <User className="w-4 h-4" />
@@ -344,6 +366,9 @@ const Settings = () => {
 
                 {/* Security Tab */}
                 <TabsContent value="security" className="space-y-6">
+                  {/* Security Score Dashboard */}
+                  <SecurityScoreDashboard onNavigateToSection={handleNavigateToSection} />
+
                   {/* Password */}
                   <Card>
                     <CardHeader>
@@ -385,6 +410,16 @@ const Settings = () => {
                       <BiometricLogin mode="setup" />
                     </CardContent>
                   </Card>
+
+                  {/* Security Notifications */}
+                  <div ref={notificationsRef}>
+                    <SecurityNotificationsPreferences />
+                  </div>
+
+                  {/* Trusted Devices */}
+                  <div ref={devicesRef}>
+                    <TrustedDevicesManagement />
+                  </div>
 
                   {/* Active Sessions */}
                   <UserSessionManagement />
