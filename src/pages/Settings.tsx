@@ -26,6 +26,8 @@ import UserSessionManagement from "@/components/settings/UserSessionManagement";
 import SecurityScoreDashboard from "@/components/settings/SecurityScoreDashboard";
 import SecurityNotificationsPreferences from "@/components/settings/SecurityNotificationsPreferences";
 import TrustedDevicesManagement from "@/components/settings/TrustedDevicesManagement";
+import SessionTimeoutSettings from "@/components/settings/SessionTimeoutSettings";
+import { BackupCodesSetup } from "@/components/auth/BackupCodesSetup";
 
 interface ProfileSettings {
   full_name: string | null;
@@ -392,8 +394,10 @@ const Settings = () => {
                       </CardTitle>
                       <CardDescription>Add an extra layer of security with TOTP</CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-6">
                       <TwoFactorSetup />
+                      <Separator />
+                      <BackupCodesSetup />
                     </CardContent>
                   </Card>
 
@@ -410,6 +414,9 @@ const Settings = () => {
                       <BiometricLogin mode="setup" />
                     </CardContent>
                   </Card>
+
+                  {/* Session Timeout Settings */}
+                  <SessionTimeoutSettings />
 
                   {/* Security Notifications */}
                   <div ref={notificationsRef}>
