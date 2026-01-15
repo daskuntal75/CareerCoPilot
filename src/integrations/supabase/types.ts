@@ -184,7 +184,7 @@ export type Database = {
           id: string
           job_title: string | null
           rating: number | null
-          user_id: string | null
+          user_id: string
           would_recommend: string | null
         }
         Insert: {
@@ -197,7 +197,7 @@ export type Database = {
           id?: string
           job_title?: string | null
           rating?: number | null
-          user_id?: string | null
+          user_id: string
           would_recommend?: string | null
         }
         Update: {
@@ -210,7 +210,7 @@ export type Database = {
           id?: string
           job_title?: string | null
           rating?: number | null
-          user_id?: string | null
+          user_id?: string
           would_recommend?: string | null
         }
         Relationships: []
