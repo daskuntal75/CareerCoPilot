@@ -715,6 +715,72 @@ export type Database = {
         }
         Relationships: []
       }
+      user_preferences: {
+        Row: {
+          auto_save_enabled: boolean | null
+          created_at: string
+          custom_settings: Json | null
+          default_resume_type: string | null
+          email_notifications: boolean | null
+          id: string
+          keyboard_shortcuts_enabled: boolean | null
+          language: string | null
+          login_alerts: boolean | null
+          marketing_emails: boolean | null
+          notifications_enabled: boolean | null
+          push_notifications: boolean | null
+          session_timeout_minutes: number | null
+          theme: string | null
+          timezone: string | null
+          two_factor_enabled: boolean | null
+          updated_at: string
+          user_id: string
+          weekly_digest: boolean | null
+        }
+        Insert: {
+          auto_save_enabled?: boolean | null
+          created_at?: string
+          custom_settings?: Json | null
+          default_resume_type?: string | null
+          email_notifications?: boolean | null
+          id?: string
+          keyboard_shortcuts_enabled?: boolean | null
+          language?: string | null
+          login_alerts?: boolean | null
+          marketing_emails?: boolean | null
+          notifications_enabled?: boolean | null
+          push_notifications?: boolean | null
+          session_timeout_minutes?: number | null
+          theme?: string | null
+          timezone?: string | null
+          two_factor_enabled?: boolean | null
+          updated_at?: string
+          user_id: string
+          weekly_digest?: boolean | null
+        }
+        Update: {
+          auto_save_enabled?: boolean | null
+          created_at?: string
+          custom_settings?: Json | null
+          default_resume_type?: string | null
+          email_notifications?: boolean | null
+          id?: string
+          keyboard_shortcuts_enabled?: boolean | null
+          language?: string | null
+          login_alerts?: boolean | null
+          marketing_emails?: boolean | null
+          notifications_enabled?: boolean | null
+          push_notifications?: boolean | null
+          session_timeout_minutes?: number | null
+          theme?: string | null
+          timezone?: string | null
+          two_factor_enabled?: boolean | null
+          updated_at?: string
+          user_id?: string
+          weekly_digest?: boolean | null
+        }
+        Relationships: []
+      }
       user_resumes: {
         Row: {
           content: string
