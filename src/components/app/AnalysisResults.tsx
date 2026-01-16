@@ -8,6 +8,8 @@ import type { AnalysisData, JobData, RequirementMatch } from "@/pages/App";
 import RAGDebugPanel from "./RAGDebugPanel";
 import { useUsageTracking } from "@/hooks/useUsageTracking";
 import { useAuth } from "@/contexts/AuthContext";
+import { HourlyQuotaIndicator } from "./HourlyQuotaIndicator";
+import { useHourlyQuota } from "@/hooks/useHourlyQuota";
 
 interface AnalysisResultsProps {
   data: AnalysisData;
@@ -82,13 +84,15 @@ const RequirementRow = ({ item, index }: { item: RequirementMatch; index: number
 const AnalysisResults = ({ data, jobData, onGenerate, onBack, applicationId }: AnalysisResultsProps) => {
   const { subscription } = useAuth();
   const { canUseFeature, getRemainingUsage, limits } = useUsageTracking();
+  const { canGenerate: canGenerateHourly, isExhausted: isHourlyExhausted } = useHourlyQuota();
   
   const fitLabel = fitLevelLabels[data.fitLevel];
   const yesCount = data.requirements.filter(r => r.status === "yes").length;
   const partialCount = data.requirements.filter(r => r.status === "partial").length;
   const noCount = data.requirements.filter(r => r.status === "no").length;
   
-  const canGenerate = canUseFeature("cover_letter");
+  const canGenerateMonthly = canUseFeature("cover_letter");
+  const canGenerate = canGenerateMonthly && canGenerateHourly;
   const remaining = getRemainingUsage("cover_letter");
   const isFreeTier = subscription.tier === "free";
 
@@ -198,16 +202,19 @@ const AnalysisResults = ({ data, jobData, onGenerate, onBack, applicationId }: A
 
             {/* Generate CTA */}
             <div className="mt-6 space-y-3">
+              {/* Hourly Quota Indicator */}
+              <HourlyQuotaIndicator showUpgradeLink={false} />
+              
               {isFreeTier && remaining !== null && (
                 <div className={cn(
                   "flex items-center gap-2 text-sm p-2 rounded-lg",
-                  canGenerate 
+                  canGenerateMonthly 
                     ? "bg-accent/10 text-accent" 
                     : "bg-destructive/10 text-destructive"
                 )}>
                   <AlertCircle className="w-4 h-4" />
                   <span>
-                    {canGenerate 
+                    {canGenerateMonthly 
                       ? `${remaining} of ${limits.cover_letter} free cover letters remaining this month`
                       : "Monthly limit reached"}
                   </span>
@@ -218,6 +225,11 @@ const AnalysisResults = ({ data, jobData, onGenerate, onBack, applicationId }: A
                 <Button variant="hero" className="w-full" onClick={onGenerate}>
                   <Sparkles className="w-4 h-4" />
                   Generate Cover Letter
+                </Button>
+              ) : isHourlyExhausted ? (
+                <Button variant="hero" className="w-full" disabled>
+                  <Sparkles className="w-4 h-4" />
+                  Hourly Limit Reached
                 </Button>
               ) : (
                 <Button variant="hero" className="w-full" asChild>

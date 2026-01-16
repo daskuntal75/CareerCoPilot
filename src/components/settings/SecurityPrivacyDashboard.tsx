@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,12 +61,16 @@ const actionTypeLabels: Record<string, { label: string; color: string }> = {
   export_requested: { label: "Export Requested", color: "bg-primary/20 text-primary" },
 };
 
+const CONFIRM_DELETE_TEXT = "DELETE MY ACCOUNT";
+
 const SecurityPrivacyDashboard = () => {
   const { user } = useAuth();
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -372,7 +378,10 @@ const SecurityPrivacyDashboard = () => {
                 Permanently delete all your data including resumes, applications, and history
               </p>
             </div>
-            <AlertDialog>
+            <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => {
+              setIsDeleteDialogOpen(open);
+              if (!open) setDeleteConfirmText("");
+            }}>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive">
                   <Trash2 className="w-4 h-4 mr-2" />
@@ -382,24 +391,40 @@ const SecurityPrivacyDashboard = () => {
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This action cannot be undone. This will permanently delete your account
-                    and remove all your data from our servers, including:
-                    <ul className="list-disc list-inside mt-2 space-y-1">
-                      <li>All uploaded resumes and documents</li>
-                      <li>All job applications and cover letters</li>
-                      <li>All interview preparation materials</li>
-                      <li>All activity history and analytics</li>
-                      <li>All vector embeddings and search data</li>
-                    </ul>
+                  <AlertDialogDescription asChild>
+                    <div>
+                      <p>
+                        This action cannot be undone. This will permanently delete your account
+                        and remove all your data from our servers, including:
+                      </p>
+                      <ul className="list-disc list-inside mt-2 space-y-1">
+                        <li>All uploaded resumes and documents</li>
+                        <li>All job applications and cover letters</li>
+                        <li>All interview preparation materials</li>
+                        <li>All activity history and analytics</li>
+                        <li>All vector embeddings and search data</li>
+                      </ul>
+                      <div className="mt-4 space-y-2">
+                        <Label htmlFor="delete-confirm" className="text-foreground font-medium">
+                          Type <span className="font-mono text-destructive">{CONFIRM_DELETE_TEXT}</span> to confirm:
+                        </Label>
+                        <Input
+                          id="delete-confirm"
+                          value={deleteConfirmText}
+                          onChange={(e) => setDeleteConfirmText(e.target.value)}
+                          placeholder="Type here to confirm..."
+                          className="border-destructive/50 focus-visible:ring-destructive"
+                        />
+                      </div>
+                    </div>
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={handleDeleteAllData}
-                    disabled={isDeleting}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    disabled={isDeleting || deleteConfirmText !== CONFIRM_DELETE_TEXT}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
                   >
                     {isDeleting ? (
                       <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
