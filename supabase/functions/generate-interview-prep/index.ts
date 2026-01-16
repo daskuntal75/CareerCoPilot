@@ -1,4 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkRateLimit, logUsage, createRateLimitResponse } from "../_shared/rate-limit-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,6 +9,8 @@ const corsHeaders = {
 
 const MAX_RETRIES = 3;
 const INITIAL_DELAY_MS = 1000;
+const MAX_JOB_DESCRIPTION_LENGTH = 15000;
+const MAX_RESUME_LENGTH = 50000;
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -179,19 +183,63 @@ serve(async (req) => {
       );
     }
 
+    // Validate input lengths
+    if (jobDescription.length > MAX_JOB_DESCRIPTION_LENGTH) {
+      return new Response(
+        JSON.stringify({ error: `Job description too long. Maximum ${MAX_JOB_DESCRIPTION_LENGTH} characters allowed.` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (resumeContent.length > MAX_RESUME_LENGTH) {
+      return new Response(
+        JSON.stringify({ error: `Resume too long. Maximum ${MAX_RESUME_LENGTH} characters allowed.` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Get user ID from auth header
+    const authHeader = req.headers.get("Authorization");
+    let userId: string | null = null;
+
+    if (authHeader) {
+      try {
+        const token = authHeader.replace("Bearer ", "");
+        const { data: { user } } = await supabase.auth.getUser(token);
+        userId = user?.id || null;
+      } catch (e) {
+        console.error("Failed to get user from token:", e);
+      }
+    }
+
+    // Check rate limit if user is authenticated
+    if (userId) {
+      const rateLimitResult = await checkRateLimit(supabase, userId, "generate_interview_prep");
+      
+      if (!rateLimitResult.allowed) {
+        return createRateLimitResponse(rateLimitResult, corsHeaders);
+      }
+
+      // Log usage
+      await logUsage(supabase, userId, "generate_interview_prep", {
+        company,
+        jobTitle,
+        sectionToRegenerate: sectionToRegenerate || null,
+      });
+    }
 
     // Fetch custom prompts from admin_settings
     let customSystemPrompt: string | null = null;
     let customUserPromptTemplate: string | null = null;
 
     try {
-      const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
-      const supabase = createClient(supabaseUrl, supabaseKey);
       
       const { data: promptSettings } = await supabase
         .from("admin_settings")
