@@ -13,6 +13,7 @@ interface TrackPromptOptions {
   userFeedback?: string;
   selectedTips?: string[];
   injectedPrompt?: string;
+  promptVersionId?: string | null;
   metadata?: Record<string, any>;
 }
 
@@ -42,7 +43,24 @@ export function usePromptTelemetry() {
     }
 
     try {
-      const { data, error } = await supabase
+      // Get current prompt version if not provided
+      let versionId = options.promptVersionId;
+      if (!versionId) {
+        const settingKey = options.documentType === "cover_letter" 
+          ? "ai_cover_letter_system_prompt" 
+          : "ai_interview_prep_system_prompt";
+        
+        const { data: currentVersion } = await supabase
+          .from("ai_prompt_versions")
+          .select("id")
+          .eq("setting_key", settingKey)
+          .eq("is_current", true)
+          .maybeSingle();
+        
+        versionId = currentVersion?.id || null;
+      }
+
+      const { data, error } = await (supabase as any)
         .from("prompt_telemetry")
         .insert({
           user_id: user.id,
@@ -53,6 +71,7 @@ export function usePromptTelemetry() {
           user_feedback: options.userFeedback || null,
           selected_tips: options.selectedTips || null,
           injected_prompt: options.injectedPrompt || null,
+          prompt_version_id: versionId,
           prompt_metadata: options.metadata || {},
         })
         .select("id")
@@ -124,7 +143,7 @@ export function usePromptTelemetry() {
     if (!user?.id) return false;
 
     try {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from("prompt_telemetry")
         .update({ response_quality_rating: rating })
         .eq("id", telemetryId)
@@ -151,7 +170,7 @@ export function usePromptTelemetry() {
     if (!user?.id) return [];
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("prompt_telemetry")
         .select("*")
         .eq("application_id", applicationId)

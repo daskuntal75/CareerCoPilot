@@ -43,32 +43,44 @@ export type Database = {
       }
       ai_prompt_versions: {
         Row: {
+          avg_quality_rating: number | null
           created_at: string
           created_by: string | null
           id: string
           is_current: boolean | null
+          negative_ratings: number | null
+          positive_ratings: number | null
           setting_key: string
           setting_value: Json
+          total_uses: number | null
           version_label: string | null
           version_number: number
         }
         Insert: {
+          avg_quality_rating?: number | null
           created_at?: string
           created_by?: string | null
           id?: string
           is_current?: boolean | null
+          negative_ratings?: number | null
+          positive_ratings?: number | null
           setting_key: string
           setting_value?: Json
+          total_uses?: number | null
           version_label?: string | null
           version_number?: number
         }
         Update: {
+          avg_quality_rating?: number | null
           created_at?: string
           created_by?: string | null
           id?: string
           is_current?: boolean | null
+          negative_ratings?: number | null
+          positive_ratings?: number | null
           setting_key?: string
           setting_value?: Json
+          total_uses?: number | null
           version_label?: string | null
           version_number?: number
         }
@@ -473,6 +485,7 @@ export type Database = {
           id: string
           injected_prompt: string | null
           prompt_metadata: Json | null
+          prompt_version_id: string | null
           response_quality_rating: number | null
           section: string | null
           selected_tips: string[] | null
@@ -487,6 +500,7 @@ export type Database = {
           id?: string
           injected_prompt?: string | null
           prompt_metadata?: Json | null
+          prompt_version_id?: string | null
           response_quality_rating?: number | null
           section?: string | null
           selected_tips?: string[] | null
@@ -501,6 +515,7 @@ export type Database = {
           id?: string
           injected_prompt?: string | null
           prompt_metadata?: Json | null
+          prompt_version_id?: string | null
           response_quality_rating?: number | null
           section?: string | null
           selected_tips?: string[] | null
@@ -513,6 +528,13 @@ export type Database = {
             columns: ["application_id"]
             isOneToOne: false
             referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "prompt_telemetry_prompt_version_id_fkey"
+            columns: ["prompt_version_id"]
+            isOneToOne: false
+            referencedRelation: "ai_prompt_versions"
             referencedColumns: ["id"]
           },
         ]
