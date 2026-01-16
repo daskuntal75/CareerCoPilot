@@ -476,6 +476,62 @@ export type Database = {
         }
         Relationships: []
       }
+      prompt_satisfaction_alerts: {
+        Row: {
+          alert_type: string
+          avg_rating: number
+          created_at: string
+          id: string
+          prompt_version_id: string | null
+          resolution_notes: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          setting_key: string
+          status: string
+          threshold: number
+          total_ratings: number
+          updated_at: string
+        }
+        Insert: {
+          alert_type?: string
+          avg_rating: number
+          created_at?: string
+          id?: string
+          prompt_version_id?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          setting_key: string
+          status?: string
+          threshold?: number
+          total_ratings: number
+          updated_at?: string
+        }
+        Update: {
+          alert_type?: string
+          avg_rating?: number
+          created_at?: string
+          id?: string
+          prompt_version_id?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          setting_key?: string
+          status?: string
+          threshold?: number
+          total_ratings?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompt_satisfaction_alerts_prompt_version_id_fkey"
+            columns: ["prompt_version_id"]
+            isOneToOne: false
+            referencedRelation: "ai_prompt_versions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       prompt_telemetry: {
         Row: {
           action_type: string
