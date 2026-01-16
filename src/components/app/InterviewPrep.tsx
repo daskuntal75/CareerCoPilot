@@ -18,6 +18,7 @@ import ExportPreviewModal from "./ExportPreviewModal";
 import VersionHistoryPanel from "./VersionHistoryPanel";
 import { useDocumentVersions, DocumentVersion } from "@/hooks/useDocumentVersions";
 import { usePromptTelemetry } from "@/hooks/usePromptTelemetry";
+import { AIQualityRating } from "./AIQualityRating";
 import {
   Dialog,
   DialogContent,
@@ -112,6 +113,7 @@ interface InterviewPrepProps {
   onGoToCoverLetter?: () => void;
   applicationId?: string | null;
   onDataChange?: (data: InterviewPrepData) => void;
+  telemetryId?: string | null;
 }
 
 const categoryConfig: Record<string, { label: string; color: string }> = {
@@ -270,6 +272,7 @@ const InterviewPrep = ({
   onGoToCoverLetter,
   applicationId,
   onDataChange,
+  telemetryId,
 }: InterviewPrepProps) => {
   const [activeTab, setActiveTab] = useState<"questions" | "research" | "strategy">("questions");
   const [showPracticeMode, setShowPracticeMode] = useState(false);
@@ -280,6 +283,7 @@ const InterviewPrep = ({
   const [selectedTips, setSelectedTips] = useState<string[]>([]);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [hasRated, setHasRated] = useState(false);
 
   // Version history hook
   const {
@@ -731,6 +735,17 @@ const InterviewPrep = ({
             )}
           </div>
         </div>
+        
+        {/* Quality Rating Widget */}
+        {telemetryId && !hasRated && (
+          <div className="mt-4">
+            <AIQualityRating 
+              telemetryId={telemetryId} 
+              documentType="interview_prep"
+              onRatingSubmitted={() => setHasRated(true)}
+            />
+          </div>
+        )}
       </motion.div>
 
       {/* Version History Panel */}
