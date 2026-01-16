@@ -1,4 +1,4 @@
-# Welcome to Career Pilot Project
+# Welcome to your Lovable project
 
 ## Project info
 

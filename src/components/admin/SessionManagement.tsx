@@ -39,7 +39,7 @@ interface ActiveUser {
   full_name: string | null;
   last_sign_in: string | null;
   created_at: string;
-  is_admin: boolean; // Derived from user_roles table
+  is_admin: boolean;
   last_activity: string | null;
   ip_address: string | null;
   user_agent: string | null;
@@ -70,18 +70,10 @@ const SessionManagement = ({ refreshTrigger }: SessionManagementProps) => {
       // Get profiles with recent login activity
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("user_id, full_name, created_at")
+        .select("user_id, full_name, is_admin, created_at")
         .order("created_at", { ascending: false });
 
       if (profilesError) throw profilesError;
-
-      // Get admin user IDs from user_roles table
-      const { data: adminRoles } = await supabase
-        .from("user_roles")
-        .select("user_id")
-        .eq("role", "admin");
-      
-      const adminUserIds = new Set(adminRoles?.map(r => r.user_id) || []);
 
       // Get recent login events from audit log
       const { data: loginEvents, error: loginError } = await supabase
@@ -124,7 +116,7 @@ const SessionManagement = ({ refreshTrigger }: SessionManagementProps) => {
           full_name: profile.full_name,
           last_sign_in: activity?.last_activity || null,
           created_at: profile.created_at,
-          is_admin: adminUserIds.has(profile.user_id),
+          is_admin: profile.is_admin || false,
           last_activity: activity?.last_activity || null,
           ip_address: activity?.ip_address || null,
           user_agent: activity?.user_agent || null,

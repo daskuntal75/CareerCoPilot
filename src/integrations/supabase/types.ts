@@ -387,6 +387,7 @@ export type Database = {
           full_name: string | null
           id: string
           interview_reminder_days: number | null
+          is_admin: boolean | null
           is_early_adopter: boolean | null
           last_name: string | null
           purpose: string | null
@@ -404,6 +405,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           interview_reminder_days?: number | null
+          is_admin?: boolean | null
           is_early_adopter?: boolean | null
           last_name?: string | null
           purpose?: string | null
@@ -421,6 +423,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           interview_reminder_days?: number | null
+          is_admin?: boolean | null
           is_early_adopter?: boolean | null
           last_name?: string | null
           purpose?: string | null
