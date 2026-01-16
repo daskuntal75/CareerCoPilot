@@ -760,6 +760,33 @@ export type Database = {
         }
         Relationships: []
       }
+      usage_logs: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          ip_address: string | null
+          metadata: Json | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       usage_tracking: {
         Row: {
           created_at: string
@@ -945,6 +972,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_hourly_rate_limit: {
+        Args: { p_action?: string; p_max_requests?: number; p_user_id: string }
+        Returns: {
+          allowed: boolean
+          current_count: number
+          remaining: number
+          reset_at: string
+        }[]
+      }
       get_admin_application_stats: {
         Args: { days_back?: number }
         Returns: {
@@ -1014,6 +1050,15 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      log_ai_usage: {
+        Args: {
+          p_action: string
+          p_ip_address?: string
+          p_metadata?: Json
+          p_user_id: string
+        }
+        Returns: string
       }
     }
     Enums: {
