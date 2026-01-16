@@ -67,13 +67,31 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Fetch custom prompts from admin_settings
+    const { data: promptSettings } = await supabase
+      .from("admin_settings")
+      .select("setting_key, setting_value")
+      .in("setting_key", ["ai_cover_letter_system_prompt", "ai_cover_letter_user_prompt"]);
+
+    let customSystemPrompt: string | null = null;
+    let customUserPromptTemplate: string | null = null;
+
+    promptSettings?.forEach((setting: { setting_key: string; setting_value: { prompt?: string } }) => {
+      if (setting.setting_key === "ai_cover_letter_system_prompt" && setting.setting_value?.prompt) {
+        customSystemPrompt = setting.setting_value.prompt;
+      }
+      if (setting.setting_key === "ai_cover_letter_user_prompt" && setting.setting_value?.prompt) {
+        customUserPromptTemplate = setting.setting_value.prompt;
+      }
+    });
+
     // Security: Sanitize inputs
     const { sanitized: sanitizedJD, threats, hasMaliciousContent } = sanitizeInput(jobDescription);
     
     if (hasMaliciousContent && userId) {
       await logSecurityThreat(supabase, userId, 'cover_letter_injection', {
         hash: hashString(jobDescription),
-        threats: threats.map(t => t.type),
+        threats: threats.map((t: { type: string }) => t.type),
       });
     }
 
@@ -164,27 +182,13 @@ COVER LETTER TEMPLATE (use as style reference):
 ${coverLetterTemplate}
 ` : "";
 
-    const systemPrompt = `You are a senior professional analyzing a job posting against resume materials to create a compelling cover letter with requirements mapping.
+    const systemPrompt = customSystemPrompt || `You are a senior professional analyzing a job posting against resume materials to create a compelling cover letter with requirements mapping.
 
 # TRUTHFULNESS CONSTRAINT
 Do not invent or embellish experience not in the resume. If a requirement has no match, state "No direct match" in the mapping table.`;
 
-    const userPrompt = sectionToRegenerate && sectionToRegenerate !== "full" 
-      ? `<job_posting>${sanitizedJD}</job_posting>
-<job_title>${jobTitle} at ${company}</job_title>
-${verifiedExperience || `<resume>${resumeContent}</resume>`}
-${analysisContext}
-${regenerationContext}
-
-Return ONLY the regenerated section.`
-      : `<job_posting>${sanitizedJD}</job_posting>
-<job_title>${jobTitle} at ${company}</job_title>
-${verifiedExperience || `<resume>${resumeContent}</resume>`}
-${templateContext}
-${analysisContext}
-${regenerationContext}
-
-# TASK
+    // Default user prompt template
+    const defaultUserPromptTemplate = `# TASK
 
 ## Step 1: Extract Top 10 Job Requirements
 Focus on decision-critical requirements (ownership scope, leadership, domain expertise). Exclude generic skills.
@@ -237,6 +241,23 @@ Requirements Met: X out of 10
 Methodology: [Brief explanation of how score was calculated]
 
 ---`;
+
+    const userPrompt = sectionToRegenerate && sectionToRegenerate !== "full" 
+      ? `<job_posting>${sanitizedJD}</job_posting>
+<job_title>${jobTitle} at ${company}</job_title>
+${verifiedExperience || `<resume>${resumeContent}</resume>`}
+${analysisContext}
+${regenerationContext}
+
+Return ONLY the regenerated section.`
+      : `<job_posting>${sanitizedJD}</job_posting>
+<job_title>${jobTitle} at ${company}</job_title>
+${verifiedExperience || `<resume>${resumeContent}</resume>`}
+${templateContext}
+${analysisContext}
+${regenerationContext}
+
+${customUserPromptTemplate || defaultUserPromptTemplate}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

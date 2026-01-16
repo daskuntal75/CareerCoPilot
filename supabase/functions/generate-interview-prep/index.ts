@@ -180,7 +180,35 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const systemPrompt = `You are a senior professional preparing for an interview. Your task is to create comprehensive interview preparation materials.
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // Fetch custom prompts from admin_settings
+    let customSystemPrompt: string | null = null;
+    let customUserPromptTemplate: string | null = null;
+
+    try {
+      const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+      const supabase = createClient(supabaseUrl, supabaseKey);
+      
+      const { data: promptSettings } = await supabase
+        .from("admin_settings")
+        .select("setting_key, setting_value")
+        .in("setting_key", ["ai_interview_prep_system_prompt", "ai_interview_prep_user_prompt"]);
+
+      promptSettings?.forEach((setting: { setting_key: string; setting_value: { prompt?: string } }) => {
+        if (setting.setting_key === "ai_interview_prep_system_prompt" && setting.setting_value?.prompt) {
+          customSystemPrompt = setting.setting_value.prompt;
+        }
+        if (setting.setting_key === "ai_interview_prep_user_prompt" && setting.setting_value?.prompt) {
+          customUserPromptTemplate = setting.setting_value.prompt;
+        }
+      });
+    } catch (err) {
+      console.error("Failed to fetch custom prompts:", err);
+    }
+
+    const defaultSystemPrompt = `You are a senior professional preparing for an interview. Your task is to create comprehensive interview preparation materials.
 
 # CRITICAL RULES
 - Base ALL responses ONLY on actual experiences from the provided resume
@@ -256,6 +284,8 @@ Return a JSON object with this structure:
 
 Generate 10-12 interview questions across different interviewer types.
 Return ONLY valid JSON, no markdown.`;
+
+    const systemPrompt = customSystemPrompt || defaultSystemPrompt;
 
     const analysisContext = analysisData ? `
 ANALYSIS:
