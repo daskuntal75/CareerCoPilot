@@ -5,7 +5,7 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
-import { User, Bell, Mail, Clock, Save, Check, Lock, Shield, Fingerprint, ShieldCheck, CreditCard, Monitor, Zap } from "lucide-react";
+import { User, Bell, Mail, Clock, Save, Check, Lock, Shield, Fingerprint, ShieldCheck, CreditCard, Monitor, Zap, Key } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,7 @@ import SecurityNotificationsPreferences from "@/components/settings/SecurityNoti
 import TrustedDevicesManagement from "@/components/settings/TrustedDevicesManagement";
 import SessionTimeoutSettings from "@/components/settings/SessionTimeoutSettings";
 import { BackupCodesSetup } from "@/components/auth/BackupCodesSetup";
+import { PasskeyLogin } from "@/components/auth/PasskeyLogin";
 
 interface ProfileSettings {
   full_name: string | null;
@@ -412,6 +413,20 @@ const Settings = () => {
                     </CardHeader>
                     <CardContent>
                       <BiometricLogin mode="setup" />
+                    </CardContent>
+                  </Card>
+
+                  {/* Passkey Management */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Key className="w-5 h-5 text-accent" />
+                        Passkeys
+                      </CardTitle>
+                      <CardDescription>Passwordless sign-in with your device's built-in security</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <PasskeyLogin mode="setup" />
                     </CardContent>
                   </Card>
 
