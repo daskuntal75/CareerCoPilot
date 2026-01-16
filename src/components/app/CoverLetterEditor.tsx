@@ -32,6 +32,9 @@ import ExportPreviewModal from "./ExportPreviewModal";
 import VersionHistoryPanel from "./VersionHistoryPanel";
 import { useDocumentVersions, DocumentVersion } from "@/hooks/useDocumentVersions";
 import { usePromptTelemetry } from "@/hooks/usePromptTelemetry";
+import { HourlyQuotaIndicator } from "./HourlyQuotaIndicator";
+import { useHourlyQuota } from "@/hooks/useHourlyQuota";
+import { AIQualityRating } from "./AIQualityRating";
 
 interface CoverLetterEditorProps {
   content: string;
@@ -44,6 +47,7 @@ interface CoverLetterEditorProps {
   onGoToInterviewPrep?: () => void;
   hasInterviewPrep?: boolean;
   applicationId?: string | null;
+  telemetryId?: string | null;
 }
 
 const regenerationSections = [
@@ -77,6 +81,7 @@ const CoverLetterEditor = ({
   onGoToInterviewPrep,
   hasInterviewPrep,
   applicationId,
+  telemetryId,
 }: CoverLetterEditorProps) => {
   const [copied, setCopied] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -86,6 +91,10 @@ const CoverLetterEditor = ({
   const [selectedTips, setSelectedTips] = useState<string[]>([]);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [hasRated, setHasRated] = useState(false);
+
+  // Hourly quota hook
+  const { canGenerate: canGenerateHourly, isExhausted: isHourlyExhausted } = useHourlyQuota();
 
   // Version history hook
   const {
@@ -595,16 +604,32 @@ const CoverLetterEditor = ({
               </div>
             )}
 
-            {onGenerateInterviewPrep && !hasInterviewPrep && (
+            {/* Quality Rating Widget */}
+            {telemetryId && !hasRated && (
               <div className="pt-6 border-t border-border">
-                <h4 className="text-sm font-medium text-foreground mb-3">Next Step</h4>
+                <AIQualityRating 
+                  telemetryId={telemetryId} 
+                  documentType="cover_letter"
+                  onRatingSubmitted={() => setHasRated(true)}
+                />
+              </div>
+            )}
+
+            {onGenerateInterviewPrep && !hasInterviewPrep && (
+              <div className="pt-6 border-t border-border space-y-3">
+                <h4 className="text-sm font-medium text-foreground">Next Step</h4>
+                
+                {/* Hourly Quota Indicator */}
+                <HourlyQuotaIndicator showUpgradeLink={false} />
+                
                 <Button 
                   variant="hero" 
                   className="w-full"
                   onClick={onGenerateInterviewPrep}
+                  disabled={isHourlyExhausted}
                 >
                   <MessageSquare className="w-4 h-4" />
-                  Prepare for Interview
+                  {isHourlyExhausted ? "Hourly Limit Reached" : "Prepare for Interview"}
                 </Button>
               </div>
             )}
