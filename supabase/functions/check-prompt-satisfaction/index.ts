@@ -30,18 +30,18 @@ serve(async (req) => {
 
   try {
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-    if (!RESEND_API_KEY) {
-      console.error("RESEND_API_KEY not configured");
-      return new Response(
-        JSON.stringify({ error: "Email service not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const resend = new Resend(RESEND_API_KEY);
+    
+    // Parse request body for optional parameters
+    let skipEmail = false;
+    try {
+      const body = await req.json();
+      skipEmail = body?.skipEmail === true;
+    } catch {
+      // No body or invalid JSON, use defaults
+    }
 
     // Get all active prompt versions with their stats
     const { data: promptVersions, error: versionsError } = await supabase
@@ -54,10 +54,29 @@ serve(async (req) => {
     }
 
     const lowSatisfactionVersions: PromptVersionStats[] = [];
+    const allVersionsStatus: Array<{
+      setting_key: string;
+      avg_rating: number | null;
+      total_ratings: number;
+      status: string;
+    }> = [];
 
     for (const version of promptVersions || []) {
       const totalRatings = (version.positive_ratings || 0) + (version.negative_ratings || 0);
-      
+      const status = 
+        totalRatings < MIN_RATINGS_FOR_ALERT 
+          ? "insufficient_data"
+          : version.avg_quality_rating !== null && version.avg_quality_rating < SATISFACTION_THRESHOLD
+            ? "below_threshold"
+            : "ok";
+
+      allVersionsStatus.push({
+        setting_key: version.setting_key,
+        avg_rating: version.avg_quality_rating,
+        total_ratings: totalRatings,
+        status,
+      });
+
       // Check if this version has enough ratings and is below threshold
       if (
         totalRatings >= MIN_RATINGS_FOR_ALERT &&
@@ -70,10 +89,66 @@ serve(async (req) => {
 
     if (lowSatisfactionVersions.length === 0) {
       return new Response(
-        JSON.stringify({ message: "All prompt versions are performing well", checked: promptVersions?.length || 0 }),
+        JSON.stringify({ 
+          message: "All prompt versions are performing well", 
+          checked: promptVersions?.length || 0,
+          versions: allVersionsStatus,
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Check for existing open alerts to avoid duplicates
+    const { data: existingAlerts } = await supabase
+      .from("prompt_satisfaction_alerts")
+      .select("prompt_version_id")
+      .eq("status", "open");
+
+    const existingAlertVersionIds = new Set(
+      (existingAlerts || []).map((a: any) => a.prompt_version_id)
+    );
+
+    // Create alerts for new issues
+    const newAlerts = [];
+    for (const version of lowSatisfactionVersions) {
+      if (!existingAlertVersionIds.has(version.id)) {
+        const totalRatings = (version.positive_ratings || 0) + (version.negative_ratings || 0);
+        newAlerts.push({
+          prompt_version_id: version.id,
+          setting_key: version.setting_key,
+          avg_rating: version.avg_quality_rating,
+          total_ratings: totalRatings,
+          threshold: SATISFACTION_THRESHOLD,
+          alert_type: "low_satisfaction",
+          status: "open",
+        });
+      }
+    }
+
+    if (newAlerts.length > 0) {
+      const { error: insertError } = await supabase
+        .from("prompt_satisfaction_alerts")
+        .insert(newAlerts);
+
+      if (insertError) {
+        console.error("Failed to insert alerts:", insertError);
+      }
+    }
+
+    // Skip email if requested or no API key
+    if (skipEmail || !RESEND_API_KEY) {
+      return new Response(
+        JSON.stringify({ 
+          message: skipEmail ? "Check completed (email skipped)" : "Check completed (no email configured)",
+          alertedVersions: lowSatisfactionVersions.length,
+          newAlertsCreated: newAlerts.length,
+          versions: allVersionsStatus,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const resend = new Resend(RESEND_API_KEY);
 
     // Get admin users to notify
     const { data: adminUsers, error: adminError } = await supabase
@@ -99,7 +174,11 @@ serve(async (req) => {
     if (adminEmails.length === 0) {
       console.warn("No admin emails found for notification");
       return new Response(
-        JSON.stringify({ message: "Low satisfaction detected but no admins to notify", versions: lowSatisfactionVersions }),
+        JSON.stringify({ 
+          message: "Low satisfaction detected but no admins to notify", 
+          versions: allVersionsStatus,
+          newAlertsCreated: newAlerts.length,
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -123,7 +202,11 @@ serve(async (req) => {
 
     if (versionsToAlert.length === 0) {
       return new Response(
-        JSON.stringify({ message: "Low satisfaction detected but already alerted within cooldown period" }),
+        JSON.stringify({ 
+          message: "Low satisfaction detected but already alerted within cooldown period",
+          versions: allVersionsStatus,
+          newAlertsCreated: newAlerts.length,
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -243,6 +326,8 @@ serve(async (req) => {
         message: "Alert sent successfully",
         alertedVersions: versionsToAlert.length,
         adminNotified: adminEmails.length,
+        newAlertsCreated: newAlerts.length,
+        versions: allVersionsStatus,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

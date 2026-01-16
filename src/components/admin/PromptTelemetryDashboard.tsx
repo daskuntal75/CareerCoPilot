@@ -33,7 +33,9 @@ import {
   Clock,
   Activity,
   Filter,
+  Bell,
 } from "lucide-react";
+import PromptSatisfactionAlerts from "./PromptSatisfactionAlerts";
 
 interface TelemetryRecord {
   id: string;
@@ -80,6 +82,8 @@ const PromptTelemetryDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [timeRange, setTimeRange] = useState<"7d" | "30d" | "90d">("30d");
+  const [isCheckingManually, setIsCheckingManually] = useState(false);
+  const [manualCheckResult, setManualCheckResult] = useState<any>(null);
 
   useEffect(() => {
     fetchTelemetry();
@@ -173,6 +177,31 @@ const PromptTelemetryDashboard = () => {
       actionBreakdown,
       dailyTrends,
     });
+  };
+
+  const handleManualCheck = async () => {
+    setIsCheckingManually(true);
+    setManualCheckResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("check-prompt-satisfaction", {
+        body: { skipEmail: true },
+      });
+
+      if (error) throw error;
+
+      setManualCheckResult(data);
+      
+      if (data?.alertedVersions > 0) {
+        toast.warning(`Found ${data.alertedVersions} prompt(s) below satisfaction threshold`);
+      } else {
+        toast.success("All prompt versions are performing well!");
+      }
+    } catch (error) {
+      console.error("Error running manual check:", error);
+      toast.error("Failed to run satisfaction check");
+    } finally {
+      setIsCheckingManually(false);
+    }
   };
 
   const formatDate = (dateStr: string) => {
@@ -303,13 +332,64 @@ const PromptTelemetryDashboard = () => {
       </div>
 
       {/* Main Content Tabs */}
-      <Tabs defaultValue="trends" className="space-y-4">
+      <Tabs defaultValue="alerts" className="space-y-4">
         <TabsList>
+          <TabsTrigger value="alerts" className="flex items-center gap-1">
+            <Bell className="w-4 h-4" />
+            Alerts
+          </TabsTrigger>
           <TabsTrigger value="trends">Daily Trends</TabsTrigger>
           <TabsTrigger value="tips">Popular Tips</TabsTrigger>
           <TabsTrigger value="actions">Action Breakdown</TabsTrigger>
           <TabsTrigger value="recent">Recent Activity</TabsTrigger>
         </TabsList>
+
+        {/* Satisfaction Alerts */}
+        <TabsContent value="alerts">
+          <Card>
+            <CardHeader>
+              <CardTitle>Prompt Satisfaction Monitoring</CardTitle>
+              <CardDescription>
+                Monitor and manage AI prompt quality alerts
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PromptSatisfactionAlerts 
+                onManualCheck={handleManualCheck}
+                isCheckingManually={isCheckingManually}
+              />
+              
+              {manualCheckResult && (
+                <div className="mt-6 p-4 rounded-lg bg-muted">
+                  <h4 className="font-medium mb-2">Last Manual Check Results</h4>
+                  <div className="text-sm space-y-1 text-muted-foreground">
+                    <p>Checked: {manualCheckResult.checked || manualCheckResult.versions?.length || 0} prompt versions</p>
+                    <p>Issues found: {manualCheckResult.alertedVersions || 0}</p>
+                    <p>New alerts created: {manualCheckResult.newAlertsCreated || 0}</p>
+                  </div>
+                  {manualCheckResult.versions && (
+                    <div className="mt-3 space-y-1">
+                      {manualCheckResult.versions.map((v: any, i: number) => (
+                        <div key={i} className="flex items-center gap-2 text-sm">
+                          <Badge 
+                            variant={v.status === "ok" ? "outline" : v.status === "below_threshold" ? "destructive" : "secondary"}
+                            className="text-xs"
+                          >
+                            {v.status === "ok" ? "✓" : v.status === "below_threshold" ? "⚠" : "?"}
+                          </Badge>
+                          <span className="font-mono text-xs">{v.setting_key}</span>
+                          <span className="text-muted-foreground">
+                            {v.avg_rating !== null ? `${v.avg_rating.toFixed(2)}/5` : "No ratings"} ({v.total_ratings} ratings)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* Daily Trends */}
         <TabsContent value="trends">
