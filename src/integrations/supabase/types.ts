@@ -184,7 +184,7 @@ export type Database = {
           id: string
           job_title: string | null
           rating: number | null
-          user_id: string | null
+          user_id: string
           would_recommend: string | null
         }
         Insert: {
@@ -197,7 +197,7 @@ export type Database = {
           id?: string
           job_title?: string | null
           rating?: number | null
-          user_id?: string | null
+          user_id: string
           would_recommend?: string | null
         }
         Update: {
@@ -210,7 +210,7 @@ export type Database = {
           id?: string
           job_title?: string | null
           rating?: number | null
-          user_id?: string | null
+          user_id?: string
           would_recommend?: string | null
         }
         Relationships: []
@@ -387,7 +387,6 @@ export type Database = {
           full_name: string | null
           id: string
           interview_reminder_days: number | null
-          is_admin: boolean | null
           is_early_adopter: boolean | null
           last_name: string | null
           purpose: string | null
@@ -405,7 +404,6 @@ export type Database = {
           full_name?: string | null
           id?: string
           interview_reminder_days?: number | null
-          is_admin?: boolean | null
           is_early_adopter?: boolean | null
           last_name?: string | null
           purpose?: string | null
@@ -423,7 +421,6 @@ export type Database = {
           full_name?: string | null
           id?: string
           interview_reminder_days?: number | null
-          is_admin?: boolean | null
           is_early_adopter?: boolean | null
           last_name?: string | null
           purpose?: string | null
@@ -712,6 +709,72 @@ export type Database = {
           updated_at?: string | null
           uploaded_at?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      user_preferences: {
+        Row: {
+          auto_save_enabled: boolean | null
+          created_at: string
+          custom_settings: Json | null
+          default_resume_type: string | null
+          email_notifications: boolean | null
+          id: string
+          keyboard_shortcuts_enabled: boolean | null
+          language: string | null
+          login_alerts: boolean | null
+          marketing_emails: boolean | null
+          notifications_enabled: boolean | null
+          push_notifications: boolean | null
+          session_timeout_minutes: number | null
+          theme: string | null
+          timezone: string | null
+          two_factor_enabled: boolean | null
+          updated_at: string
+          user_id: string
+          weekly_digest: boolean | null
+        }
+        Insert: {
+          auto_save_enabled?: boolean | null
+          created_at?: string
+          custom_settings?: Json | null
+          default_resume_type?: string | null
+          email_notifications?: boolean | null
+          id?: string
+          keyboard_shortcuts_enabled?: boolean | null
+          language?: string | null
+          login_alerts?: boolean | null
+          marketing_emails?: boolean | null
+          notifications_enabled?: boolean | null
+          push_notifications?: boolean | null
+          session_timeout_minutes?: number | null
+          theme?: string | null
+          timezone?: string | null
+          two_factor_enabled?: boolean | null
+          updated_at?: string
+          user_id: string
+          weekly_digest?: boolean | null
+        }
+        Update: {
+          auto_save_enabled?: boolean | null
+          created_at?: string
+          custom_settings?: Json | null
+          default_resume_type?: string | null
+          email_notifications?: boolean | null
+          id?: string
+          keyboard_shortcuts_enabled?: boolean | null
+          language?: string | null
+          login_alerts?: boolean | null
+          marketing_emails?: boolean | null
+          notifications_enabled?: boolean | null
+          push_notifications?: boolean | null
+          session_timeout_minutes?: number | null
+          theme?: string | null
+          timezone?: string | null
+          two_factor_enabled?: boolean | null
+          updated_at?: string
+          user_id?: string
+          weekly_digest?: boolean | null
         }
         Relationships: []
       }

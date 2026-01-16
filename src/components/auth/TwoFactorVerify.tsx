@@ -5,7 +5,8 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Shield, Loader2, ArrowLeft } from "lucide-react";
+import { Shield, Loader2, ArrowLeft, Key } from "lucide-react";
+import { BackupCodeVerify } from "./BackupCodeVerify";
 
 interface TwoFactorVerifyProps {
   onVerified: () => void;
@@ -18,6 +19,7 @@ export function TwoFactorVerify({ onVerified, onBack }: TwoFactorVerifyProps) {
   const [factorId, setFactorId] = useState<string | null>(null);
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [useBackupCode, setUseBackupCode] = useState(false);
 
   useEffect(() => {
     initiateMfaChallenge();
@@ -83,6 +85,18 @@ export function TwoFactorVerify({ onVerified, onBack }: TwoFactorVerifyProps) {
     );
   }
 
+  // Show backup code verification screen - rendered as conditional content, not early return with hooks
+  const renderBackupCodeVerify = () => (
+    <BackupCodeVerify
+      onVerified={onVerified}
+      onBack={() => setUseBackupCode(false)}
+    />
+  );
+
+  if (useBackupCode) {
+    return renderBackupCodeVerify();
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -125,6 +139,25 @@ export function TwoFactorVerify({ onVerified, onBack }: TwoFactorVerifyProps) {
       >
         {verifying ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
         Verify
+      </Button>
+
+      {/* Backup code option */}
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t border-border" />
+        </div>
+        <div className="relative flex justify-center text-xs uppercase">
+          <span className="bg-card px-2 text-muted-foreground">or</span>
+        </div>
+      </div>
+
+      <Button
+        variant="outline"
+        onClick={() => setUseBackupCode(true)}
+        className="w-full"
+      >
+        <Key className="w-4 h-4 mr-2" />
+        Use a Backup Code
       </Button>
 
       <button
