@@ -23,13 +23,20 @@ import {
   History,
   Clock,
   ChevronDown,
+  
   Eye,
   Tag,
   GitCompare,
   FlaskConical,
   X,
   Check,
-  Pencil
+  Pencil,
+  Download,
+  Upload,
+  BarChart3,
+  ThumbsUp,
+  ThumbsDown,
+  TrendingUp
 } from "lucide-react";
 import {
   AlertDialog,
@@ -75,6 +82,16 @@ interface PromptVersion {
   version_label: string | null;
   created_at: string;
   is_current: boolean;
+  avg_quality_rating?: number | null;
+  total_uses?: number;
+  positive_ratings?: number;
+  negative_ratings?: number;
+}
+
+interface ExportedConfig {
+  exportedAt: string;
+  version: string;
+  prompts: PromptSettings;
 }
 
 interface DiffLine {
@@ -232,6 +249,15 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
   const [abTestResultA, setAbTestResultA] = useState<string | null>(null);
   const [abTestResultB, setAbTestResultB] = useState<string | null>(null);
   const [abTestRunning, setAbTestRunning] = useState(false);
+  
+  // Export/Import state
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importPreview, setImportPreview] = useState<ExportedConfig | null>(null);
+  
+  // Analytics state
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [versionAnalytics, setVersionAnalytics] = useState<PromptVersion[]>([]);
 
   useEffect(() => {
     fetchPrompts();
@@ -295,7 +321,7 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
 
       if (error) throw error;
       
-      const mappedVersions: PromptVersion[] = (data || []).map((item) => ({
+      const mappedVersions: PromptVersion[] = (data || []).map((item: any) => ({
         id: item.id,
         setting_key: item.setting_key,
         setting_value: item.setting_value as { prompt?: string },
@@ -303,6 +329,10 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
         version_label: item.version_label,
         created_at: item.created_at,
         is_current: item.is_current ?? false,
+        avg_quality_rating: item.avg_quality_rating,
+        total_uses: item.total_uses ?? 0,
+        positive_ratings: item.positive_ratings ?? 0,
+        negative_ratings: item.negative_ratings ?? 0,
       }));
       
       setVersions(mappedVersions);
@@ -312,6 +342,95 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
     } finally {
       setLoadingVersions(false);
     }
+  };
+
+  // Fetch version analytics for all prompt types
+  const fetchVersionAnalytics = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("ai_prompt_versions")
+        .select("*")
+        .gt("total_uses", 0)
+        .order("total_uses", { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+      
+      const mappedVersions: PromptVersion[] = (data || []).map((item: any) => ({
+        id: item.id,
+        setting_key: item.setting_key,
+        setting_value: item.setting_value as { prompt?: string },
+        version_number: item.version_number,
+        version_label: item.version_label,
+        created_at: item.created_at,
+        is_current: item.is_current ?? false,
+        avg_quality_rating: item.avg_quality_rating,
+        total_uses: item.total_uses ?? 0,
+        positive_ratings: item.positive_ratings ?? 0,
+        negative_ratings: item.negative_ratings ?? 0,
+      }));
+      
+      setVersionAnalytics(mappedVersions);
+    } catch (error) {
+      console.error("Error fetching version analytics:", error);
+    }
+  };
+
+  // Export configuration to JSON
+  const exportConfig = () => {
+    const config: ExportedConfig = {
+      exportedAt: new Date().toISOString(),
+      version: "1.0",
+      prompts: prompts,
+    };
+    
+    const blob = new Blob([JSON.stringify(config, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ai-prompts-config-${format(new Date(), "yyyy-MM-dd-HHmm")}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("Configuration exported successfully");
+  };
+
+  // Handle file selection for import
+  const handleImportFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setImportFile(file);
+    
+    try {
+      const text = await file.text();
+      const config = JSON.parse(text) as ExportedConfig;
+      
+      // Validate the config structure
+      if (!config.prompts || !config.version) {
+        throw new Error("Invalid configuration file format");
+      }
+      
+      setImportPreview(config);
+    } catch (error) {
+      console.error("Error parsing import file:", error);
+      toast.error("Invalid configuration file");
+      setImportFile(null);
+      setImportPreview(null);
+    }
+  };
+
+  // Apply imported configuration
+  const applyImportedConfig = () => {
+    if (!importPreview) return;
+    
+    setPrompts(importPreview.prompts);
+    setHasChanges(true);
+    setImportDialogOpen(false);
+    setImportFile(null);
+    setImportPreview(null);
+    toast.success("Configuration imported. Don't forget to save!");
   };
 
   const handlePromptChange = (key: keyof PromptSettings, value: string) => {
@@ -637,6 +756,25 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
                   Discard
                 </Button>
               )}
+              <Button variant="outline" size="sm" onClick={exportConfig}>
+                <Download className="w-4 h-4 mr-2" />
+                Export
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setImportDialogOpen(true)}>
+                <Upload className="w-4 h-4 mr-2" />
+                Import
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  fetchVersionAnalytics();
+                  setAnalyticsOpen(true);
+                }}
+              >
+                <BarChart3 className="w-4 h-4 mr-2" />
+                Analytics
+              </Button>
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -1223,6 +1361,247 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
               )}
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Configuration Dialog */}
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="w-5 h-5" />
+              Import AI Prompt Configuration
+            </DialogTitle>
+            <DialogDescription>
+              Upload a previously exported JSON configuration file to restore prompts.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="border-2 border-dashed border-border rounded-lg p-6 text-center">
+              <Input
+                type="file"
+                accept=".json"
+                onChange={handleImportFileSelect}
+                className="hidden"
+                id="import-file"
+              />
+              <label 
+                htmlFor="import-file" 
+                className="cursor-pointer flex flex-col items-center gap-2"
+              >
+                <Upload className="w-8 h-8 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">
+                  Click to select a JSON configuration file
+                </span>
+                {importFile && (
+                  <Badge variant="secondary" className="mt-2">
+                    {importFile.name}
+                  </Badge>
+                )}
+              </label>
+            </div>
+            
+            {importPreview && (
+              <div className="space-y-3">
+                <div className="p-3 rounded-lg bg-muted/50">
+                  <div className="flex items-center justify-between text-sm mb-2">
+                    <span className="font-medium">Configuration Preview</span>
+                    <Badge variant="outline">v{importPreview.version}</Badge>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Exported: {format(new Date(importPreview.exportedAt), "PPpp")}
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2 border rounded">
+                    <span className="font-medium">Cover Letter System:</span>
+                    <span className="ml-1 text-muted-foreground">
+                      {importPreview.prompts.coverLetterSystemPrompt.length} chars
+                    </span>
+                  </div>
+                  <div className="p-2 border rounded">
+                    <span className="font-medium">Cover Letter User:</span>
+                    <span className="ml-1 text-muted-foreground">
+                      {importPreview.prompts.coverLetterUserPrompt.length} chars
+                    </span>
+                  </div>
+                  <div className="p-2 border rounded">
+                    <span className="font-medium">Interview System:</span>
+                    <span className="ml-1 text-muted-foreground">
+                      {importPreview.prompts.interviewPrepSystemPrompt.length} chars
+                    </span>
+                  </div>
+                  <div className="p-2 border rounded">
+                    <span className="font-medium">Interview User:</span>
+                    <span className="ml-1 text-muted-foreground">
+                      {importPreview.prompts.interviewPrepUserPrompt.length} chars
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2 p-2 rounded bg-warning/10 text-warning text-sm">
+                  <AlertCircle className="w-4 h-4" />
+                  Importing will overwrite your current prompts. You'll need to save after importing.
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <div className="flex justify-end gap-2 pt-4">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setImportDialogOpen(false);
+                setImportFile(null);
+                setImportPreview(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={applyImportedConfig}
+              disabled={!importPreview}
+              className="bg-accent text-accent-foreground hover:bg-accent/90"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Apply Configuration
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Version Analytics Dialog */}
+      <Dialog open={analyticsOpen} onOpenChange={setAnalyticsOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BarChart3 className="w-5 h-5" />
+              Prompt Version Performance Analytics
+            </DialogTitle>
+            <DialogDescription>
+              Track which prompt versions produce higher user satisfaction ratings
+            </DialogDescription>
+          </DialogHeader>
+          
+          <ScrollArea className="h-[60vh]">
+            {versionAnalytics.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                <p>No analytics data available yet.</p>
+                <p className="text-sm">Analytics are collected when users rate generated content.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* Summary Cards */}
+                <div className="grid grid-cols-3 gap-4">
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="text-2xl font-bold">
+                        {versionAnalytics.reduce((sum, v) => sum + (v.total_uses || 0), 0)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Total Rated Uses</div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="text-2xl font-bold text-green-500 flex items-center gap-1">
+                        <ThumbsUp className="w-5 h-5" />
+                        {versionAnalytics.reduce((sum, v) => sum + (v.positive_ratings || 0), 0)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Positive Ratings</div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <div className="text-2xl font-bold text-red-500 flex items-center gap-1">
+                        <ThumbsDown className="w-5 h-5" />
+                        {versionAnalytics.reduce((sum, v) => sum + (v.negative_ratings || 0), 0)}
+                      </div>
+                      <div className="text-sm text-muted-foreground">Negative Ratings</div>
+                    </CardContent>
+                  </Card>
+                </div>
+                
+                {/* Version Performance Table */}
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Version Performance Breakdown</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {versionAnalytics.map((version) => {
+                        const satisfactionRate = version.total_uses && version.total_uses > 0
+                          ? ((version.positive_ratings || 0) / version.total_uses * 100).toFixed(1)
+                          : "N/A";
+                        
+                        return (
+                          <div 
+                            key={version.id}
+                            className="p-3 border rounded-lg flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div>
+                                <Badge variant={version.is_current ? "default" : "secondary"}>
+                                  v{version.version_number}
+                                </Badge>
+                                {version.version_label && (
+                                  <Badge variant="outline" className="ml-2">
+                                    {version.version_label}
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                {getPromptLabel(version.setting_key)}
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-6">
+                              <div className="text-center">
+                                <div className="text-sm font-medium">{version.total_uses || 0}</div>
+                                <div className="text-xs text-muted-foreground">Uses</div>
+                              </div>
+                              
+                              <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-1 text-green-500">
+                                  <ThumbsUp className="w-4 h-4" />
+                                  <span className="text-sm font-medium">{version.positive_ratings || 0}</span>
+                                </div>
+                                <div className="flex items-center gap-1 text-red-500">
+                                  <ThumbsDown className="w-4 h-4" />
+                                  <span className="text-sm font-medium">{version.negative_ratings || 0}</span>
+                                </div>
+                              </div>
+                              
+                              <div className="text-center min-w-[80px]">
+                                <div className="flex items-center gap-1 justify-center">
+                                  <TrendingUp className="w-4 h-4 text-accent" />
+                                  <span className="text-sm font-medium">
+                                    {satisfactionRate}%
+                                  </span>
+                                </div>
+                                <div className="text-xs text-muted-foreground">Satisfaction</div>
+                              </div>
+                              
+                              {version.avg_quality_rating && (
+                                <div className="text-center min-w-[60px]">
+                                  <div className="text-sm font-medium">
+                                    {Number(version.avg_quality_rating).toFixed(1)}/5
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">Avg Rating</div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </ScrollArea>
         </DialogContent>
       </Dialog>
     </>

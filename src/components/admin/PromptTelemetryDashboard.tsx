@@ -45,6 +45,7 @@ interface TelemetryRecord {
   injected_prompt: string | null;
   prompt_metadata: unknown;
   response_quality_rating: number | null;
+  prompt_version_id: string | null;
   created_at: string;
 }
 
@@ -91,7 +92,7 @@ const PromptTelemetryDashboard = () => {
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - daysBack);
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("prompt_telemetry")
         .select("*")
         .gte("created_at", startDate.toISOString())
@@ -99,8 +100,8 @@ const PromptTelemetryDashboard = () => {
 
       if (error) throw error;
 
-      setTelemetryData(data || []);
-      calculateSummary(data || []);
+      setTelemetryData((data || []) as TelemetryRecord[]);
+      calculateSummary((data || []) as TelemetryRecord[]);
     } catch (error) {
       console.error("Error fetching telemetry:", error);
       toast.error("Failed to fetch telemetry data");
