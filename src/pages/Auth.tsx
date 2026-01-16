@@ -18,6 +18,7 @@ import { TwoFactorVerify } from "@/components/auth/TwoFactorVerify";
 import { BiometricLogin } from "@/components/auth/BiometricLogin";
 import { EmailLookupForm } from "@/components/auth/EmailLookupForm";
 import { PasswordBreachWarning } from "@/components/auth/PasswordBreachWarning";
+import { NewDeviceVerification } from "@/components/auth/NewDeviceVerification";
 import { supabase } from "@/integrations/supabase/client";
 import { useRateLimiter } from "@/hooks/useRateLimiter";
 import { useDeviceFingerprint } from "@/hooks/useDeviceFingerprint";
@@ -31,7 +32,7 @@ const purposeSchema = z.string().trim().min(10, "Please describe your purpose (m
 const companySchema = z.string().trim().min(1, "Company is required").max(100, "Company name too long");
 const zipCodeSchema = z.string().trim().min(3, "Invalid zip code").max(20, "Zip code too long");
 
-type AuthMode = "login" | "signup" | "forgot-password" | "reset" | "2fa" | "find-email";
+type AuthMode = "login" | "signup" | "forgot-password" | "reset" | "2fa" | "find-email" | "device-verification";
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
@@ -57,13 +58,14 @@ const Auth = () => {
     zipCode?: string;
   }>({});
   const [pendingMfa, setPendingMfa] = useState(false);
+  const [pendingDeviceVerification, setPendingDeviceVerification] = useState(false);
   const [breachWarning, setBreachWarning] = useState<{ isBreached: boolean; occurrences: number }>({ isBreached: false, occurrences: 0 });
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
   const { trackAuthEvent, trackPageView } = useAnalytics();
   
   // Device fingerprinting
-  const { fingerprint, markAsTrusted, isTrusted } = useDeviceFingerprint();
+  const { fingerprint, markAsTrusted, isTrusted, deviceInfo } = useDeviceFingerprint();
   
   // Password breach checking
   const { checkPassword, checking: checkingBreach } = usePasswordBreachCheck();
@@ -268,12 +270,41 @@ const Auth = () => {
           const { data: { user: currentUser } } = await supabase.auth.getUser();
           await logAuthAttempt("log_success", email.trim(), currentUser?.id);
           
+          // Check if device is trusted
+          const deviceIsTrusted = isTrusted || !fingerprint;
+          
+          // If device is not trusted, require email verification
+          if (!deviceIsTrusted && currentUser) {
+            try {
+              const { error: verifyError } = await supabase.functions.invoke("send-device-verification", {
+                body: {
+                  email: email.trim(),
+                  userId: currentUser.id,
+                  deviceFingerprint: fingerprint,
+                  userAgent: navigator.userAgent,
+                },
+              });
+              
+              if (!verifyError) {
+                setMode("device-verification");
+                setPendingDeviceVerification(true);
+                toast.info("New device detected. Please check your email to verify.");
+                return;
+              }
+            } catch (e) {
+              console.error("Device verification error:", e);
+              // Continue with login if verification fails
+            }
+          }
+          
           // Check if MFA is required
           const mfaRequired = await checkMfaRequired();
           if (mfaRequired) {
             setMode("2fa");
             setPendingMfa(true);
           } else {
+            // Mark device as trusted on successful login
+            markAsTrusted();
             toast.success("Welcome back!");
             trackAuthEvent("login_success");
             navigate("/dashboard");
@@ -312,6 +343,7 @@ const Auth = () => {
 
   const handleMfaVerified = () => {
     setPendingMfa(false);
+    markAsTrusted(); // Mark device as trusted after successful MFA
     toast.success("Welcome back!");
     trackAuthEvent("login_success", { mfa: true });
     navigate("/dashboard");
@@ -337,6 +369,36 @@ const Auth = () => {
           onBack={() => {
             setMode("login");
             setPendingMfa(false);
+          }}
+        />
+      );
+    }
+
+    if (mode === "device-verification") {
+      return (
+        <NewDeviceVerification
+          email={email}
+          onBack={() => {
+            setMode("login");
+            setPendingDeviceVerification(false);
+          }}
+          onResend={async () => {
+            try {
+              const { data: { user: currentUser } } = await supabase.auth.getUser();
+              if (currentUser) {
+                await supabase.functions.invoke("send-device-verification", {
+                  body: {
+                    email: email.trim(),
+                    userId: currentUser.id,
+                    deviceFingerprint: fingerprint,
+                    userAgent: navigator.userAgent,
+                  },
+                });
+                toast.success("Verification email sent!");
+              }
+            } catch (e) {
+              toast.error("Failed to resend verification email");
+            }
           }}
         />
       );

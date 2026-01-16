@@ -8,6 +8,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { AppSettingsProvider } from "@/contexts/AppSettingsContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { FeedbackButton, addToNavigationHistory } from "@/components/feedback";
+import { SessionTimeoutWarning } from "@/components/layout/SessionTimeoutWarning";
 
 // Eager load critical pages
 import Index from "./pages/Index";
@@ -62,10 +63,11 @@ const NavigationTracker = () => {
   return null;
 };
 
-// App content with feedback button
+// App content with feedback button and session timeout warning
 const AppContent = () => (
   <>
     <NavigationTracker />
+    <SessionTimeoutWarning />
     <Suspense fallback={<PageLoader />}>
       <Routes>
         <Route path="/" element={<Index />} />
