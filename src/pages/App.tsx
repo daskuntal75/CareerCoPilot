@@ -404,7 +404,11 @@ const AppPage = () => {
     }
   };
 
-  const handleGenerateInterviewPrep = async (sectionToRegenerate?: string) => {
+  const handleGenerateInterviewPrep = async (
+    sectionToRegenerate?: string,
+    userFeedback?: string,
+    selectedTips?: string[]
+  ) => {
     if (!jobData || !detailedResume) return;
     
     // Check usage limits for free tier (only for new generations, not regenerations)
@@ -440,6 +444,14 @@ const AppPage = () => {
         }
       }
 
+      // Build injected prompt for telemetry
+      let injectedPrompt = "";
+      if (sectionToRegenerate) {
+        injectedPrompt = `Section: ${sectionToRegenerate}`;
+        if (userFeedback) injectedPrompt += `\nUser Feedback: ${userFeedback}`;
+        if (selectedTips?.length) injectedPrompt += `\nSelected Tips: ${selectedTips.join(", ")}`;
+      }
+
       // For interview prep, we use non-streaming since we need structured JSON
       // The function handles retries and timeouts internally
       setGenerationStage("drafting");
@@ -452,6 +464,8 @@ const AppPage = () => {
           company: jobData.company,
           analysisData,
           sectionToRegenerate,
+          userFeedback,
+          selectedTips,
           existingData: sectionToRegenerate ? interviewPrep : undefined,
           stream: false, // Keep non-streaming for structured JSON response
         },
@@ -474,6 +488,19 @@ const AppPage = () => {
         }
         toast.success(`${sectionToRegenerate} regenerated successfully`);
         trackInterviewPrepEvent("section_regenerated", { section: sectionToRegenerate });
+        
+        // Track telemetry for regeneration
+        await trackInterviewPrepPrompt(applicationId, "regenerate", {
+          section: sectionToRegenerate,
+          userFeedback,
+          selectedTips,
+          injectedPrompt,
+          metadata: {
+            company: jobData.company,
+            jobTitle: jobData.title,
+            fitScore: analysisData?.fitScore,
+          },
+        });
       } else {
         setInterviewPrep(response.data);
         setCurrentStep("interview");
@@ -483,6 +510,15 @@ const AppPage = () => {
           company: jobData.company,
           job_title: jobData.title,
           application_id: applicationId,
+        });
+        
+        // Track telemetry for initial generation
+        await trackInterviewPrepPrompt(applicationId, "generate", {
+          metadata: {
+            company: jobData.company,
+            jobTitle: jobData.title,
+            fitScore: analysisData?.fitScore,
+          },
         });
         
         if (user) {
@@ -657,7 +693,7 @@ const AppPage = () => {
                   onBack={() => setCurrentStep("editor")}
                   onRegenerateSection={(section, feedback, tips) => {
                     toast.info(`Regenerating ${section} with your feedback...`);
-                    handleGenerateInterviewPrep(section);
+                    handleGenerateInterviewPrep(section, feedback, tips);
                   }}
                   isRegenerating={isLoading}
                   onGoToCoverLetter={() => setCurrentStep("editor")}
