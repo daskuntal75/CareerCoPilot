@@ -16,6 +16,10 @@ interface RevokeSessionRequest {
   sendNotification?: boolean;
 }
 
+// Rate limiting configuration
+const RATE_LIMIT_WINDOW_MINUTES = 1;
+const MAX_REVOCATIONS_PER_WINDOW = 5;
+
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -60,6 +64,51 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
+    // Rate limiting: Check how many revocations this admin has done in the last minute
+    const rateLimitWindow = new Date();
+    rateLimitWindow.setMinutes(rateLimitWindow.getMinutes() - RATE_LIMIT_WINDOW_MINUTES);
+
+    const { data: recentRevocations, error: rateError } = await supabaseClient
+      .from("audit_log")
+      .select("id")
+      .eq("user_id", requestingUser.id)
+      .eq("action_type", "session_revoked")
+      .gte("created_at", rateLimitWindow.toISOString());
+
+    if (rateError) {
+      console.error("Rate limit check error:", rateError);
+    }
+
+    const revocationCount = recentRevocations?.length || 0;
+    if (revocationCount >= MAX_REVOCATIONS_PER_WINDOW) {
+      // Log the rate limit hit
+      await supabaseClient.from("audit_log").insert({
+        user_id: requestingUser.id,
+        action_type: "session_revoke_rate_limited",
+        action_data: {
+          attempted_at: new Date().toISOString(),
+          revocations_in_window: revocationCount,
+          limit: MAX_REVOCATIONS_PER_WINDOW,
+          window_minutes: RATE_LIMIT_WINDOW_MINUTES,
+        },
+      });
+
+      return new Response(
+        JSON.stringify({ 
+          error: `Rate limit exceeded. Maximum ${MAX_REVOCATIONS_PER_WINDOW} session revocations per minute.`,
+          retryAfter: 60 - (new Date().getSeconds()),
+        }),
+        { 
+          status: 429, 
+          headers: { 
+            "Content-Type": "application/json", 
+            "Retry-After": "60",
+            ...corsHeaders 
+          } 
+        }
+      );
+    }
+
     const { targetUserId, sessionInfo, sendNotification = true }: RevokeSessionRequest = await req.json();
 
     // Get target user's email for notification
@@ -83,15 +132,25 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Log the action
+    // Log the action with detailed audit information
+    const clientIP = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || 
+                     req.headers.get("x-real-ip") || 
+                     "unknown";
+    const userAgent = req.headers.get("user-agent") || "unknown";
+
     await supabaseClient.from("audit_log").insert({
       user_id: requestingUser.id,
       action_type: "session_revoked",
       action_target: targetUserId,
+      ip_address: clientIP,
+      user_agent: userAgent,
       action_data: {
         target_email: targetUser.user.email,
         session_info: sessionInfo || "All sessions",
         revoked_by: requestingUser.email,
+        revoked_by_id: requestingUser.id,
+        timestamp: new Date().toISOString(),
+        revocations_this_window: revocationCount + 1,
       },
     });
 
@@ -134,7 +193,8 @@ const handler = async (req: Request): Promise<Response> => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: `All sessions revoked for user ${targetUser.user.email}` 
+        message: `All sessions revoked for user ${targetUser.user.email}`,
+        remainingRevocations: MAX_REVOCATIONS_PER_WINDOW - revocationCount - 1,
       }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );

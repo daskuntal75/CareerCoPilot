@@ -18,7 +18,8 @@ import {
   Settings,
   LogIn,
   Sparkles,
-  MessageSquare
+  MessageSquare,
+  Wand2
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ import FeedbackAnalytics from "@/components/admin/FeedbackAnalytics";
 import AdminSecurityDashboard from "@/components/admin/AdminSecurityDashboard";
 import Admin2FAEnforcement from "@/components/admin/Admin2FAEnforcement";
 import SessionManagement from "@/components/admin/SessionManagement";
+import AIPromptManagement from "@/components/admin/AIPromptManagement";
 
 interface UserSummary {
   total_users: number;
@@ -351,6 +353,10 @@ const Admin = () => {
                   <Shield className="w-4 h-4" />
                   Security
                 </TabsTrigger>
+                <TabsTrigger value="ai-prompts" className="flex items-center gap-2">
+                  <Wand2 className="w-4 h-4" />
+                  AI Prompts
+                </TabsTrigger>
                 <TabsTrigger value="settings" className="flex items-center gap-2">
                   <Settings className="w-4 h-4" />
                   Settings
@@ -496,6 +502,10 @@ const Admin = () => {
                   <AdminSecurityDashboard refreshTrigger={refreshTrigger} />
                   <SessionManagement refreshTrigger={refreshTrigger} />
                 </div>
+              </TabsContent>
+
+              <TabsContent value="ai-prompts">
+                <AIPromptManagement refreshTrigger={refreshTrigger} />
               </TabsContent>
 
               <TabsContent value="settings">
