@@ -165,7 +165,9 @@ serve(async (req) => {
       company,
       interviewGuidance,
       analysisData, 
-      sectionToRegenerate, 
+      sectionToRegenerate,
+      userFeedback,
+      selectedTips,
       existingData,
       stream = false,
     } = await req.json();
@@ -298,6 +300,17 @@ INTERVIEW GUIDANCE FROM COMPANY:
 ${interviewGuidance}
 ` : "";
 
+    const tipInstructions: Record<string, string> = {
+      more_specific: "Include more specific examples with concrete details.",
+      shorter: "Make content more concise - reduce word count.",
+      longer: "Expand with more detail and elaboration.",
+      formal: "Use a more formal, professional tone.",
+      conversational: "Use a more conversational, friendly tone.",
+      quantify: "Add more metrics and quantifiable achievements.",
+      passion: "Express more enthusiasm and passion for the role.",
+      unique: "Emphasize unique differentiating factors.",
+    };
+
     const sectionPrompts: Record<string, string> = {
       questions: `Generate 10-12 interview questions with STAR answers. Return JSON with only "questions" array.`,
       keyStrengths: `Analyze key strengths. Return JSON with only "keyStrengths" array (5-7 items).`,
@@ -307,6 +320,22 @@ ${interviewGuidance}
       strategicAnalysis: `SWOT analysis. Return JSON with only "strategicAnalysis" object.`,
       uniqueValueProposition: `Craft value proposition. Return JSON with "uniqueValueProposition" and "whyThisCompany".`,
     };
+
+    // Build improvement instructions from user feedback and tips
+    let improvementInstructions = "";
+    if (sectionToRegenerate) {
+      if (userFeedback) {
+        improvementInstructions += `\nUser Feedback: ${userFeedback}`;
+      }
+      if (selectedTips && selectedTips.length > 0) {
+        improvementInstructions += "\nImprovement Guidelines:";
+        for (const tip of selectedTips) {
+          if (tipInstructions[tip]) {
+            improvementInstructions += `\n- ${tipInstructions[tip]}`;
+          }
+        }
+      }
+    }
 
     const userPrompt = sectionToRegenerate && sectionPrompts[sectionToRegenerate] 
       ? `<resume>${resumeContent}</resume>
@@ -318,6 +347,7 @@ ${guidanceContext}
 
 # TASK
 ${sectionPrompts[sectionToRegenerate]}
+${improvementInstructions}
 
 Base ALL content on actual resume experiences.`
       : `<resume>${resumeContent}</resume>

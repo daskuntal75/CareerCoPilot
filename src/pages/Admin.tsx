@@ -48,6 +48,7 @@ import AdminSecurityDashboard from "@/components/admin/AdminSecurityDashboard";
 import Admin2FAEnforcement from "@/components/admin/Admin2FAEnforcement";
 import SessionManagement from "@/components/admin/SessionManagement";
 import AIPromptManagement from "@/components/admin/AIPromptManagement";
+import PromptTelemetryDashboard from "@/components/admin/PromptTelemetryDashboard";
 
 interface UserSummary {
   total_users: number;
@@ -357,6 +358,10 @@ const Admin = () => {
                   <Wand2 className="w-4 h-4" />
                   AI Prompts
                 </TabsTrigger>
+                <TabsTrigger value="telemetry" className="flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4" />
+                  Telemetry
+                </TabsTrigger>
                 <TabsTrigger value="settings" className="flex items-center gap-2">
                   <Settings className="w-4 h-4" />
                   Settings
@@ -506,6 +511,10 @@ const Admin = () => {
 
               <TabsContent value="ai-prompts">
                 <AIPromptManagement refreshTrigger={refreshTrigger} />
+              </TabsContent>
+
+              <TabsContent value="telemetry">
+                <PromptTelemetryDashboard />
               </TabsContent>
 
               <TabsContent value="settings">
