@@ -19,6 +19,7 @@ import { BiometricLogin } from "@/components/auth/BiometricLogin";
 import { EmailLookupForm } from "@/components/auth/EmailLookupForm";
 import { PasswordBreachWarning } from "@/components/auth/PasswordBreachWarning";
 import { NewDeviceVerification } from "@/components/auth/NewDeviceVerification";
+import { PasskeyLogin } from "@/components/auth/PasskeyLogin";
 import { supabase } from "@/integrations/supabase/client";
 import { useRateLimiter } from "@/hooks/useRateLimiter";
 import { useDeviceFingerprint } from "@/hooks/useDeviceFingerprint";
@@ -431,8 +432,9 @@ const Auth = () => {
 
         {/* Biometric Login - only show on login mode */}
         {isLogin && (
-          <div className="mb-4">
+          <div className="mb-4 space-y-2">
             <BiometricLogin onSuccess={handleBiometricSuccess} mode="login" />
+            <PasskeyLogin onSuccess={handleBiometricSuccess} mode="login" />
           </div>
         )}
 
