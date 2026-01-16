@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,8 +23,13 @@ import {
   History,
   Clock,
   ChevronDown,
-  ChevronUp,
-  Eye
+  Eye,
+  Tag,
+  GitCompare,
+  FlaskConical,
+  X,
+  Check,
+  Pencil
 } from "lucide-react";
 import {
   AlertDialog,
@@ -69,6 +75,11 @@ interface PromptVersion {
   version_label: string | null;
   created_at: string;
   is_current: boolean;
+}
+
+interface DiffLine {
+  type: "added" | "removed" | "unchanged";
+  content: string;
 }
 
 const defaultPrompts: PromptSettings = {
@@ -135,6 +146,56 @@ Generate role-specific questions by interviewer type with STAR answers.
 Brief professional email templates for each round`,
 };
 
+// Simple diff algorithm for text comparison
+function computeDiff(oldText: string, newText: string): DiffLine[] {
+  const oldLines = oldText.split("\n");
+  const newLines = newText.split("\n");
+  const result: DiffLine[] = [];
+
+  // Simple LCS-based diff
+  const lcs = (a: string[], b: string[]): Set<string> => {
+    const set = new Set<string>();
+    for (const line of a) {
+      if (b.includes(line)) set.add(line);
+    }
+    return set;
+  };
+
+  const commonLines = lcs(oldLines, newLines);
+  let oldIdx = 0;
+  let newIdx = 0;
+
+  while (oldIdx < oldLines.length || newIdx < newLines.length) {
+    const oldLine = oldLines[oldIdx];
+    const newLine = newLines[newIdx];
+
+    if (oldIdx >= oldLines.length) {
+      result.push({ type: "added", content: newLines[newIdx] });
+      newIdx++;
+    } else if (newIdx >= newLines.length) {
+      result.push({ type: "removed", content: oldLines[oldIdx] });
+      oldIdx++;
+    } else if (oldLine === newLine) {
+      result.push({ type: "unchanged", content: oldLine });
+      oldIdx++;
+      newIdx++;
+    } else if (!commonLines.has(oldLine)) {
+      result.push({ type: "removed", content: oldLine });
+      oldIdx++;
+    } else if (!commonLines.has(newLine)) {
+      result.push({ type: "added", content: newLine });
+      newIdx++;
+    } else {
+      result.push({ type: "removed", content: oldLine });
+      result.push({ type: "added", content: newLine });
+      oldIdx++;
+      newIdx++;
+    }
+  }
+
+  return result;
+}
+
 const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -153,6 +214,24 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedVersionKey, setSelectedVersionKey] = useState<string>("ai_cover_letter_system_prompt");
+  
+  // Diff view state
+  const [diffOpen, setDiffOpen] = useState(false);
+  const [diffVersions, setDiffVersions] = useState<{ v1: PromptVersion | null; v2: PromptVersion | null }>({ v1: null, v2: null });
+  const [selectingForDiff, setSelectingForDiff] = useState<"v1" | "v2" | null>(null);
+  
+  // Version labeling state
+  const [editingLabel, setEditingLabel] = useState<string | null>(null);
+  const [labelInput, setLabelInput] = useState("");
+  
+  // A/B Testing state
+  const [abTestOpen, setAbTestOpen] = useState(false);
+  const [abTestType, setAbTestType] = useState<"cover_letter" | "interview_prep">("cover_letter");
+  const [abTestPromptA, setAbTestPromptA] = useState({ system: "", user: "" });
+  const [abTestPromptB, setAbTestPromptB] = useState({ system: "", user: "" });
+  const [abTestResultA, setAbTestResultA] = useState<string | null>(null);
+  const [abTestResultB, setAbTestResultB] = useState<string | null>(null);
+  const [abTestRunning, setAbTestRunning] = useState(false);
 
   useEffect(() => {
     fetchPrompts();
@@ -242,7 +321,6 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
 
   const saveVersion = async (settingKey: string, value: string) => {
     try {
-      // Get the current max version number for this setting
       const { data: existingVersions } = await supabase
         .from("ai_prompt_versions")
         .select("version_number")
@@ -252,13 +330,11 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
 
       const nextVersion = (existingVersions?.[0]?.version_number || 0) + 1;
 
-      // Mark all existing versions as not current
       await supabase
         .from("ai_prompt_versions")
         .update({ is_current: false })
         .eq("setting_key", settingKey);
 
-      // Insert new version
       const { error } = await supabase
         .from("ai_prompt_versions")
         .insert({
@@ -271,7 +347,28 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
       if (error) throw error;
     } catch (error) {
       console.error("Error saving version:", error);
-      // Don't throw - version history is secondary to the main save
+    }
+  };
+
+  const updateVersionLabel = async (versionId: string, label: string) => {
+    try {
+      const { error } = await supabase
+        .from("ai_prompt_versions")
+        .update({ version_label: label || null })
+        .eq("id", versionId);
+
+      if (error) throw error;
+
+      setVersions((prev) =>
+        prev.map((v) => (v.id === versionId ? { ...v, version_label: label || null } : v))
+      );
+      toast.success("Version label updated");
+    } catch (error) {
+      console.error("Error updating version label:", error);
+      toast.error("Failed to update version label");
+    } finally {
+      setEditingLabel(null);
+      setLabelInput("");
     }
   };
 
@@ -309,7 +406,6 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
         if (error) throw error;
       }
 
-      // Save versions for prompts that changed
       if (prompts.coverLetterSystemPrompt !== savedPrompts.coverLetterSystemPrompt) {
         await saveVersion("ai_cover_letter_system_prompt", prompts.coverLetterSystemPrompt);
       }
@@ -372,6 +468,68 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
     }
   };
 
+  const runABTest = async () => {
+    setAbTestRunning(true);
+    setAbTestResultA(null);
+    setAbTestResultB(null);
+
+    try {
+      const [resultA, resultB] = await Promise.all([
+        supabase.functions.invoke("test-ai-prompt", {
+          body: {
+            systemPrompt: abTestPromptA.system,
+            userPrompt: abTestPromptA.user,
+            promptType: abTestType,
+          },
+        }),
+        supabase.functions.invoke("test-ai-prompt", {
+          body: {
+            systemPrompt: abTestPromptB.system,
+            userPrompt: abTestPromptB.user,
+            promptType: abTestType,
+          },
+        }),
+      ]);
+
+      if (resultA.error) throw resultA.error;
+      if (resultB.error) throw resultB.error;
+
+      setAbTestResultA(resultA.data?.content || "Error generating output");
+      setAbTestResultB(resultB.data?.content || "Error generating output");
+    } catch (error) {
+      console.error("Error running A/B test:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to run A/B test");
+    } finally {
+      setAbTestRunning(false);
+    }
+  };
+
+  const startABTest = (type: "cover_letter" | "interview_prep") => {
+    setAbTestType(type);
+    if (type === "cover_letter") {
+      setAbTestPromptA({ 
+        system: prompts.coverLetterSystemPrompt, 
+        user: prompts.coverLetterUserPrompt 
+      });
+      setAbTestPromptB({ 
+        system: prompts.coverLetterSystemPrompt, 
+        user: prompts.coverLetterUserPrompt 
+      });
+    } else {
+      setAbTestPromptA({ 
+        system: prompts.interviewPrepSystemPrompt, 
+        user: prompts.interviewPrepUserPrompt 
+      });
+      setAbTestPromptB({ 
+        system: prompts.interviewPrepSystemPrompt, 
+        user: prompts.interviewPrepUserPrompt 
+      });
+    }
+    setAbTestResultA(null);
+    setAbTestResultB(null);
+    setAbTestOpen(true);
+  };
+
   const restoreVersion = async (version: PromptVersion) => {
     const promptValue = version.setting_value?.prompt;
     if (!promptValue) return;
@@ -394,6 +552,27 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
     toast.success(`Restored version ${version.version_number}. Don't forget to save!`);
     setHistoryOpen(false);
   };
+
+  const selectForDiff = (version: PromptVersion) => {
+    if (selectingForDiff === "v1") {
+      setDiffVersions((prev) => ({ ...prev, v1: version }));
+      setSelectingForDiff(null);
+    } else if (selectingForDiff === "v2") {
+      setDiffVersions((prev) => ({ ...prev, v2: version }));
+      setSelectingForDiff(null);
+    }
+  };
+
+  const openDiffView = () => {
+    setDiffOpen(true);
+  };
+
+  const diffLines = useMemo(() => {
+    if (!diffVersions.v1 || !diffVersions.v2) return [];
+    const oldText = diffVersions.v1.setting_value?.prompt || "";
+    const newText = diffVersions.v2.setting_value?.prompt || "";
+    return computeDiff(oldText, newText);
+  }, [diffVersions]);
 
   const resetToDefaults = () => {
     setPrompts(defaultPrompts);
@@ -530,7 +709,15 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
             </TabsList>
 
             <TabsContent value="cover-letter" className="space-y-6">
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => startABTest("cover_letter")}
+                >
+                  <FlaskConical className="w-4 h-4 mr-2" />
+                  A/B Test
+                </Button>
                 <Button 
                   variant="outline" 
                   size="sm"
@@ -583,7 +770,15 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
             </TabsContent>
 
             <TabsContent value="interview-prep" className="space-y-6">
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => startABTest("interview_prep")}
+                >
+                  <FlaskConical className="w-4 h-4 mr-2" />
+                  A/B Test
+                </Button>
                 <Button 
                   variant="outline" 
                   size="sm"
@@ -646,6 +841,7 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
               <li>• Include constraints to prevent hallucinations (e.g., "only use information from the resume")</li>
               <li>• Use clear section headers and bullet points for complex instructions</li>
               <li>• Use the "Test Prompt" button to preview output before saving</li>
+              <li>• Use "A/B Test" to compare two different prompt variations side-by-side</li>
             </ul>
           </div>
         </CardContent>
@@ -682,14 +878,14 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
 
       {/* Version History Dialog */}
       <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh]">
+        <DialogContent className="max-w-3xl max-h-[85vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <History className="w-5 h-5" />
               Version History
             </DialogTitle>
             <DialogDescription>
-              View and restore previous versions of AI prompts
+              View, compare, and restore previous versions of AI prompts
             </DialogDescription>
           </DialogHeader>
           
@@ -708,6 +904,7 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
                   onClick={() => {
                     setSelectedVersionKey(key);
                     fetchVersionHistory(key);
+                    setDiffVersions({ v1: null, v2: null });
                   }}
                 >
                   {getPromptLabel(key).split(" - ")[0]}
@@ -718,7 +915,53 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
               ))}
             </div>
 
-            <ScrollArea className="h-[50vh]">
+            {/* Diff comparison controls */}
+            <div className="flex items-center gap-2 p-3 rounded-lg border bg-muted/30">
+              <GitCompare className="w-4 h-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Compare:</span>
+              <Button
+                variant={selectingForDiff === "v1" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectingForDiff(selectingForDiff === "v1" ? null : "v1")}
+              >
+                {diffVersions.v1 ? `v${diffVersions.v1.version_number}` : "Select v1"}
+              </Button>
+              <span className="text-muted-foreground">vs</span>
+              <Button
+                variant={selectingForDiff === "v2" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectingForDiff(selectingForDiff === "v2" ? null : "v2")}
+              >
+                {diffVersions.v2 ? `v${diffVersions.v2.version_number}` : "Select v2"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!diffVersions.v1 || !diffVersions.v2}
+                onClick={openDiffView}
+              >
+                <Eye className="w-4 h-4 mr-1" />
+                View Diff
+              </Button>
+              {(diffVersions.v1 || diffVersions.v2) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setDiffVersions({ v1: null, v2: null })}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+
+            {selectingForDiff && (
+              <div className="text-sm text-accent flex items-center gap-2 p-2 rounded bg-accent/10">
+                <AlertCircle className="w-4 h-4" />
+                Click a version below to select it as {selectingForDiff === "v1" ? "the first" : "the second"} comparison version
+              </div>
+            )}
+
+            <ScrollArea className="h-[45vh]">
               {loadingVersions ? (
                 <div className="space-y-2">
                   {[1, 2, 3].map((i) => (
@@ -735,12 +978,27 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
                 <div className="space-y-2">
                   {versions.map((version) => (
                     <Collapsible key={version.id}>
-                      <div className="border rounded-lg p-3">
+                      <div 
+                        className={`border rounded-lg p-3 transition-colors ${
+                          selectingForDiff ? "cursor-pointer hover:border-accent" : ""
+                        } ${
+                          diffVersions.v1?.id === version.id || diffVersions.v2?.id === version.id 
+                            ? "border-accent bg-accent/5" 
+                            : ""
+                        }`}
+                        onClick={() => selectingForDiff && selectForDiff(version)}
+                      >
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-3 flex-wrap">
                             <Badge variant={version.is_current ? "default" : "secondary"}>
                               v{version.version_number}
                             </Badge>
+                            {version.version_label && (
+                              <Badge variant="outline" className="gap-1">
+                                <Tag className="w-3 h-3" />
+                                {version.version_label}
+                              </Badge>
+                            )}
                             <div className="flex items-center gap-1 text-sm text-muted-foreground">
                               <Clock className="w-3 h-3" />
                               {format(new Date(version.created_at), "MMM d, yyyy 'at' h:mm a")}
@@ -749,7 +1007,47 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
                               <Badge variant="outline" className="text-xs">Current</Badge>
                             )}
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                            {editingLabel === version.id ? (
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  value={labelInput}
+                                  onChange={(e) => setLabelInput(e.target.value)}
+                                  placeholder="e.g., Production v2"
+                                  className="h-8 w-36 text-sm"
+                                  autoFocus
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => updateVersionLabel(version.id, labelInput)}
+                                >
+                                  <Check className="w-4 h-4 text-success" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setEditingLabel(null);
+                                    setLabelInput("");
+                                  }}
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setEditingLabel(version.id);
+                                  setLabelInput(version.version_label || "");
+                                }}
+                                title="Add/Edit Label"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                            )}
                             <CollapsibleTrigger asChild>
                               <Button variant="ghost" size="sm">
                                 <ChevronDown className="w-4 h-4" />
@@ -778,6 +1076,152 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
                 </div>
               )}
             </ScrollArea>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diff View Dialog */}
+      <Dialog open={diffOpen} onOpenChange={setDiffOpen}>
+        <DialogContent className="max-w-5xl max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GitCompare className="w-5 h-5" />
+              Compare Versions
+            </DialogTitle>
+            <DialogDescription>
+              Comparing v{diffVersions.v1?.version_number} 
+              {diffVersions.v1?.version_label && ` (${diffVersions.v1.version_label})`} 
+              → v{diffVersions.v2?.version_number}
+              {diffVersions.v2?.version_label && ` (${diffVersions.v2.version_label})`}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <ScrollArea className="h-[65vh]">
+            <div className="space-y-1 font-mono text-sm">
+              {diffLines.map((line, idx) => (
+                <div
+                  key={idx}
+                  className={`px-3 py-0.5 ${
+                    line.type === "added" 
+                      ? "bg-success/20 text-success-foreground border-l-2 border-success" 
+                      : line.type === "removed" 
+                        ? "bg-destructive/20 text-destructive-foreground border-l-2 border-destructive"
+                        : "text-muted-foreground"
+                  }`}
+                >
+                  <span className="select-none mr-2 text-muted-foreground">
+                    {line.type === "added" ? "+" : line.type === "removed" ? "-" : " "}
+                  </span>
+                  {line.content || " "}
+                </div>
+              ))}
+              {diffLines.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  No differences found between these versions.
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* A/B Test Dialog */}
+      <Dialog open={abTestOpen} onOpenChange={setAbTestOpen}>
+        <DialogContent className="max-w-[95vw] max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FlaskConical className="w-5 h-5" />
+              A/B Test - {abTestType === "cover_letter" ? "Cover Letter" : "Interview Prep"}
+            </DialogTitle>
+            <DialogDescription>
+              Compare two different prompt configurations side-by-side
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid grid-cols-2 gap-4">
+            {/* Prompt A */}
+            <div className="space-y-3 border rounded-lg p-4">
+              <h3 className="font-semibold flex items-center gap-2">
+                <Badge>A</Badge>
+                Prompt Variant A
+              </h3>
+              <div className="space-y-2">
+                <Label className="text-xs">System Prompt</Label>
+                <Textarea
+                  value={abTestPromptA.system}
+                  onChange={(e) => setAbTestPromptA(prev => ({ ...prev, system: e.target.value }))}
+                  className="min-h-[100px] font-mono text-xs"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">User Prompt</Label>
+                <Textarea
+                  value={abTestPromptA.user}
+                  onChange={(e) => setAbTestPromptA(prev => ({ ...prev, user: e.target.value }))}
+                  className="min-h-[100px] font-mono text-xs"
+                />
+              </div>
+              {abTestResultA && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold text-success">Result A</Label>
+                  <ScrollArea className="h-[200px] border rounded p-2">
+                    <pre className="text-xs whitespace-pre-wrap">{abTestResultA}</pre>
+                  </ScrollArea>
+                </div>
+              )}
+            </div>
+
+            {/* Prompt B */}
+            <div className="space-y-3 border rounded-lg p-4">
+              <h3 className="font-semibold flex items-center gap-2">
+                <Badge variant="secondary">B</Badge>
+                Prompt Variant B
+              </h3>
+              <div className="space-y-2">
+                <Label className="text-xs">System Prompt</Label>
+                <Textarea
+                  value={abTestPromptB.system}
+                  onChange={(e) => setAbTestPromptB(prev => ({ ...prev, system: e.target.value }))}
+                  className="min-h-[100px] font-mono text-xs"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">User Prompt</Label>
+                <Textarea
+                  value={abTestPromptB.user}
+                  onChange={(e) => setAbTestPromptB(prev => ({ ...prev, user: e.target.value }))}
+                  className="min-h-[100px] font-mono text-xs"
+                />
+              </div>
+              {abTestResultB && (
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold text-success">Result B</Label>
+                  <ScrollArea className="h-[200px] border rounded p-2">
+                    <pre className="text-xs whitespace-pre-wrap">{abTestResultB}</pre>
+                  </ScrollArea>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-center pt-4">
+            <Button 
+              onClick={runABTest} 
+              disabled={abTestRunning}
+              className="bg-accent text-accent-foreground hover:bg-accent/90"
+            >
+              {abTestRunning ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Running Test...
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4 mr-2" />
+                  Run A/B Test
+                </>
+              )}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
