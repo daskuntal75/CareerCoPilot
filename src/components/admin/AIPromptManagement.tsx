@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 import { 
   Wand2, 
   Save, 
@@ -15,7 +17,13 @@ import {
   Users, 
   RotateCcw,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Play,
+  History,
+  Clock,
+  ChevronDown,
+  ChevronUp,
+  Eye
 } from "lucide-react";
 import {
   AlertDialog,
@@ -28,6 +36,19 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { format } from "date-fns";
 
 interface AIPromptManagementProps {
   refreshTrigger?: number;
@@ -38,6 +59,16 @@ interface PromptSettings {
   coverLetterUserPrompt: string;
   interviewPrepSystemPrompt: string;
   interviewPrepUserPrompt: string;
+}
+
+interface PromptVersion {
+  id: string;
+  setting_key: string;
+  setting_value: { prompt?: string };
+  version_number: number;
+  version_label: string | null;
+  created_at: string;
+  is_current: boolean;
 }
 
 const defaultPrompts: PromptSettings = {
@@ -107,9 +138,21 @@ Brief professional email templates for each round`,
 const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [prompts, setPrompts] = useState<PromptSettings>(defaultPrompts);
   const [hasChanges, setHasChanges] = useState(false);
   const [savedPrompts, setSavedPrompts] = useState<PromptSettings>(defaultPrompts);
+  
+  // Test preview state
+  const [testResult, setTestResult] = useState<string | null>(null);
+  const [testDialogOpen, setTestDialogOpen] = useState(false);
+  const [testType, setTestType] = useState<"cover_letter" | "interview_prep">("cover_letter");
+  
+  // Version history state
+  const [versions, setVersions] = useState<PromptVersion[]>([]);
+  const [loadingVersions, setLoadingVersions] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [selectedVersionKey, setSelectedVersionKey] = useState<string>("ai_cover_letter_system_prompt");
 
   useEffect(() => {
     fetchPrompts();
@@ -161,9 +204,75 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
     }
   };
 
+  const fetchVersionHistory = async (settingKey: string) => {
+    setLoadingVersions(true);
+    try {
+      const { data, error } = await supabase
+        .from("ai_prompt_versions")
+        .select("*")
+        .eq("setting_key", settingKey)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+      
+      const mappedVersions: PromptVersion[] = (data || []).map((item) => ({
+        id: item.id,
+        setting_key: item.setting_key,
+        setting_value: item.setting_value as { prompt?: string },
+        version_number: item.version_number,
+        version_label: item.version_label,
+        created_at: item.created_at,
+        is_current: item.is_current ?? false,
+      }));
+      
+      setVersions(mappedVersions);
+    } catch (error) {
+      console.error("Error fetching version history:", error);
+      toast.error("Failed to load version history");
+    } finally {
+      setLoadingVersions(false);
+    }
+  };
+
   const handlePromptChange = (key: keyof PromptSettings, value: string) => {
     setPrompts((prev) => ({ ...prev, [key]: value }));
     setHasChanges(true);
+  };
+
+  const saveVersion = async (settingKey: string, value: string) => {
+    try {
+      // Get the current max version number for this setting
+      const { data: existingVersions } = await supabase
+        .from("ai_prompt_versions")
+        .select("version_number")
+        .eq("setting_key", settingKey)
+        .order("version_number", { ascending: false })
+        .limit(1);
+
+      const nextVersion = (existingVersions?.[0]?.version_number || 0) + 1;
+
+      // Mark all existing versions as not current
+      await supabase
+        .from("ai_prompt_versions")
+        .update({ is_current: false })
+        .eq("setting_key", settingKey);
+
+      // Insert new version
+      const { error } = await supabase
+        .from("ai_prompt_versions")
+        .insert({
+          setting_key: settingKey,
+          setting_value: { prompt: value },
+          version_number: nextVersion,
+          is_current: true,
+        });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error saving version:", error);
+      // Don't throw - version history is secondary to the main save
+    }
   };
 
   const savePrompts = async () => {
@@ -200,6 +309,20 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
         if (error) throw error;
       }
 
+      // Save versions for prompts that changed
+      if (prompts.coverLetterSystemPrompt !== savedPrompts.coverLetterSystemPrompt) {
+        await saveVersion("ai_cover_letter_system_prompt", prompts.coverLetterSystemPrompt);
+      }
+      if (prompts.coverLetterUserPrompt !== savedPrompts.coverLetterUserPrompt) {
+        await saveVersion("ai_cover_letter_user_prompt", prompts.coverLetterUserPrompt);
+      }
+      if (prompts.interviewPrepSystemPrompt !== savedPrompts.interviewPrepSystemPrompt) {
+        await saveVersion("ai_interview_prep_system_prompt", prompts.interviewPrepSystemPrompt);
+      }
+      if (prompts.interviewPrepUserPrompt !== savedPrompts.interviewPrepUserPrompt) {
+        await saveVersion("ai_interview_prep_user_prompt", prompts.interviewPrepUserPrompt);
+      }
+
       setSavedPrompts(prompts);
       setHasChanges(false);
       toast.success("AI prompts saved successfully");
@@ -211,6 +334,67 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
     }
   };
 
+  const testPrompt = async (type: "cover_letter" | "interview_prep") => {
+    setTesting(true);
+    setTestType(type);
+    setTestResult(null);
+    setTestDialogOpen(true);
+
+    try {
+      const systemPrompt = type === "cover_letter" 
+        ? prompts.coverLetterSystemPrompt 
+        : prompts.interviewPrepSystemPrompt;
+      const userPrompt = type === "cover_letter"
+        ? prompts.coverLetterUserPrompt
+        : prompts.interviewPrepUserPrompt;
+
+      const { data, error } = await supabase.functions.invoke("test-ai-prompt", {
+        body: {
+          systemPrompt,
+          userPrompt,
+          promptType: type,
+        },
+      });
+
+      if (error) throw error;
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      setTestResult(data.content);
+    } catch (error) {
+      console.error("Error testing prompt:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to test prompt");
+      setTestResult("Error: " + (error instanceof Error ? error.message : "Failed to generate test output"));
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const restoreVersion = async (version: PromptVersion) => {
+    const promptValue = version.setting_value?.prompt;
+    if (!promptValue) return;
+
+    switch (version.setting_key) {
+      case "ai_cover_letter_system_prompt":
+        handlePromptChange("coverLetterSystemPrompt", promptValue);
+        break;
+      case "ai_cover_letter_user_prompt":
+        handlePromptChange("coverLetterUserPrompt", promptValue);
+        break;
+      case "ai_interview_prep_system_prompt":
+        handlePromptChange("interviewPrepSystemPrompt", promptValue);
+        break;
+      case "ai_interview_prep_user_prompt":
+        handlePromptChange("interviewPrepUserPrompt", promptValue);
+        break;
+    }
+
+    toast.success(`Restored version ${version.version_number}. Don't forget to save!`);
+    setHistoryOpen(false);
+  };
+
   const resetToDefaults = () => {
     setPrompts(defaultPrompts);
     setHasChanges(true);
@@ -219,6 +403,21 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
   const discardChanges = () => {
     setPrompts(savedPrompts);
     setHasChanges(false);
+  };
+
+  const getPromptLabel = (key: string) => {
+    switch (key) {
+      case "ai_cover_letter_system_prompt":
+        return "Cover Letter - System Prompt";
+      case "ai_cover_letter_user_prompt":
+        return "Cover Letter - User Prompt";
+      case "ai_interview_prep_system_prompt":
+        return "Interview Prep - System Prompt";
+      case "ai_interview_prep_user_prompt":
+        return "Interview Prep - User Prompt";
+      default:
+        return key;
+    }
   };
 
   if (loading) {
@@ -239,174 +438,350 @@ const AIPromptManagement = ({ refreshTrigger }: AIPromptManagementProps) => {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Wand2 className="w-5 h-5 text-accent" />
-              AI Prompt Management
-            </CardTitle>
-            <CardDescription>
-              Customize the AI prompts used for generating cover letters and interview prep materials
-            </CardDescription>
-          </div>
-          <div className="flex gap-2">
-            {hasChanges && (
-              <Button variant="outline" size="sm" onClick={discardChanges}>
-                <RotateCcw className="w-4 h-4 mr-2" />
-                Discard
-              </Button>
-            )}
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Reset to Defaults
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Wand2 className="w-5 h-5 text-accent" />
+                AI Prompt Management
+              </CardTitle>
+              <CardDescription>
+                Customize the AI prompts used for generating cover letters and interview prep materials
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {hasChanges && (
+                <Button variant="outline" size="sm" onClick={discardChanges}>
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  Discard
                 </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle className="flex items-center gap-2">
-                    <AlertCircle className="w-5 h-5 text-warning" />
-                    Reset to Default Prompts?
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will reset all AI prompts to their default values. Your current customizations will be lost.
-                    You'll still need to save after resetting.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={resetToDefaults}>
-                    Reset to Defaults
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-            <Button 
-              onClick={savePrompts} 
-              disabled={saving || !hasChanges}
-              className="bg-accent text-accent-foreground hover:bg-accent/90"
-            >
-              {saving ? (
-                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Save className="w-4 h-4 mr-2" />
               )}
-              Save Changes
-            </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  setHistoryOpen(true);
+                  fetchVersionHistory(selectedVersionKey);
+                }}
+              >
+                <History className="w-4 h-4 mr-2" />
+                Version History
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Reset to Defaults
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center gap-2">
+                      <AlertCircle className="w-5 h-5 text-warning" />
+                      Reset to Default Prompts?
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will reset all AI prompts to their default values. Your current customizations will be lost.
+                      You'll still need to save after resetting.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={resetToDefaults}>
+                      Reset to Defaults
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <Button 
+                onClick={savePrompts} 
+                disabled={saving || !hasChanges}
+                className="bg-accent text-accent-foreground hover:bg-accent/90"
+              >
+                {saving ? (
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 mr-2" />
+                )}
+                Save Changes
+              </Button>
+            </div>
           </div>
-        </div>
-        {hasChanges && (
-          <div className="flex items-center gap-2 mt-2 p-2 rounded-md bg-warning/10 text-warning text-sm">
-            <AlertCircle className="w-4 h-4" />
-            You have unsaved changes
+          {hasChanges && (
+            <div className="flex items-center gap-2 mt-2 p-2 rounded-md bg-warning/10 text-warning text-sm">
+              <AlertCircle className="w-4 h-4" />
+              You have unsaved changes
+            </div>
+          )}
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="cover-letter" className="space-y-4">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="cover-letter" className="flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                Cover Letter
+              </TabsTrigger>
+              <TabsTrigger value="interview-prep" className="flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                Interview Prep
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="cover-letter" className="space-y-6">
+              <div className="flex justify-end">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => testPrompt("cover_letter")}
+                  disabled={testing}
+                >
+                  {testing && testType === "cover_letter" ? (
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Play className="w-4 h-4 mr-2" />
+                  )}
+                  Test Prompt
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="cl-system" className="text-sm font-medium flex items-center gap-2">
+                  System Prompt
+                  <span className="text-xs text-muted-foreground font-normal">
+                    (Sets the AI's behavior and constraints)
+                  </span>
+                </Label>
+                <Textarea
+                  id="cl-system"
+                  value={prompts.coverLetterSystemPrompt}
+                  onChange={(e) => handlePromptChange("coverLetterSystemPrompt", e.target.value)}
+                  className="min-h-[200px] font-mono text-sm"
+                  placeholder="Enter system prompt..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="cl-user" className="text-sm font-medium flex items-center gap-2">
+                  User Prompt Template
+                  <span className="text-xs text-muted-foreground font-normal">
+                    (Instructions for generating the cover letter)
+                  </span>
+                </Label>
+                <Textarea
+                  id="cl-user"
+                  value={prompts.coverLetterUserPrompt}
+                  onChange={(e) => handlePromptChange("coverLetterUserPrompt", e.target.value)}
+                  className="min-h-[300px] font-mono text-sm"
+                  placeholder="Enter user prompt template..."
+                />
+                <p className="text-xs text-muted-foreground">
+                  Note: The resume, job description, and other context are automatically prepended to this prompt.
+                </p>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="interview-prep" className="space-y-6">
+              <div className="flex justify-end">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => testPrompt("interview_prep")}
+                  disabled={testing}
+                >
+                  {testing && testType === "interview_prep" ? (
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Play className="w-4 h-4 mr-2" />
+                  )}
+                  Test Prompt
+                </Button>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="ip-system" className="text-sm font-medium flex items-center gap-2">
+                  System Prompt
+                  <span className="text-xs text-muted-foreground font-normal">
+                    (Sets the AI's behavior and constraints)
+                  </span>
+                </Label>
+                <Textarea
+                  id="ip-system"
+                  value={prompts.interviewPrepSystemPrompt}
+                  onChange={(e) => handlePromptChange("interviewPrepSystemPrompt", e.target.value)}
+                  className="min-h-[200px] font-mono text-sm"
+                  placeholder="Enter system prompt..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="ip-user" className="text-sm font-medium flex items-center gap-2">
+                  User Prompt Template
+                  <span className="text-xs text-muted-foreground font-normal">
+                    (Instructions for generating interview prep)
+                  </span>
+                </Label>
+                <Textarea
+                  id="ip-user"
+                  value={prompts.interviewPrepUserPrompt}
+                  onChange={(e) => handlePromptChange("interviewPrepUserPrompt", e.target.value)}
+                  className="min-h-[300px] font-mono text-sm"
+                  placeholder="Enter user prompt template..."
+                />
+                <p className="text-xs text-muted-foreground">
+                  Note: The resume, job description, and other context are automatically prepended to this prompt.
+                </p>
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          <div className="mt-6 p-4 rounded-lg bg-muted/50">
+            <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-success" />
+              Prompt Tips
+            </h4>
+            <ul className="text-xs text-muted-foreground space-y-1">
+              <li>• Be specific about the output format you expect</li>
+              <li>• Include constraints to prevent hallucinations (e.g., "only use information from the resume")</li>
+              <li>• Use clear section headers and bullet points for complex instructions</li>
+              <li>• Use the "Test Prompt" button to preview output before saving</li>
+            </ul>
           </div>
-        )}
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="cover-letter" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="cover-letter" className="flex items-center gap-2">
-              <FileText className="w-4 h-4" />
-              Cover Letter
-            </TabsTrigger>
-            <TabsTrigger value="interview-prep" className="flex items-center gap-2">
-              <Users className="w-4 h-4" />
-              Interview Prep
-            </TabsTrigger>
-          </TabsList>
+        </CardContent>
+      </Card>
 
-          <TabsContent value="cover-letter" className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="cl-system" className="text-sm font-medium flex items-center gap-2">
-                System Prompt
-                <span className="text-xs text-muted-foreground font-normal">
-                  (Sets the AI's behavior and constraints)
-                </span>
-              </Label>
-              <Textarea
-                id="cl-system"
-                value={prompts.coverLetterSystemPrompt}
-                onChange={(e) => handlePromptChange("coverLetterSystemPrompt", e.target.value)}
-                className="min-h-[200px] font-mono text-sm"
-                placeholder="Enter system prompt..."
-              />
+      {/* Test Result Dialog */}
+      <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="w-5 h-5" />
+              Test Result - {testType === "cover_letter" ? "Cover Letter" : "Interview Prep"}
+            </DialogTitle>
+            <DialogDescription>
+              This is a preview using sample resume and job description data.
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-[60vh] pr-4">
+            {testing ? (
+              <div className="flex items-center justify-center py-12">
+                <RefreshCw className="w-8 h-8 animate-spin text-muted-foreground" />
+                <span className="ml-3 text-muted-foreground">Generating test output...</span>
+              </div>
+            ) : testResult ? (
+              <div className="prose prose-sm max-w-none dark:prose-invert">
+                <pre className="whitespace-pre-wrap text-sm bg-muted/50 p-4 rounded-lg">
+                  {testResult}
+                </pre>
+              </div>
+            ) : null}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Version History Dialog */}
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="w-5 h-5" />
+              Version History
+            </DialogTitle>
+            <DialogDescription>
+              View and restore previous versions of AI prompts
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {[
+                "ai_cover_letter_system_prompt",
+                "ai_cover_letter_user_prompt",
+                "ai_interview_prep_system_prompt",
+                "ai_interview_prep_user_prompt",
+              ].map((key) => (
+                <Button
+                  key={key}
+                  variant={selectedVersionKey === key ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setSelectedVersionKey(key);
+                    fetchVersionHistory(key);
+                  }}
+                >
+                  {getPromptLabel(key).split(" - ")[0]}
+                  <span className="hidden sm:inline ml-1">
+                    - {getPromptLabel(key).split(" - ")[1]}
+                  </span>
+                </Button>
+              ))}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="cl-user" className="text-sm font-medium flex items-center gap-2">
-                User Prompt Template
-                <span className="text-xs text-muted-foreground font-normal">
-                  (Instructions for generating the cover letter)
-                </span>
-              </Label>
-              <Textarea
-                id="cl-user"
-                value={prompts.coverLetterUserPrompt}
-                onChange={(e) => handlePromptChange("coverLetterUserPrompt", e.target.value)}
-                className="min-h-[300px] font-mono text-sm"
-                placeholder="Enter user prompt template..."
-              />
-              <p className="text-xs text-muted-foreground">
-                Note: The resume, job description, and other context are automatically prepended to this prompt.
-              </p>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="interview-prep" className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="ip-system" className="text-sm font-medium flex items-center gap-2">
-                System Prompt
-                <span className="text-xs text-muted-foreground font-normal">
-                  (Sets the AI's behavior and constraints)
-                </span>
-              </Label>
-              <Textarea
-                id="ip-system"
-                value={prompts.interviewPrepSystemPrompt}
-                onChange={(e) => handlePromptChange("interviewPrepSystemPrompt", e.target.value)}
-                className="min-h-[200px] font-mono text-sm"
-                placeholder="Enter system prompt..."
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="ip-user" className="text-sm font-medium flex items-center gap-2">
-                User Prompt Template
-                <span className="text-xs text-muted-foreground font-normal">
-                  (Instructions for generating interview prep)
-                </span>
-              </Label>
-              <Textarea
-                id="ip-user"
-                value={prompts.interviewPrepUserPrompt}
-                onChange={(e) => handlePromptChange("interviewPrepUserPrompt", e.target.value)}
-                className="min-h-[300px] font-mono text-sm"
-                placeholder="Enter user prompt template..."
-              />
-              <p className="text-xs text-muted-foreground">
-                Note: The resume, job description, and other context are automatically prepended to this prompt.
-              </p>
-            </div>
-          </TabsContent>
-        </Tabs>
-
-        <div className="mt-6 p-4 rounded-lg bg-muted/50">
-          <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
-            <CheckCircle className="w-4 h-4 text-success" />
-            Prompt Tips
-          </h4>
-          <ul className="text-xs text-muted-foreground space-y-1">
-            <li>• Be specific about the output format you expect</li>
-            <li>• Include constraints to prevent hallucinations (e.g., "only use information from the resume")</li>
-            <li>• Use clear section headers and bullet points for complex instructions</li>
-            <li>• Test changes with a few generations before deploying widely</li>
-          </ul>
-        </div>
-      </CardContent>
-    </Card>
+            <ScrollArea className="h-[50vh]">
+              {loadingVersions ? (
+                <div className="space-y-2">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-20" />
+                  ))}
+                </div>
+              ) : versions.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <History className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p>No version history available for this prompt yet.</p>
+                  <p className="text-sm">Versions are saved automatically when you save changes.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {versions.map((version) => (
+                    <Collapsible key={version.id}>
+                      <div className="border rounded-lg p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <Badge variant={version.is_current ? "default" : "secondary"}>
+                              v{version.version_number}
+                            </Badge>
+                            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                              <Clock className="w-3 h-3" />
+                              {format(new Date(version.created_at), "MMM d, yyyy 'at' h:mm a")}
+                            </div>
+                            {version.is_current && (
+                              <Badge variant="outline" className="text-xs">Current</Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <CollapsibleTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <ChevronDown className="w-4 h-4" />
+                              </Button>
+                            </CollapsibleTrigger>
+                            {!version.is_current && (
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => restoreVersion(version)}
+                              >
+                                <RotateCcw className="w-4 h-4 mr-1" />
+                                Restore
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        <CollapsibleContent className="mt-3">
+                          <pre className="text-xs bg-muted/50 p-3 rounded-md overflow-x-auto whitespace-pre-wrap max-h-48">
+                            {version.setting_value?.prompt || "No content"}
+                          </pre>
+                        </CollapsibleContent>
+                      </div>
+                    </Collapsible>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 

@@ -41,6 +41,39 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_prompt_versions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_current: boolean | null
+          setting_key: string
+          setting_value: Json
+          version_label: string | null
+          version_number: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_current?: boolean | null
+          setting_key: string
+          setting_value?: Json
+          version_label?: string | null
+          version_number?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_current?: boolean | null
+          setting_key?: string
+          setting_value?: Json
+          version_label?: string | null
+          version_number?: number
+        }
+        Relationships: []
+      }
       analytics_events: {
         Row: {
           created_at: string
