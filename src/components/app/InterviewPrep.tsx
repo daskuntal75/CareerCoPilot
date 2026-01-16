@@ -17,6 +17,7 @@ import InterviewPractice from "./InterviewPractice";
 import ExportPreviewModal from "./ExportPreviewModal";
 import VersionHistoryPanel from "./VersionHistoryPanel";
 import { useDocumentVersions, DocumentVersion } from "@/hooks/useDocumentVersions";
+import { usePromptTelemetry } from "@/hooks/usePromptTelemetry";
 import {
   Dialog,
   DialogContent,
@@ -290,6 +291,9 @@ const InterviewPrep = ({
     renameVersion,
   } = useDocumentVersions(applicationId || null, "interview_prep");
 
+  // Prompt telemetry hook
+  const { trackInterviewPrepPrompt } = usePromptTelemetry();
+
   // Track previous data for auto-versioning
   const previousDataRef = useRef<InterviewPrepData>(data);
   const lastAutoSaveRef = useRef<number>(Date.now());
@@ -500,20 +504,51 @@ const InterviewPrep = ({
     }
   };
 
-  const handleOpenRegenerateDialog = (sectionKey: string) => {
+  const handleOpenRegenerateDialog = (sectionKey: string, preselectedTip?: string) => {
     setSelectedSection(sectionKey);
     setFeedbackText("");
-    setSelectedTips([]);
+    // Pre-select the tip if provided (from quick improvements)
+    setSelectedTips(preselectedTip ? [preselectedTip] : []);
     setShowRegenerateDialog(true);
   };
 
-  const handleRegenerateSubmit = () => {
+  const handleRegenerateSubmit = async () => {
     if (!feedbackText.trim() && selectedTips.length === 0) {
       toast.error("Please provide feedback or select at least one improvement tip");
       return;
     }
     
     if (onRegenerateSection && selectedSection) {
+      // Build the injected prompt for telemetry
+      const tipLabels = selectedTips.map(tipId => {
+        const tip = regenerationTips.find(t => t.id === tipId);
+        return tip ? `${tip.label}: ${tip.description}` : tipId;
+      });
+      
+      const injectedPrompt = [
+        `Section: ${selectedSection}`,
+        feedbackText ? `User Feedback: ${feedbackText}` : "",
+        tipLabels.length > 0 ? `Improvement Tips: ${tipLabels.join("; ")}` : "",
+      ].filter(Boolean).join("\n");
+
+      // Track prompt telemetry for monitoring
+      await trackInterviewPrepPrompt(
+        applicationId || null,
+        "regenerate",
+        {
+          section: selectedSection,
+          userFeedback: feedbackText,
+          selectedTips,
+          injectedPrompt,
+          metadata: {
+            tipLabels,
+            company: jobData.company,
+            jobTitle: jobData.title,
+            questionCount: data.questions?.length || 0,
+          },
+        }
+      );
+
       onRegenerateSection(selectedSection, feedbackText, selectedTips);
       setShowRegenerateDialog(false);
       setSelectedSection(null);
@@ -860,7 +895,7 @@ const InterviewPrep = ({
                 {regenerationTips.slice(0, 4).map((tip) => (
                   <button
                     key={tip.id}
-                    onClick={() => handleOpenRegenerateDialog("questions")}
+                    onClick={() => handleOpenRegenerateDialog("questions", tip.id)}
                     className="w-full text-left text-xs text-muted-foreground hover:text-foreground hover:bg-secondary/50 p-2 rounded-lg transition-colors flex items-start gap-2"
                   >
                     <Target className="w-3 h-3 mt-0.5 flex-shrink-0 text-accent" />

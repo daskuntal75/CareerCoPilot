@@ -18,6 +18,7 @@ import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useUsageTracking } from "@/hooks/useUsageTracking";
+import { usePromptTelemetry } from "@/hooks/usePromptTelemetry";
 import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRequired";
 import { useDemoLimit } from "@/hooks/useDemoLimit";
 import { DemoLimitBanner } from "@/components/feedback";
@@ -49,6 +50,7 @@ const AppPage = () => {
   const { detailedResume, isProfileComplete, isLoading: isProfileLoading } = useUserProfile();
   const { trackPageView, trackApplicationEvent, trackCoverLetterEvent, trackInterviewPrepEvent } = useAnalytics();
   const { canUseFeature, incrementUsage, getRemainingUsage, limits } = useUsageTracking();
+  const { trackCoverLetterPrompt, trackInterviewPrepPrompt } = usePromptTelemetry();
   const { isLimitReached, isDemoMode, demoLimit, supportEmail, applicationCount, refreshCount } = useDemoLimit();
   const [currentStep, setCurrentStep] = useState<AppStep>("job");
   const [jobData, setJobData] = useState<JobData | null>(null);
@@ -366,6 +368,15 @@ const AppPage = () => {
       
       setCoverLetter(fullContent);
       setCurrentStep("editor");
+      
+      // Track prompt telemetry for initial generation
+      await trackCoverLetterPrompt(applicationId, "generate", {
+        metadata: {
+          company: jobData.company,
+          jobTitle: jobData.title,
+          fitScore: analysisData?.fitScore,
+        },
+      });
       
       // Track analytics
       trackCoverLetterEvent("generated", {

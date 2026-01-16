@@ -464,6 +464,59 @@ export type Database = {
         }
         Relationships: []
       }
+      prompt_telemetry: {
+        Row: {
+          action_type: string
+          application_id: string | null
+          created_at: string
+          document_type: string
+          id: string
+          injected_prompt: string | null
+          prompt_metadata: Json | null
+          response_quality_rating: number | null
+          section: string | null
+          selected_tips: string[] | null
+          user_feedback: string | null
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          application_id?: string | null
+          created_at?: string
+          document_type: string
+          id?: string
+          injected_prompt?: string | null
+          prompt_metadata?: Json | null
+          response_quality_rating?: number | null
+          section?: string | null
+          selected_tips?: string[] | null
+          user_feedback?: string | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          application_id?: string | null
+          created_at?: string
+          document_type?: string
+          id?: string
+          injected_prompt?: string | null
+          prompt_metadata?: Json | null
+          response_quality_rating?: number | null
+          section?: string | null
+          selected_tips?: string[] | null
+          user_feedback?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompt_telemetry_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       requirement_matches: {
         Row: {
           chunk_id: string
