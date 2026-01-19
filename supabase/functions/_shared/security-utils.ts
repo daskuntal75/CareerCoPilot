@@ -18,23 +18,92 @@ const PROMPT_INJECTION_PATTERNS = [
   /system\s*:\s*/gi,
   /\[system\]/gi,
   /\[inst(ruction)?s?\]/gi,
+  /override\s+(the\s+)?(system|previous|default)/gi,
+  /bypass\s+(the\s+)?(safety|restriction|filter|rule)/gi,
+  /disable\s+(your\s+)?(safety|restriction|filter|guard|protection)/gi,
   
   // Role manipulation attempts
   /you\s+are\s+(now|no\s+longer)/gi,
   /act\s+as\s+(a\s+)?(different|new|another)/gi,
   /pretend\s+(to\s+be|you('re|are))/gi,
   /roleplay\s+as/gi,
+  /imagine\s+you('re|are)\s+(a\s+)?(different|not)/gi,
+  /switch\s+(to|into)\s+(a\s+)?(different|new)\s+(mode|persona|character)/gi,
+  /from\s+now\s+on\s+(you('re|are)|act|behave)/gi,
+  
+  // Jailbreak persona attempts (DAN, etc.)
+  /\b(DAN|do\s+anything\s+now)\b/gi,
+  /\bjailbreak(ed)?\b/gi,
+  /\bunlock(ed)?\s+(mode|yourself|your\s+potential)/gi,
+  /\bdeveloper\s+mode\b/gi,
+  /\broot\s+access\b/gi,
+  /\badmin(istrator)?\s+mode\b/gi,
+  /\bsudo\s+mode\b/gi,
+  /\bno\s+(limit|restriction|filter|rule)s?\s+mode\b/gi,
+  /\bevil\s+(mode|version|persona)\b/gi,
+  /\buncensored\s+(mode|version)\b/gi,
+  /\balter\s+ego\b/gi,
+  /\bshadow\s+self\b/gi,
+  /\bopposite\s+day\b/gi,
+  /\bopposite\s+mode\b/gi,
+  /\breverse\s+psychology\b/gi,
+  /enabled?\s+(jailbreak|developer|admin|root|evil)/gi,
+  /activate\s+(jailbreak|developer|admin|root|evil)/gi,
+  
+  // Roleplay exploit attempts
+  /let's\s+(play|pretend|roleplay)/gi,
+  /you('re|are)\s+playing\s+(the\s+role|a\s+character)/gi,
+  /this\s+is\s+(just\s+)?(a\s+)?(roleplay|game|fiction|hypothetical)/gi,
+  /in\s+this\s+(hypothetical|fictional)\s+scenario/gi,
+  /for\s+(educational|research|testing)\s+purposes/gi,
+  /purely\s+hypothetical/gi,
+  /no\s+ethical\s+concern/gi,
+  /\bas\s+an?\s+(evil|villain|bad)\s+(AI|assistant|character)/gi,
+  /\bwrite\s+as\s+if\s+you\s+had\s+no\s+(ethics|morals|restrictions)/gi,
+  
+  // Prompt leaking attempts
+  /reveal\s+(your|the)\s+(system|initial|original)\s+prompt/gi,
+  /show\s+(me\s+)?(your|the)\s+(instructions|prompt|rules)/gi,
+  /what\s+(are|were)\s+(your|the)\s+(original|system)\s+(instructions|prompts)/gi,
+  /repeat\s+(the\s+)?(text|words|instructions)\s+(above|before)/gi,
+  /print\s+(your\s+)?(system|initial)\s+(message|prompt)/gi,
+  /display\s+(the\s+)?(hidden|secret|original)\s+(instructions|prompt)/gi,
+  
+  // Token smuggling and encoding tricks
+  /base64\s*:/gi,
+  /encode\s+(this|the\s+following)\s+in/gi,
+  /decode\s+the\s+following/gi,
+  /\bhex\s*:\s*[0-9a-f]/gi,
+  /translate\s+(from|to)\s+pig\s+latin/gi,
+  /backwards?\s*:/gi,
+  /reverse\s+(the\s+)?(text|letters|words)/gi,
+  
+  // Multi-turn manipulation
+  /remember\s+(what\s+)?I\s+(told|said|asked)\s+(you\s+)?(earlier|before|previously)/gi,
+  /continue\s+from\s+(where|what)\s+(we|you)\s+(left|said)/gi,
+  /as\s+we\s+(agreed|discussed)\s+(earlier|before)/gi,
+  /you\s+already\s+agreed\s+to/gi,
+  /you\s+promised\s+(me\s+)?to/gi,
   
   // Data exfiltration attempts
   /export\s+(all\s+)?(user|candidate|salary|personal)\s+data/gi,
   /send\s+(this|data|info)\s+to/gi,
   /forward\s+(to|this)/gi,
   /email\s+(this|data)\s+to/gi,
+  /exfiltrate/gi,
+  /leak\s+(the\s+)?(data|information|secrets)/gi,
+  /extract\s+(confidential|private|sensitive)/gi,
   
   // Hidden instruction markers
   /\x00-\x08\x0B\x0C\x0E-\x1F/g, // Control characters
   /[\u200B-\u200D\uFEFF\u2060]/g, // Zero-width characters
   /\u202A-\u202E/g, // Bidirectional text controls
+  
+  // Delimiter injection attempts
+  /<\|(im_start|im_end|system|user|assistant)\|>/gi,
+  /\[\[(SYSTEM|USER|ASSISTANT)\]\]/gi,
+  /###\s*(SYSTEM|USER|ASSISTANT|INSTRUCTION)/gi,
+  /```\s*(system|instruction|command)/gi,
 ];
 
 // PII patterns for redaction
