@@ -33,3 +33,6 @@ verify_jwt = false
 [functions.check-prompt-satisfaction]
 verify_jwt = false
 schedule = "0 9 * * *"
+
+[functions.test-prompt-injection]
+verify_jwt = false
