@@ -49,7 +49,7 @@ import Admin2FAEnforcement from "@/components/admin/Admin2FAEnforcement";
 import SessionManagement from "@/components/admin/SessionManagement";
 import AIPromptManagement from "@/components/admin/AIPromptManagement";
 import PromptTelemetryDashboard from "@/components/admin/PromptTelemetryDashboard";
-
+import PromptInjectionTrends from "@/components/admin/PromptInjectionTrends";
 interface UserSummary {
   total_users: number;
   users_with_applications: number;
@@ -506,6 +506,7 @@ const Admin = () => {
                 <div className="space-y-6">
                   <AdminSecurityDashboard refreshTrigger={refreshTrigger} />
                   <SessionManagement refreshTrigger={refreshTrigger} />
+                  <PromptInjectionTrends />
                 </div>
               </TabsContent>
 
