@@ -26,6 +26,88 @@ import { DemoLimitBanner } from "@/components/feedback";
 
 export type AppStep = "job" | "analysis" | "editor" | "interview";
 
+// Transform legacy interview prep data format (phase_X) to expected format
+const normalizeInterviewPrepData = (data: any): InterviewPrepData | null => {
+  if (!data) return null;
+  
+  // If data already has the expected structure, return it
+  if (data.questions && Array.isArray(data.questions)) {
+    return data as InterviewPrepData;
+  }
+  
+  // Transform legacy phase_X format to expected format
+  const phase1 = data.phase_1_company_research || {};
+  const phase2 = data.phase_2_strategic_analysis || {};
+  const phase3 = data.phase_3_interview_preparation || {};
+  const phase4 = data.phase_4_interview_questions || [];
+  
+  // If no legacy data found, return null
+  if (!phase1.vision_mission && !phase3.core_requirements && phase4.length === 0) {
+    // Check if there's any data at all
+    if (Object.keys(data).length === 0) return null;
+  }
+  
+  // Transform questions from legacy format
+  const questions = Array.isArray(phase4) ? phase4.map((q: any) => ({
+    question: q.question || "",
+    category: q.interviewer_type?.toLowerCase()?.replace(" ", "_") || "behavioral",
+    difficulty: "medium" as const,
+    whyAsked: "Based on job requirements and your experience",
+    starAnswer: q.answer ? {
+      situation: q.answer.situation || "",
+      task: q.answer.task || "",
+      action: q.answer.action || "",
+      result: q.answer.result || "",
+    } : { situation: "", task: "", action: "", result: "" },
+    tips: [],
+  })) : [];
+  
+  // Transform SWOT analysis
+  const swot = phase2.swot_analysis || {};
+  const strategicAnalysis = {
+    strengths: swot.strengths || [],
+    criticalStrength: swot.strengths?.[0] || "",
+    weaknesses: swot.weaknesses || [],
+    criticalWeakness: swot.weaknesses?.[0] || "",
+    opportunities: swot.opportunities || [],
+    criticalOpportunity: swot.opportunities?.[0] || "",
+    threats: swot.threats || [],
+    criticalThreat: swot.threats?.[0] || "",
+    competitors: phase2.competitive_landscape || [],
+    competitivePosition: "",
+  };
+  
+  // Build normalized data
+  const normalizedData: InterviewPrepData = {
+    questions,
+    keyStrengths: phase3.core_requirements || [],
+    potentialConcerns: [],
+    questionsToAsk: [],
+    applicationContext: `Interview preparation for ${phase3.interview_structure || "this role"}`,
+    companyIntelligence: {
+      visionMission: phase1.vision_mission || "",
+      industryMarket: phase1.industry_position || "",
+      financialPerformance: "",
+      productsServices: phase1.products_services || "",
+    },
+    keyDomainConcepts: [],
+    strategicAnalysis,
+    cultureAndBenefits: {
+      cultureInsights: phase1.culture ? [phase1.culture] : [],
+      standoutBenefits: [],
+    },
+    interviewStructure: {
+      coreRequirements: phase3.core_requirements || [],
+      keyCompetencies: [],
+      predictedFormat: phase3.interview_structure || "",
+    },
+    uniqueValueProposition: phase3.unique_value_proposition || "",
+    whyThisCompany: phase3.why_company_why_leaving?.why_company || "",
+  };
+  
+  return normalizedData;
+};
+
 export interface JobData {
   company: string;
   title: string;
@@ -109,7 +191,11 @@ const AppPage = () => {
       }
 
       if (data.interview_prep) {
-        setInterviewPrep(data.interview_prep as any);
+        // Normalize legacy format to expected format
+        const normalizedPrep = normalizeInterviewPrepData(data.interview_prep);
+        if (normalizedPrep) {
+          setInterviewPrep(normalizedPrep);
+        }
       }
 
       // Set appropriate step based on data
