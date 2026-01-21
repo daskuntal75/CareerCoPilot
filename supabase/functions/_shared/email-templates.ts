@@ -491,13 +491,183 @@ export const generatePasswordChangedEmail = (data: PasswordChangedEmailData): st
       
       <div style="text-align: center;">
         <a href="${data.appUrl}/auth?mode=forgot-password" class="cta-button">
-          Reset Password Now →
+        Reset Password Now →
         </a>
       </div>
     </div>
     <div class="footer">
       <p>This is an automated security notification from TailoredApply.</p>
       <p>If you have questions, <a href="${data.appUrl}/support">contact our support team</a>.</p>
+    </div>
+  `);
+};
+
+export interface AdminSecurityAlertData {
+  alertType: 'failed_admin_login' | 'suspicious_activity' | 'rate_limit_exceeded' | 'prompt_injection_detected' | 'unusual_access_pattern';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  details: string;
+  ipAddress?: string;
+  userEmail?: string;
+  location?: string;
+  timestamp: string;
+  appUrl: string;
+  actionRequired?: string;
+  eventCount?: number;
+}
+
+export const generateAdminSecurityAlertEmail = (data: AdminSecurityAlertData): string => {
+  const severityColors: Record<string, { bg: string; text: string; icon: string }> = {
+    low: { bg: '#eff6ff', text: '#1e40af', icon: 'ℹ️' },
+    medium: { bg: '#fffbeb', text: '#92400e', icon: '⚠️' },
+    high: { bg: '#fef2f2', text: '#dc2626', icon: '🚨' },
+    critical: { bg: '#fdf2f8', text: '#be185d', icon: '🔴' },
+  };
+
+  const alertTypeLabels: Record<string, string> = {
+    failed_admin_login: 'Failed Admin Login Attempt',
+    suspicious_activity: 'Suspicious Activity Detected',
+    rate_limit_exceeded: 'Rate Limit Exceeded',
+    prompt_injection_detected: 'Prompt Injection Attempt',
+    unusual_access_pattern: 'Unusual Access Pattern',
+  };
+
+  const colors = severityColors[data.severity] || severityColors.medium;
+  const alertLabel = alertTypeLabels[data.alertType] || 'Security Alert';
+
+  const ipAddressRow = data.ipAddress ? `
+        <div class="info-row">
+          <span class="info-label">IP Address</span>
+          <span class="info-value">${data.ipAddress}</span>
+        </div>
+        ` : '';
+  
+  const locationRow = data.location ? `
+        <div class="info-row">
+          <span class="info-label">Location</span>
+          <span class="info-value">${data.location}</span>
+        </div>
+        ` : '';
+  
+  const userEmailRow = data.userEmail ? `
+        <div class="info-row">
+          <span class="info-label">User</span>
+          <span class="info-value">${data.userEmail}</span>
+        </div>
+        ` : '';
+  
+  const eventCountRow = data.eventCount ? `
+        <div class="info-row">
+          <span class="info-label">Event Count</span>
+          <span class="info-value">${data.eventCount} occurrences</span>
+        </div>
+        ` : '';
+  
+  const actionRequiredBox = data.actionRequired ? `
+      <div class="alert-box warning">
+        <div class="alert-title">📋 Action Required</div>
+        <p class="alert-text">${data.actionRequired}</p>
+      </div>
+      ` : '';
+
+  return emailWrapper(`
+    <div class="header" style="background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%);">
+      <div class="header-icon">${colors.icon}</div>
+      <div class="logo">TailoredApply Admin</div>
+      <h1>Security Alert</h1>
+      <p>${data.severity.toUpperCase()} Priority</p>
+    </div>
+    <div class="content">
+      <div class="alert-box" style="background: ${colors.bg}; border-left-color: ${colors.text};">
+        <div class="alert-title" style="color: ${colors.text};">
+          ${colors.icon} ${alertLabel}
+        </div>
+        <p class="alert-text">${data.details}</p>
+      </div>
+      
+      <div class="info-card">
+        <h3>Event Details</h3>
+        <div class="info-row">
+          <span class="info-label">Alert Type</span>
+          <span class="info-value">${alertLabel}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Severity</span>
+          <span class="info-value" style="color: ${colors.text}; font-weight: 600; text-transform: uppercase;">${data.severity}</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Time</span>
+          <span class="info-value">${data.timestamp}</span>
+        </div>
+        ${ipAddressRow}
+        ${locationRow}
+        ${userEmailRow}
+        ${eventCountRow}
+      </div>
+      
+      ${actionRequiredBox}
+      
+      <div style="text-align: center;">
+        <a href="${data.appUrl}/admin?tab=security" class="cta-button">
+          View Security Dashboard →
+        </a>
+      </div>
+    </div>
+    <div class="footer">
+      <p>This is an automated admin security alert from TailoredApply.</p>
+      <p>You're receiving this because you're an admin with security notifications enabled.</p>
+    </div>
+  `);
+};
+
+export interface PromptInjectionAlertData {
+  attemptCount: number;
+  recentAttempts: Array<{
+    input: string;
+    threatType: string;
+    timestamp: string;
+  }>;
+  timestamp: string;
+  appUrl: string;
+}
+
+export const generatePromptInjectionAlertEmail = (data: PromptInjectionAlertData): string => {
+  const attemptsList = data.recentAttempts.slice(0, 5).map((attempt) => `
+    <div style="background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+      <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">${attempt.timestamp} - ${attempt.threatType}</div>
+      <div style="font-size: 13px; color: #334155; font-family: monospace; word-break: break-all;">${attempt.input.substring(0, 100)}${attempt.input.length > 100 ? '...' : ''}</div>
+    </div>
+  `).join('');
+
+  return emailWrapper(`
+    <div class="header" style="background: linear-gradient(135deg, #7c2d12 0%, #9a3412 100%);">
+      <div class="header-icon">🛡️</div>
+      <div class="logo">TailoredApply Security</div>
+      <h1>Prompt Injection Detected</h1>
+      <p>${data.attemptCount} attempts blocked</p>
+    </div>
+    <div class="content">
+      <div class="alert-box">
+        <div class="alert-title">⚠️ Security Event</div>
+        <p class="alert-text">Our AI security system detected and blocked ${data.attemptCount} prompt injection attempt(s) in the last 24 hours.</p>
+      </div>
+      
+      <h3 style="margin-bottom: 12px;">Recent Blocked Attempts</h3>
+      ${attemptsList}
+      
+      <div class="alert-box info">
+        <div class="alert-title">✓ Protection Active</div>
+        <p class="alert-text">All malicious prompts were automatically sanitized and blocked before reaching the AI system.</p>
+      </div>
+      
+      <div style="text-align: center;">
+        <a href="${data.appUrl}/admin?tab=security" class="cta-button">
+          Review Security Logs →
+        </a>
+      </div>
+    </div>
+    <div class="footer">
+      <p>This is an automated security alert from TailoredApply.</p>
+      <p>Generated at ${data.timestamp}</p>
     </div>
   `);
 };
