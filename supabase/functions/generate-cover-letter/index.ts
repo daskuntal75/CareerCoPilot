@@ -12,6 +12,14 @@ const corsHeaders = {
 // Input length limits for security
 const MAX_JOB_DESCRIPTION_LENGTH = 15000;
 const MAX_RESUME_LENGTH = 50000;
+const REQUEST_TIMEOUT_MS = 60000; // 60 seconds for faster responses
+
+// Simple in-memory request queue for load balancing
+const activeRequests = { count: 0, maxConcurrent: 50 };
+
+const canAcceptRequest = (): boolean => {
+  return activeRequests.count < activeRequests.maxConcurrent;
+};
 
 // Section-specific prompts for regeneration
 const sectionPrompts: Record<string, string> = {
@@ -39,6 +47,27 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Load balancing check
+  if (!canAcceptRequest()) {
+    return new Response(
+      JSON.stringify({ 
+        error: "Server is busy",
+        message: "High demand detected. Please try again in a few seconds.",
+        retryAfter: 5,
+      }),
+      { 
+        status: 503, 
+        headers: { 
+          ...corsHeaders, 
+          "Content-Type": "application/json",
+          "Retry-After": "5",
+        } 
+      }
+    );
+  }
+  
+  activeRequests.count++;
+
   try {
     const { 
       resumeContent, 
@@ -57,6 +86,7 @@ serve(async (req) => {
     } = await req.json();
     
     if (!resumeContent || !jobDescription) {
+      activeRequests.count--;
       return new Response(
         JSON.stringify({ error: "Resume content and job description are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -65,6 +95,7 @@ serve(async (req) => {
 
     // Enforce input length limits
     if (jobDescription.length > MAX_JOB_DESCRIPTION_LENGTH) {
+      activeRequests.count--;
       return new Response(
         JSON.stringify({ error: `Job description exceeds maximum length of ${MAX_JOB_DESCRIPTION_LENGTH} characters` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -312,6 +343,13 @@ ${regenerationContext}
 
 ${customUserPromptTemplate || defaultUserPromptTemplate}`;
 
+    // Use faster model for section regeneration
+    const isRegeneration = sectionToRegenerate && sectionToRegenerate !== "full";
+    const model = isRegeneration ? "google/gemini-2.5-flash-lite" : "google/gemini-2.5-flash";
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -319,16 +357,22 @@ ${customUserPromptTemplate || defaultUserPromptTemplate}`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
         stream: stream,
+        temperature: 0.7,
+        max_tokens: isRegeneration ? 2000 : 4000,
       }),
+      signal: controller.signal,
     });
+    
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
+      activeRequests.count--;
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limits exceeded, please try again later." }), {
           status: 429,
@@ -347,6 +391,7 @@ ${customUserPromptTemplate || defaultUserPromptTemplate}`;
     }
 
     if (stream) {
+      activeRequests.count--;
       return new Response(response.body, {
         headers: { 
           ...corsHeaders, 
@@ -364,6 +409,7 @@ ${customUserPromptTemplate || defaultUserPromptTemplate}`;
       throw new Error("Empty response from AI");
     }
 
+    activeRequests.count--;
     return new Response(JSON.stringify({ 
       coverLetter,
       regeneratedSection: sectionToRegenerate || null,
@@ -371,9 +417,16 @@ ${customUserPromptTemplate || defaultUserPromptTemplate}`;
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
+    activeRequests.count = Math.max(0, activeRequests.count - 1);
     console.error("Error in generate-cover-letter:", error);
+    
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    const isTimeout = error instanceof Error && error.name === "AbortError";
+    
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify({ 
+        error: isTimeout ? "Request timed out. Please try again." : errorMessage 
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

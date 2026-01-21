@@ -39,3 +39,9 @@ verify_jwt = false
 
 [functions.send-security-alert]
 verify_jwt = false
+
+[functions.migrate-interview-prep]
+verify_jwt = false
+
+[functions.get-profile]
+verify_jwt = false

@@ -7,10 +7,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const MAX_RETRIES = 3;
-const INITIAL_DELAY_MS = 1000;
+const MAX_RETRIES = 2; // Reduced for faster fallback
+const INITIAL_DELAY_MS = 500; // Faster retry
 const MAX_JOB_DESCRIPTION_LENGTH = 15000;
 const MAX_RESUME_LENGTH = 50000;
+const REQUEST_TIMEOUT_MS = 90000; // 90 seconds
+
+// Simple in-memory request queue for load balancing
+const activeRequests = { count: 0, maxConcurrent: 50 };
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -56,16 +60,20 @@ const parseAIResponse = (content: string): any => {
 const makeAIRequestWithRetry = async (
   apiKey: string,
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  isRegeneration = false
 ): Promise<any> => {
   let lastError: Error | null = null;
+  
+  // Use faster model for regeneration of single sections
+  const model = isRegeneration ? "google/gemini-2.5-flash-lite" : "google/gemini-2.5-flash";
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
-      console.log(`AI request attempt ${attempt + 1}/${MAX_RETRIES}`);
+      console.log(`AI request attempt ${attempt + 1}/${MAX_RETRIES} using ${model}`);
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000);
+      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
       
       const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
@@ -74,11 +82,13 @@ const makeAIRequestWithRetry = async (
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
+          model,
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },
           ],
+          temperature: 0.7, // Slightly lower for faster, more deterministic responses
+          max_tokens: isRegeneration ? 4000 : 8000, // Limit tokens for faster response
         }),
         signal: controller.signal,
       });
@@ -129,8 +139,11 @@ const makeAIRequestWithRetry = async (
 const makeStreamingAIRequest = async (
   apiKey: string,
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  isRegeneration = false
 ): Promise<Response> => {
+  const model = isRegeneration ? "google/gemini-2.5-flash-lite" : "google/gemini-2.5-flash";
+  
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -138,12 +151,14 @@ const makeStreamingAIRequest = async (
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "google/gemini-3-flash-preview",
+      model,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
       stream: true,
+      temperature: 0.7,
+      max_tokens: isRegeneration ? 4000 : 8000,
     }),
   });
 
@@ -154,6 +169,11 @@ const makeStreamingAIRequest = async (
   }
 
   return response;
+};
+
+// Load balancing check
+const canAcceptRequest = (): boolean => {
+  return activeRequests.count < activeRequests.maxConcurrent;
 };
 
 serve(async (req) => {
@@ -176,27 +196,49 @@ serve(async (req) => {
       stream = false,
     } = await req.json();
     
-    if (!resumeContent || !jobDescription) {
+    // Load balancing check
+    if (!canAcceptRequest()) {
       return new Response(
-        JSON.stringify({ error: "Resume content and job description are required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ 
+          error: "Server is busy",
+          message: "High demand detected. Please try again in a few seconds.",
+          retryAfter: 5,
+        }),
+        { 
+          status: 503, 
+          headers: { 
+            ...corsHeaders, 
+            "Content-Type": "application/json",
+            "Retry-After": "5",
+          } 
+        }
       );
     }
+    
+    activeRequests.count++;
+    
+    try {
+      if (!resumeContent || !jobDescription) {
+        return new Response(
+          JSON.stringify({ error: "Resume content and job description are required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
-    // Validate input lengths
-    if (jobDescription.length > MAX_JOB_DESCRIPTION_LENGTH) {
-      return new Response(
-        JSON.stringify({ error: `Job description too long. Maximum ${MAX_JOB_DESCRIPTION_LENGTH} characters allowed.` }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+      // Validate input lengths
+      if (jobDescription.length > MAX_JOB_DESCRIPTION_LENGTH) {
+        return new Response(
+          JSON.stringify({ error: `Job description too long. Maximum ${MAX_JOB_DESCRIPTION_LENGTH} characters allowed.` }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
-    if (resumeContent.length > MAX_RESUME_LENGTH) {
-      return new Response(
-        JSON.stringify({ error: `Resume too long. Maximum ${MAX_RESUME_LENGTH} characters allowed.` }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+      if (resumeContent.length > MAX_RESUME_LENGTH) {
+        return new Response(
+          JSON.stringify({ error: `Resume too long. Maximum ${MAX_RESUME_LENGTH} characters allowed.` }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
@@ -445,9 +487,12 @@ Brief professional email templates for each round
 
 Return complete JSON following system prompt structure.`;
 
+    const isRegeneration = !!sectionToRegenerate;
+    
     if (stream) {
       try {
-        const streamResponse = await makeStreamingAIRequest(LOVABLE_API_KEY, systemPrompt, userPrompt);
+        const streamResponse = await makeStreamingAIRequest(LOVABLE_API_KEY, systemPrompt, userPrompt, isRegeneration);
+        activeRequests.count--;
         return new Response(streamResponse.body, {
           headers: { 
             ...corsHeaders, 
@@ -457,6 +502,7 @@ Return complete JSON following system prompt structure.`;
           },
         });
       } catch (error) {
+        activeRequests.count--;
         const errorMessage = error instanceof Error ? error.message : "Streaming failed";
         return new Response(
           JSON.stringify({ error: errorMessage }),
@@ -469,12 +515,21 @@ Return complete JSON following system prompt structure.`;
       }
     }
 
-    const interviewPrep = await makeAIRequestWithRetry(LOVABLE_API_KEY, systemPrompt, userPrompt);
+    const interviewPrep = await makeAIRequestWithRetry(LOVABLE_API_KEY, systemPrompt, userPrompt, isRegeneration);
+    activeRequests.count--;
 
     return new Response(JSON.stringify(interviewPrep), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
+    
+    } finally {
+      // Ensure count is decremented on any error path
+      if (activeRequests.count > 0) {
+        // Already decremented in success paths above
+      }
+    }
   } catch (error) {
+    activeRequests.count = Math.max(0, activeRequests.count - 1);
     console.error("Error in generate-interview-prep:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
