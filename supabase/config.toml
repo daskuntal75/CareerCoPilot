@@ -36,3 +36,6 @@ schedule = "0 9 * * *"
 
 [functions.test-prompt-injection]
 verify_jwt = false
+
+[functions.send-security-alert]
+verify_jwt = false

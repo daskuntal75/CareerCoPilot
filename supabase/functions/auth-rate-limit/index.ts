@@ -160,7 +160,7 @@ const handler = async (req: Request): Promise<Response> => {
       // If lockout triggered, send notification email
       if (triggersLockout && email) {
         try {
-          // Send lockout notification
+          // Send lockout notification to the user
           await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-lockout-notification`, {
             method: "POST",
             headers: {
@@ -174,6 +174,51 @@ const handler = async (req: Request): Promise<Response> => {
               userAgent,
             }),
           });
+
+          // Check if this is an admin account and send admin alert
+          const { data: adminCheck } = await supabaseClient
+            .from("user_roles")
+            .select("role, user_id")
+            .eq("role", "admin")
+            .limit(1);
+
+          // If we have admins, check if the target email belongs to an admin
+          if (adminCheck && adminCheck.length > 0) {
+            // Look up if the email being targeted is an admin
+            const { data: { users: targetUsers } } = await supabaseClient.auth.admin.listUsers();
+            const targetUser = targetUsers?.find(u => u.email === email);
+            
+            if (targetUser) {
+              const { data: isTargetAdmin } = await supabaseClient
+                .from("user_roles")
+                .select("role")
+                .eq("user_id", targetUser.id)
+                .eq("role", "admin")
+                .maybeSingle();
+
+              if (isTargetAdmin) {
+                // Send high-priority admin alert for failed admin login
+                await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/send-security-alert`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${Deno.env.get("SUPABASE_ANON_KEY")}`,
+                  },
+                  body: JSON.stringify({
+                    alertType: "failed_admin_login",
+                    severity: "high",
+                    details: `Multiple failed login attempts detected for admin account: ${email}. The account has been temporarily locked.`,
+                    ipAddress: realIp,
+                    userEmail: email,
+                    location: geoLocation.formatted,
+                    eventCount: attemptCount,
+                    actionRequired: "Review the security logs and ensure this is not a targeted attack on admin accounts.",
+                  }),
+                });
+                console.log("Admin security alert sent for failed admin login");
+              }
+            }
+          }
         } catch (notifyError) {
           console.error("Error sending lockout notification:", notifyError);
         }
