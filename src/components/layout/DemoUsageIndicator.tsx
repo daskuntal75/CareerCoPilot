@@ -18,13 +18,15 @@ const DemoUsageIndicator = () => {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Badge 
-            variant={isAtLimit ? "destructive" : "secondary"}
-            className="flex items-center gap-1.5 cursor-help"
-          >
-            <FileText className="w-3 h-3" />
-            <span>{applicationCount} of {demoLimit}</span>
-          </Badge>
+          <div className="inline-flex">
+            <Badge 
+              variant={isAtLimit ? "destructive" : "secondary"}
+              className="flex items-center gap-1.5 cursor-help"
+            >
+              <FileText className="w-3 h-3" />
+              <span>{applicationCount} of {demoLimit}</span>
+            </Badge>
+          </div>
         </TooltipTrigger>
         <TooltipContent>
           <p className="font-medium">Demo Mode</p>
