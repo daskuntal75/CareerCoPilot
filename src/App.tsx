@@ -9,6 +9,7 @@ import { AppSettingsProvider } from "@/contexts/AppSettingsContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { FeedbackButton, addToNavigationHistory } from "@/components/feedback";
 import { SessionTimeoutWarning } from "@/components/layout/SessionTimeoutWarning";
+import CookieConsentBanner from "@/components/privacy/CookieConsentBanner";
 
 // Eager load critical pages
 import Index from "./pages/Index";
@@ -92,6 +93,7 @@ const AppContent = () => (
       </Routes>
     </Suspense>
     <FeedbackButton />
+    <CookieConsentBanner />
   </>
 );
 

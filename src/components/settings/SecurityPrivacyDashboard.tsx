@@ -1,17 +1,20 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Shield, 
-  Eye, 
-  Trash2, 
-  AlertTriangle, 
-  Clock, 
-  CheckCircle2, 
-  XCircle, 
+import {
+  Shield,
+  Eye,
+  Trash2,
+  AlertTriangle,
+  Clock,
+  CheckCircle2,
+  XCircle,
   FileText,
   Download,
   RefreshCw,
-  Lock
+  Lock,
+  Cookie,
+  BarChart3,
+  Megaphone,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,6 +23,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,6 +39,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAuditLog } from "@/hooks/useAuditLog";
+import { useConsentManagement } from "@/hooks/useConsentManagement";
 import { format } from "date-fns";
 
 interface AuditLogEntry {
@@ -65,6 +70,7 @@ const CONFIRM_DELETE_TEXT = "DELETE MY ACCOUNT";
 
 const SecurityPrivacyDashboard = () => {
   const { user } = useAuth();
+  const { consent, updateConsent, isLoading: consentLoading } = useConsentManagement();
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -101,27 +107,13 @@ const SecurityPrivacyDashboard = () => {
   const handleExportData = async () => {
     setIsExporting(true);
     try {
-      // Fetch all user data
-      const [applications, resumes, auditData] = await Promise.all([
-        supabase.from("applications").select("*").eq("user_id", user?.id),
-        supabase.from("user_resumes").select("id, file_name, resume_type, uploaded_at").eq("user_id", user?.id),
-        supabase.from("audit_log").select("*").eq("user_id", user?.id).order("created_at", { ascending: false }),
-      ]);
+      // Use the comprehensive GDPR export function
+      const { data, error } = await supabase.functions.invoke("gdpr-export-data");
 
-      const exportData = {
-        exportedAt: new Date().toISOString(),
-        user: {
-          id: user?.id,
-          email: user?.email,
-          createdAt: user?.created_at,
-        },
-        applications: applications.data || [],
-        resumes: resumes.data || [],
-        activityLog: auditData.data || [],
-      };
+      if (error) throw error;
 
       // Create and download JSON file
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -131,7 +123,7 @@ const SecurityPrivacyDashboard = () => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      toast.success("Data exported successfully");
+      toast.success("Data exported successfully - includes all your personal data");
     } catch (error) {
       console.error("Error exporting data:", error);
       toast.error("Failed to export data");
@@ -143,46 +135,21 @@ const SecurityPrivacyDashboard = () => {
   const handleDeleteAllData = async () => {
     setIsDeleting(true);
     try {
-      // Delete user data from all tables
-      const userId = user?.id;
-      if (!userId) throw new Error("User not found");
+      // Use the comprehensive GDPR delete function
+      const { data, error } = await supabase.functions.invoke("gdpr-delete-account", {
+        body: { confirmText: CONFIRM_DELETE_TEXT },
+      });
 
-      // First, get resume chunk IDs to delete related requirement_matches
-      const { data: chunks } = await supabase
-        .from("resume_chunks")
-        .select("id")
-        .eq("user_id", userId);
+      if (error) throw error;
 
-      if (chunks && chunks.length > 0) {
-        const chunkIds = chunks.map(c => c.id);
-        await supabase
-          .from("requirement_matches")
-          .delete()
-          .in("chunk_id", chunkIds);
-      }
+      toast.success("Your account and all data have been permanently deleted");
 
-      // Delete in order to respect foreign key constraints
-      await Promise.all([
-        supabase.from("email_notifications").delete().eq("user_id", userId),
-        supabase.from("document_versions").delete().eq("user_id", userId),
-        supabase.from("audit_log").delete().eq("user_id", userId),
-        supabase.from("analytics_events").delete().eq("user_id", userId),
-      ]);
-
-      // Delete dependent data
-      await Promise.all([
-        supabase.from("resume_chunks").delete().eq("user_id", userId),
-        supabase.from("user_resumes").delete().eq("user_id", userId),
-        supabase.from("user_cover_letter_templates").delete().eq("user_id", userId),
-        supabase.from("profiles").delete().eq("user_id", userId),
-        supabase.from("applications").delete().eq("user_id", userId),
-      ]);
-
-      toast.success("All your data has been deleted");
+      // Sign out will happen automatically since the user is deleted
+      // But we call it anyway to clear local state
       await supabase.auth.signOut();
     } catch (error) {
       console.error("Error deleting data:", error);
-      toast.error("Failed to delete data. Please contact support.");
+      toast.error("Failed to delete account. Please contact support.");
     } finally {
       setIsDeleting(false);
     }
@@ -231,6 +198,76 @@ const SecurityPrivacyDashboard = () => {
               </p>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Cookie & Tracking Consent */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Cookie className="w-5 h-5 text-accent" />
+            Cookie & Tracking Preferences
+          </CardTitle>
+          <CardDescription>
+            Control how we collect and use your data (GDPR compliant)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Essential Cookies - Always On */}
+          <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+            <div className="flex items-start gap-3">
+              <Shield className="w-5 h-5 text-muted-foreground mt-0.5" />
+              <div>
+                <Label className="text-base font-medium">Essential Cookies</Label>
+                <p className="text-sm text-muted-foreground">
+                  Required for authentication and core functionality
+                </p>
+              </div>
+            </div>
+            <Switch checked={true} disabled />
+          </div>
+
+          {/* Analytics */}
+          <div className="flex items-center justify-between p-4 rounded-lg border border-border">
+            <div className="flex items-start gap-3">
+              <BarChart3 className="w-5 h-5 text-muted-foreground mt-0.5" />
+              <div>
+                <Label className="text-base font-medium">Analytics</Label>
+                <p className="text-sm text-muted-foreground">
+                  Help us improve by tracking feature usage and page views
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={consent.analytics}
+              onCheckedChange={(checked) => updateConsent({ analytics: checked })}
+              disabled={consentLoading}
+            />
+          </div>
+
+          {/* Marketing */}
+          <div className="flex items-center justify-between p-4 rounded-lg border border-border">
+            <div className="flex items-start gap-3">
+              <Megaphone className="w-5 h-5 text-muted-foreground mt-0.5" />
+              <div>
+                <Label className="text-base font-medium">Marketing Communications</Label>
+                <p className="text-sm text-muted-foreground">
+                  Receive personalized tips and product updates
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={consent.marketing}
+              onCheckedChange={(checked) => updateConsent({ marketing: checked })}
+              disabled={consentLoading}
+            />
+          </div>
+
+          {consent.consentTimestamp && (
+            <p className="text-xs text-muted-foreground text-center">
+              Last updated: {format(new Date(consent.consentTimestamp), "MMM d, yyyy 'at' h:mm a")}
+            </p>
+          )}
         </CardContent>
       </Card>
 

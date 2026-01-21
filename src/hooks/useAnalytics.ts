@@ -2,7 +2,7 @@ import { useCallback, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
-type EventCategory = 
+type EventCategory =
   | "navigation"
   | "authentication"
   | "application"
@@ -26,6 +26,18 @@ const getSessionId = (): string => {
     sessionStorage.setItem("analytics_session_id", sessionId);
   }
   return sessionId;
+};
+
+// Check if user has given analytics consent
+const hasAnalyticsConsent = (): boolean => {
+  try {
+    const consentData = localStorage.getItem("privacy_consent");
+    if (!consentData) return false;
+    const consent = JSON.parse(consentData);
+    return consent.consentGiven && consent.analytics;
+  } catch {
+    return false;
+  }
 };
 
 export function useAnalytics() {
@@ -66,8 +78,13 @@ export function useAnalytics() {
   }, [user?.id]);
 
   const trackEvent = useCallback((options: TrackEventOptions) => {
+    // GDPR Compliance: Only track if user has given consent
+    if (!hasAnalyticsConsent()) {
+      return;
+    }
+
     pendingEventsRef.current.push(options);
-    
+
     // Flush after short delay to batch events
     setTimeout(() => {
       flushEvents();
