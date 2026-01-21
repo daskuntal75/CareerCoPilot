@@ -1,11 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders, handleCorsPrelight, createCorsResponse, createCorsErrorResponse } from "../_shared/cors-utils.ts";
 
 const logStep = (step: string, details?: Record<string, unknown>) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
@@ -13,9 +9,11 @@ const logStep = (step: string, details?: Record<string, unknown>) => {
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  // Handle CORS preflight
+  const preflightResponse = handleCorsPrelight(req);
+  if (preflightResponse) return preflightResponse;
+
+  const origin = req.headers.get("origin");
 
   const supabaseClient = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
@@ -48,7 +46,8 @@ serve(async (req) => {
       logStep("Found existing customer", { customerId });
     }
 
-    const origin = req.headers.get("origin") || "http://localhost:5173";
+    // Use origin for redirect URLs, with secure fallback
+    const redirectOrigin = origin || Deno.env.get("APP_URL") || "http://localhost:5173";
 
     // Create a subscription session
     const session = await stripe.checkout.sessions.create({
@@ -61,23 +60,17 @@ serve(async (req) => {
         },
       ],
       mode: "subscription",
-      success_url: `${origin}/subscription/success`,
-      cancel_url: `${origin}/pricing?subscription=canceled`,
+      success_url: `${redirectOrigin}/subscription/success`,
+      cancel_url: `${redirectOrigin}/pricing?subscription=canceled`,
       allow_promotion_codes: true,
     });
 
     logStep("Checkout session created", { sessionId: session.id });
 
-    return new Response(JSON.stringify({ url: session.url }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
-    });
+    return createCorsResponse({ url: session.url }, origin);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
-    });
+    return createCorsErrorResponse(errorMessage, origin, 500);
   }
 });

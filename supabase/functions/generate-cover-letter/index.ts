@@ -3,11 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sanitizeInput, hashString, sandboxUntrustedInput } from "../_shared/security-utils.ts";
 import { logSecurityThreat } from "../_shared/audit-utils.ts";
 import { checkRateLimit, logUsage, createRateLimitResponse } from "../_shared/rate-limit-utils.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders, handleCorsPrelight, createCorsErrorResponse } from "../_shared/cors-utils.ts";
 
 // Input length limits for security
 const MAX_JOB_DESCRIPTION_LENGTH = 15000;
@@ -43,29 +39,32 @@ const tipInstructions: Record<string, string> = {
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  // Handle CORS preflight
+  const preflightResponse = handleCorsPrelight(req);
+  if (preflightResponse) return preflightResponse;
+
+  const origin = req.headers.get("origin");
+  const corsHeaders = getCorsHeaders(origin);
 
   // Load balancing check
   if (!canAcceptRequest()) {
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: "Server is busy",
         message: "High demand detected. Please try again in a few seconds.",
         retryAfter: 5,
       }),
-      { 
-        status: 503, 
-        headers: { 
-          ...corsHeaders, 
+      {
+        status: 503,
+        headers: {
+          ...corsHeaders,
           "Content-Type": "application/json",
           "Retry-After": "5",
-        } 
+        }
       }
     );
   }
-  
+
   activeRequests.count++;
 
   try {

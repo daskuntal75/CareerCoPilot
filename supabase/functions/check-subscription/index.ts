@@ -1,11 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders, handleCorsPrelight, createCorsResponse, createCorsErrorResponse } from "../_shared/cors-utils.ts";
 
 // Price to tier mapping
 const PRICE_TIERS: Record<string, string> = {
@@ -21,9 +17,11 @@ const logStep = (step: string, details?: Record<string, unknown>) => {
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  // Handle CORS preflight
+  const preflightResponse = handleCorsPrelight(req);
+  if (preflightResponse) return preflightResponse;
+
+  const origin = req.headers.get("origin");
 
   const supabaseClient = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
@@ -53,14 +51,14 @@ serve(async (req) => {
 
     if (customers.data.length === 0) {
       logStep("No customer found, returning free tier");
-      return new Response(JSON.stringify({ 
-        subscribed: false, 
-        tier: "free",
-        subscription_end: null 
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
+      return createCorsResponse(
+        {
+          subscribed: false,
+          tier: "free",
+          subscription_end: null
+        },
+        origin
+      );
     }
 
     const customerId = customers.data[0].id;
@@ -74,43 +72,40 @@ serve(async (req) => {
 
     if (subscriptions.data.length === 0) {
       logStep("No active subscription found");
-      return new Response(JSON.stringify({ 
-        subscribed: false, 
-        tier: "free",
-        subscription_end: null 
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
+      return createCorsResponse(
+        {
+          subscribed: false,
+          tier: "free",
+          subscription_end: null
+        },
+        origin
+      );
     }
 
     const subscription = subscriptions.data[0];
     const subscriptionEnd = new Date(subscription.current_period_end * 1000).toISOString();
     const priceId = subscription.items.data[0].price.id;
     const tier = PRICE_TIERS[priceId] || "pro";
-    
-    logStep("Active subscription found", { 
-      subscriptionId: subscription.id, 
-      tier, 
+
+    logStep("Active subscription found", {
+      subscriptionId: subscription.id,
+      tier,
       priceId,
-      endDate: subscriptionEnd 
+      endDate: subscriptionEnd
     });
 
-    return new Response(JSON.stringify({
-      subscribed: true,
-      tier,
-      subscription_end: subscriptionEnd,
-      price_id: priceId,
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
-    });
+    return createCorsResponse(
+      {
+        subscribed: true,
+        tier,
+        subscription_end: subscriptionEnd,
+        price_id: priceId,
+      },
+      origin
+    );
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
-    return new Response(JSON.stringify({ error: errorMessage }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
-    });
+    return createCorsErrorResponse(errorMessage, origin, 500);
   }
 });

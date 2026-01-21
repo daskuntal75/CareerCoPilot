@@ -1,11 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { getLocationFromIP } from "../_shared/geolocation.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders, handleCorsPrelight, createCorsResponse, createCorsErrorResponse } from "../_shared/cors-utils.ts";
 
 interface RateLimitRequest {
   action: "check" | "log_failure" | "log_success" | "check_lockout";
@@ -30,9 +26,11 @@ const CONFIG: RateLimitConfig = {
 };
 
 const handler = async (req: Request): Promise<Response> => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  // Handle CORS preflight
+  const preflightResponse = handleCorsPrelight(req);
+  if (preflightResponse) return preflightResponse;
+
+  const origin = req.headers.get("origin");
 
   try {
     const supabaseClient = createClient(
@@ -44,9 +42,9 @@ const handler = async (req: Request): Promise<Response> => {
     const { action, email, ipAddress, userAgent, userId }: RateLimitRequest = await req.json();
 
     // Get real IP from headers (Cloudflare/proxy)
-    const realIp = ipAddress || 
-      req.headers.get("cf-connecting-ip") || 
-      req.headers.get("x-forwarded-for")?.split(",")[0] || 
+    const realIp = ipAddress ||
+      req.headers.get("cf-connecting-ip") ||
+      req.headers.get("x-forwarded-for")?.split(",")[0] ||
       req.headers.get("x-real-ip") ||
       "unknown";
 
@@ -63,11 +61,18 @@ const handler = async (req: Request): Promise<Response> => {
         .order("created_at", { ascending: false });
 
       if (attemptsError) {
-        console.error("Error checking rate limit:", attemptsError);
-        // Fail open - allow the attempt if we can't check
-        return new Response(
-          JSON.stringify({ allowed: true, remainingAttempts: CONFIG.maxAttempts }),
-          { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        // SECURITY: Fail CLOSED - deny the attempt if we can't verify rate limit status
+        // This prevents bypass attacks when the database is unavailable
+        console.error("Error checking rate limit - failing closed:", attemptsError);
+        return createCorsResponse(
+          {
+            allowed: false,
+            remainingAttempts: 0,
+            error: "Unable to verify rate limit. Please try again.",
+            failedClosed: true,
+          },
+          origin,
+          503
         );
       }
 
@@ -103,15 +108,15 @@ const handler = async (req: Request): Promise<Response> => {
         }
       }
 
-      return new Response(
-        JSON.stringify({
+      return createCorsResponse(
+        {
           allowed: !isLocked && remainingAttempts > 0,
           remainingAttempts,
           isLocked,
           lockoutRemainingMs,
           lockoutSeconds: Math.ceil(lockoutRemainingMs / 1000),
-        }),
-        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        },
+        origin
       );
     }
 
@@ -224,14 +229,14 @@ const handler = async (req: Request): Promise<Response> => {
         }
       }
 
-      return new Response(
-        JSON.stringify({ 
-          logged: true, 
+      return createCorsResponse(
+        {
+          logged: true,
           attemptCount,
           triggersLockout,
           remainingAttempts: Math.max(0, CONFIG.maxAttempts - attemptCount),
-        }),
-        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        },
+        origin
       );
     }
 
@@ -264,24 +269,18 @@ const handler = async (req: Request): Promise<Response> => {
         console.error("Error logging successful login:", logError);
       }
 
-      return new Response(
-        JSON.stringify({ logged: true, location: geoLocation.formatted }),
-        { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      return createCorsResponse(
+        { logged: true, location: geoLocation.formatted },
+        origin
       );
     }
 
-    return new Response(
-      JSON.stringify({ error: "Invalid action" }),
-      { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
+    return createCorsErrorResponse("Invalid action", origin, 400);
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("Rate limit error:", errorMessage);
-    return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
+    return createCorsErrorResponse(errorMessage, origin, 500);
   }
 };
 

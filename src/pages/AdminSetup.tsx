@@ -16,11 +16,13 @@ const AdminSetup = () => {
   const navigate = useNavigate();
   const [checking, setChecking] = useState(true);
   const [setupAvailable, setSetupAvailable] = useState(false);
+  const [setupToken, setSetupToken] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showToken, setShowToken] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
@@ -45,40 +47,59 @@ const AdminSetup = () => {
   };
 
   const validateForm = () => {
+    if (!setupToken) {
+      setError("Setup token is required");
+      return false;
+    }
+
     if (!email || !password || !confirmPassword) {
       setError("All fields are required");
       return false;
     }
-    
+
     if (!email.includes("@")) {
       setError("Please enter a valid email address");
       return false;
     }
-    
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters");
+
+    // Stronger password requirements for admin accounts
+    if (password.length < 12) {
+      setError("Password must be at least 12 characters");
       return false;
     }
-    
+
+    const hasUppercase = /[A-Z]/.test(password);
+    const hasLowercase = /[a-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+
+    if (!hasUppercase || !hasLowercase || !hasNumber || !hasSpecial) {
+      setError("Password must contain uppercase, lowercase, number, and special character");
+      return false;
+    }
+
     if (password !== confirmPassword) {
       setError("Passwords do not match");
       return false;
     }
-    
+
     return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    
+
     if (!validateForm()) return;
-    
+
     setLoading(true);
 
     try {
       const { data, error } = await supabase.functions.invoke("setup-first-admin", {
         body: { email, password, fullName },
+        headers: {
+          "x-setup-token": setupToken,
+        },
       });
 
       if (error) throw error;
@@ -224,6 +245,38 @@ const AdminSetup = () => {
                   )}
 
                   <div className="space-y-2">
+                    <Label htmlFor="setupToken">Setup Token *</Label>
+                    <div className="relative">
+                      <Input
+                        id="setupToken"
+                        type={showToken ? "text" : "password"}
+                        value={setupToken}
+                        onChange={(e) => setSetupToken(e.target.value)}
+                        placeholder="Enter the setup token"
+                        required
+                        disabled={loading}
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full px-3"
+                        onClick={() => setShowToken(!showToken)}
+                      >
+                        {showToken ? (
+                          <EyeOff className="w-4 h-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="w-4 h-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      The setup token is provided by your system administrator
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="fullName">Full Name</Label>
                     <Input
                       id="fullName"
@@ -256,7 +309,7 @@ const AdminSetup = () => {
                         type={showPassword ? "text" : "password"}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Minimum 8 characters"
+                        placeholder="Min 12 chars, uppercase, lowercase, number, special"
                         required
                         disabled={loading}
                         className="pr-10"
