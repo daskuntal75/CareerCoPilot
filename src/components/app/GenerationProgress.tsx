@@ -1,7 +1,8 @@
-import { motion } from "framer-motion";
-import { Check, Loader2, RefreshCw, AlertTriangle, X, Shield, Lock, Eye } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Check, Loader2, RefreshCw, AlertTriangle, X, Shield, Lock, Eye, Sparkles, Zap, Brain } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
 
 export type GenerationStage = "analyzing" | "drafting" | "refining" | "complete";
 
@@ -23,26 +24,138 @@ interface GenerationProgressProps {
 
 const stageConfig = {
   "cover-letter": {
-    analyzing: { label: "Analyzing job requirements", description: "Matching your experience with job criteria" },
-    drafting: { label: "Drafting cover letter", description: "Creating personalized content based on your profile" },
-    refining: { label: "Refining & polishing", description: "Enhancing language and formatting" },
-    complete: { label: "Complete", description: "Your cover letter is ready" },
+    analyzing: { 
+      label: "Analyzing requirements", 
+      description: "Matching your experience with job criteria",
+      icon: Brain,
+      tips: ["Identifying key requirements", "Mapping your skills", "Finding best matches"]
+    },
+    drafting: { 
+      label: "Drafting cover letter", 
+      description: "Creating personalized content",
+      icon: Sparkles,
+      tips: ["Writing compelling opening", "Highlighting achievements", "Adding STAR examples"]
+    },
+    refining: { 
+      label: "Refining & polishing", 
+      description: "Enhancing language and flow",
+      icon: Zap,
+      tips: ["Optimizing tone", "Improving clarity", "Final quality check"]
+    },
+    complete: { 
+      label: "Complete", 
+      description: "Your cover letter is ready",
+      icon: Check,
+      tips: []
+    },
   },
   "interview-prep": {
-    analyzing: { label: "Researching company", description: "Gathering intelligence and strategic insights" },
-    drafting: { label: "Generating questions", description: "Creating role-specific interview scenarios" },
-    refining: { label: "Building STAR answers", description: "Crafting responses from your experience" },
-    complete: { label: "Complete", description: "Your interview prep is ready" },
+    analyzing: { 
+      label: "Researching company", 
+      description: "Gathering intelligence and insights",
+      icon: Brain,
+      tips: ["Analyzing company culture", "Identifying key stakeholders", "Understanding the market"]
+    },
+    drafting: { 
+      label: "Generating questions", 
+      description: "Creating interview scenarios",
+      icon: Sparkles,
+      tips: ["Predicting behavioral questions", "Building technical scenarios", "Preparing case studies"]
+    },
+    refining: { 
+      label: "Building STAR answers", 
+      description: "Crafting responses from your experience",
+      icon: Zap,
+      tips: ["Structuring situations", "Highlighting actions", "Quantifying results"]
+    },
+    complete: { 
+      label: "Complete", 
+      description: "Your interview prep is ready",
+      icon: Check,
+      tips: []
+    },
   },
 };
 
 const securityFeatures = [
-  { icon: Shield, text: "Zero-retention AI processing" },
-  { icon: Lock, text: "End-to-end encryption" },
-  { icon: Eye, text: "PII automatically redacted" },
+  { icon: Shield, text: "Zero-retention AI" },
+  { icon: Lock, text: "Encrypted" },
+  { icon: Eye, text: "PII protected" },
 ];
 
 const stages: GenerationStage[] = ["analyzing", "drafting", "refining", "complete"];
+
+// Rotating tips component
+const RotatingTips = ({ tips }: { tips: string[] }) => {
+  const [currentTip, setCurrentTip] = useState(0);
+  
+  useEffect(() => {
+    if (tips.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentTip(prev => (prev + 1) % tips.length);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [tips.length]);
+  
+  if (tips.length === 0) return null;
+  
+  return (
+    <AnimatePresence mode="wait">
+      <motion.p
+        key={currentTip}
+        initial={{ opacity: 0, y: 5 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -5 }}
+        className="text-xs text-accent/80 flex items-center gap-1.5"
+      >
+        <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+        {tips[currentTip]}
+      </motion.p>
+    </AnimatePresence>
+  );
+};
+
+// Streaming content preview with live typing effect
+const StreamingPreview = ({ content }: { content: string }) => {
+  const displayContent = content.slice(-400);
+  const lines = displayContent.split('\n').slice(-6);
+  
+  return (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: "auto" }}
+      className="mb-4 rounded-lg bg-muted/20 border border-border/50 overflow-hidden"
+    >
+      <div className="px-3 py-2 border-b border-border/50 bg-muted/30 flex items-center gap-2">
+        <div className="flex gap-1">
+          <span className="w-2 h-2 rounded-full bg-destructive/50" />
+          <span className="w-2 h-2 rounded-full bg-warning/50" />
+          <span className="w-2 h-2 rounded-full bg-success/50" />
+        </div>
+        <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Live Preview</span>
+      </div>
+      <div className="p-3 max-h-28 overflow-y-auto">
+        <div className="font-mono text-xs text-foreground/80 whitespace-pre-wrap leading-relaxed">
+          {lines.map((line, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: i === lines.length - 1 ? 1 : 0.7 }}
+              className={cn(i === lines.length - 1 && "font-medium")}
+            >
+              {line || '\u00A0'}
+            </motion.div>
+          ))}
+          <motion.span
+            animate={{ opacity: [1, 0] }}
+            transition={{ duration: 0.5, repeat: Infinity }}
+            className="inline-block w-2 h-4 bg-accent ml-0.5 align-middle"
+          />
+        </div>
+      </div>
+    </motion.div>
+  );
+};
 
 const GenerationProgress = ({ 
   currentStage, 
@@ -54,171 +167,222 @@ const GenerationProgress = ({
 }: GenerationProgressProps) => {
   const config = stageConfig[type];
   const currentIndex = stages.indexOf(currentStage);
-  const calculatedProgress = externalProgress ?? ((currentIndex + 1) / 3) * 100;
+  const baseProgress = (currentIndex / 3) * 100;
+  const stageProgress = 33.33;
+  
+  // Animate progress within current stage
+  const [animatedProgress, setAnimatedProgress] = useState(0);
+  
+  useEffect(() => {
+    if (externalProgress !== undefined) {
+      setAnimatedProgress(externalProgress);
+      return;
+    }
+    
+    // Simulate progress within stage
+    const targetProgress = baseProgress + (stageProgress * 0.9);
+    const increment = (targetProgress - animatedProgress) * 0.1;
+    
+    const interval = setInterval(() => {
+      setAnimatedProgress(prev => {
+        if (prev >= targetProgress) return prev;
+        return Math.min(prev + increment, targetProgress);
+      });
+    }, 200);
+    
+    return () => clearInterval(interval);
+  }, [currentStage, baseProgress, externalProgress]);
+
+  const currentConfig = config[currentStage];
+  const CurrentIcon = currentConfig.icon;
 
   return (
-    <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center">
+    <div className="fixed inset-0 z-50 bg-background/90 backdrop-blur-md flex items-center justify-center">
       <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="bg-card border border-border rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl"
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="bg-card border border-border rounded-2xl p-6 max-w-lg w-full mx-4 shadow-2xl"
       >
-        <div className="text-center mb-8">
+        {/* Header */}
+        <div className="text-center mb-6">
           <motion.div
-            animate={{ rotate: currentStage !== "complete" ? 360 : 0 }}
-            transition={{ duration: 2, repeat: currentStage !== "complete" ? Infinity : 0, ease: "linear" }}
-            className="w-16 h-16 mx-auto mb-4 rounded-full bg-accent/10 flex items-center justify-center"
+            className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-accent/20 to-accent/5 flex items-center justify-center relative"
           >
-            {currentStage === "complete" ? (
-              <Check className="w-8 h-8 text-success" />
-            ) : retryInfo?.isRetrying ? (
-              <RefreshCw className="w-8 h-8 text-warning" />
-            ) : (
-              <Loader2 className="w-8 h-8 text-accent" />
+            {/* Spinning ring */}
+            {currentStage !== "complete" && (
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                className="absolute inset-0 rounded-full border-2 border-transparent border-t-accent"
+              />
             )}
+            
+            <motion.div
+              animate={{ 
+                scale: currentStage === "complete" ? [1, 1.2, 1] : 1,
+              }}
+              transition={{ duration: 0.3 }}
+            >
+              {currentStage === "complete" ? (
+                <Check className="w-10 h-10 text-success" />
+              ) : retryInfo?.isRetrying ? (
+                <RefreshCw className="w-10 h-10 text-warning animate-spin" />
+              ) : (
+                <CurrentIcon className="w-10 h-10 text-accent" />
+              )}
+            </motion.div>
           </motion.div>
+          
           <h2 className="text-xl font-bold text-foreground">
-            {type === "cover-letter" ? "Generating Cover Letter" : "Preparing Interview Guide"}
+            {currentConfig.label}
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Using Gemini 2.5 Flash for fast, accurate results
+            {currentConfig.description}
           </p>
+          
+          {/* Rotating tips */}
+          <div className="mt-3 h-5">
+            <RotatingTips tips={currentConfig.tips} />
+          </div>
         </div>
 
-        {/* Security Features Banner */}
+        {/* Security Features */}
         <motion.div
-          initial={{ opacity: 0, y: 5 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-4 p-3 rounded-lg bg-success/5 border border-success/20"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.2 }}
+          className="mb-4 p-2 rounded-lg bg-success/5 border border-success/10"
         >
-          <div className="flex items-center justify-center gap-4 text-xs text-success">
+          <div className="flex items-center justify-center gap-4 text-[10px] text-success uppercase tracking-wider">
             {securityFeatures.map((feature, index) => (
-              <div key={index} className="flex items-center gap-1.5">
-                <feature.icon className="w-3.5 h-3.5" />
+              <div key={index} className="flex items-center gap-1">
+                <feature.icon className="w-3 h-3" />
                 <span>{feature.text}</span>
               </div>
             ))}
           </div>
         </motion.div>
 
-        {/* Retry Status Banner */}
-        {retryInfo && retryInfo.attempt > 1 && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            className={cn(
-              "mb-4 p-3 rounded-lg flex items-center gap-3 text-sm",
-              retryInfo.isRetrying 
-                ? "bg-warning/10 border border-warning/20 text-warning" 
-                : "bg-muted/50 border border-border text-muted-foreground"
-            )}
-          >
-            {retryInfo.isRetrying ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin flex-shrink-0" />
-                <div>
-                  <p className="font-medium">Retrying... (Attempt {retryInfo.attempt}/{retryInfo.maxAttempts})</p>
-                  {retryInfo.lastError && (
-                    <p className="text-xs opacity-80 mt-0.5">{retryInfo.lastError}</p>
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                <p>Recovered after {retryInfo.attempt - 1} retry attempt(s)</p>
-              </>
-            )}
-          </motion.div>
-        )}
+        {/* Retry Status */}
+        <AnimatePresence>
+          {retryInfo && retryInfo.attempt > 1 && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className={cn(
+                "mb-4 p-3 rounded-lg flex items-center gap-3 text-sm",
+                retryInfo.isRetrying 
+                  ? "bg-warning/10 border border-warning/20 text-warning" 
+                  : "bg-muted/50 border border-border text-muted-foreground"
+              )}
+            >
+              {retryInfo.isRetrying ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin flex-shrink-0" />
+                  <div>
+                    <p className="font-medium">Retrying... (Attempt {retryInfo.attempt}/{retryInfo.maxAttempts})</p>
+                    {retryInfo.lastError && (
+                      <p className="text-xs opacity-80 mt-0.5">{retryInfo.lastError}</p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                  <p>Recovered after {retryInfo.attempt - 1} retry</p>
+                </>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Streaming Content Preview */}
-        {streamingContent && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="mb-4 p-3 rounded-lg bg-muted/30 border border-border max-h-32 overflow-y-auto"
-          >
-            <p className="text-xs text-muted-foreground font-mono whitespace-pre-wrap">
-              {streamingContent.slice(-500)}
-              <span className="animate-pulse">▊</span>
-            </p>
-          </motion.div>
-        )}
+        <AnimatePresence>
+          {streamingContent && streamingContent.length > 10 && (
+            <StreamingPreview content={streamingContent} />
+          )}
+        </AnimatePresence>
 
-        <div className="space-y-4">
+        {/* Stage Progress Steps */}
+        <div className="flex items-center justify-between mb-6">
           {stages.slice(0, -1).map((stage, index) => {
             const isComplete = index < currentIndex;
             const isCurrent = index === currentIndex;
-            const stageInfo = config[stage];
+            const StageIcon = config[stage].icon;
 
             return (
-              <motion.div
-                key={stage}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className={cn(
-                  "flex items-start gap-4 p-3 rounded-lg transition-colors",
-                  isCurrent && "bg-accent/5 border border-accent/20",
-                  isComplete && "opacity-60"
-                )}
-              >
-                <div className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors",
-                  isComplete && "bg-success/20 text-success",
-                  isCurrent && "bg-accent/20 text-accent",
-                  !isComplete && !isCurrent && "bg-muted text-muted-foreground"
-                )}>
+              <div key={stage} className="flex-1 flex items-center">
+                <motion.div
+                  animate={{
+                    scale: isCurrent ? 1.1 : 1,
+                  }}
+                  className={cn(
+                    "w-10 h-10 rounded-full flex items-center justify-center transition-colors",
+                    isComplete && "bg-success text-success-foreground",
+                    isCurrent && "bg-accent text-accent-foreground",
+                    !isComplete && !isCurrent && "bg-muted text-muted-foreground"
+                  )}
+                >
                   {isComplete ? (
-                    <Check className="w-4 h-4" />
+                    <Check className="w-5 h-5" />
                   ) : isCurrent ? (
                     <motion.div
                       animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
                     >
-                      <Loader2 className="w-4 h-4" />
+                      <StageIcon className="w-5 h-5" />
                     </motion.div>
                   ) : (
-                    <span className="text-sm font-medium">{index + 1}</span>
+                    <StageIcon className="w-5 h-5" />
                   )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className={cn(
-                    "font-medium",
-                    isCurrent ? "text-foreground" : "text-muted-foreground"
-                  )}>
-                    {stageInfo.label}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {stageInfo.description}
-                  </p>
-                </div>
-              </motion.div>
+                </motion.div>
+                
+                {index < 2 && (
+                  <div className="flex-1 h-1 mx-2 rounded-full bg-muted overflow-hidden">
+                    <motion.div
+                      className="h-full bg-accent"
+                      initial={{ width: "0%" }}
+                      animate={{ 
+                        width: isComplete ? "100%" : isCurrent ? "50%" : "0%" 
+                      }}
+                      transition={{ duration: 0.5 }}
+                    />
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
 
-        <div className="mt-6 pt-4 border-t border-border">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Step {Math.min(currentIndex + 1, 3)} of 3</span>
-            <span>
-              {retryInfo?.isRetrying 
-                ? `Retry ${retryInfo.attempt}/${retryInfo.maxAttempts}` 
-                : "This may take up to a minute"}
+        {/* Main Progress Bar */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">
+              {type === "cover-letter" ? "Generating Cover Letter" : "Preparing Interview Guide"}
+            </span>
+            <span className="font-mono text-foreground">
+              {Math.round(animatedProgress)}%
             </span>
           </div>
-          <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
+          <div className="h-2 bg-muted rounded-full overflow-hidden">
             <motion.div
               className={cn(
                 "h-full rounded-full",
-                retryInfo?.isRetrying ? "bg-warning" : "bg-accent"
+                retryInfo?.isRetrying 
+                  ? "bg-warning" 
+                  : "bg-gradient-to-r from-accent to-accent/70"
               )}
               initial={{ width: "0%" }}
-              animate={{ width: `${calculatedProgress}%` }}
-              transition={{ duration: 0.5 }}
+              animate={{ width: `${animatedProgress}%` }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
             />
           </div>
+          <p className="text-[10px] text-muted-foreground text-center">
+            {retryInfo?.isRetrying 
+              ? `Retry ${retryInfo.attempt}/${retryInfo.maxAttempts}` 
+              : "Using Gemini 2.5 Flash for fast, accurate results"}
+          </p>
         </div>
 
         {/* Cancel Button */}
@@ -236,7 +400,7 @@ const GenerationProgress = ({
               className="text-muted-foreground hover:text-destructive"
             >
               <X className="w-4 h-4 mr-2" />
-              Cancel Generation
+              Cancel
             </Button>
           </motion.div>
         )}
