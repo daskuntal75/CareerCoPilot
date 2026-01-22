@@ -1,9 +1,12 @@
 /**
  * Rate Limiting Utilities for AI Generation Edge Functions
- * 
+ *
  * Implements hourly rate limits per user:
  * - Free tier: 10 AI generations per hour
  * - Paid tiers: Higher or unlimited limits
+ *
+ * Also provides distributed rate limiting using database-backed
+ * sliding window algorithm for scalability across edge function instances.
  */
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -21,12 +24,28 @@ export interface RateLimitResult {
   tier: string;
 }
 
+export interface DistributedRateLimitResult {
+  allowed: boolean;
+  remaining: number;
+  total: number;
+  resetAt: Date;
+}
+
 // Tier-based rate limits per hour
 const TIER_LIMITS: Record<string, number> = {
   free: 10,
   basic: 50,
   pro: 200,
+  premium: 500,
   enterprise: -1, // Unlimited
+};
+
+// Concurrent request limits per resource
+const CONCURRENT_LIMITS: Record<string, number> = {
+  "cover-letter-generation": 50,
+  "interview-prep-generation": 50,
+  "job-fit-analysis": 100,
+  default: 100,
 };
 
 /**
@@ -162,7 +181,7 @@ export function createRateLimitResponse(
   corsHeaders: Record<string, string>
 ): Response {
   const resetInMinutes = Math.ceil((result.resetAt.getTime() - Date.now()) / 60000);
-  
+
   return new Response(
     JSON.stringify({
       error: "Rate limit exceeded",
@@ -180,6 +199,113 @@ export function createRateLimitResponse(
         "X-RateLimit-Remaining": "0",
         "X-RateLimit-Reset": result.resetAt.toISOString(),
         "Retry-After": String(resetInMinutes * 60),
+      },
+    }
+  );
+}
+
+// ============================================================================
+// DISTRIBUTED RATE LIMITING (Database-backed for scalability)
+// ============================================================================
+
+/**
+ * Check distributed rate limit using database-backed sliding window.
+ * This works across all edge function instances.
+ *
+ * @param supabase - Supabase client with service role
+ * @param bucketKey - Unique identifier (user_id, IP, etc.)
+ * @param resource - The resource being rate limited
+ * @param maxRequests - Maximum requests allowed in window
+ * @param windowMs - Window duration in milliseconds
+ */
+export async function checkDistributedRateLimit(
+  supabase: SupabaseClient,
+  bucketKey: string,
+  resource: string,
+  maxRequests: number = 100,
+  windowMs: number = 60000
+): Promise<DistributedRateLimitResult> {
+  try {
+    const { data, error } = await supabase.rpc("check_rate_limit", {
+      p_bucket_key: bucketKey,
+      p_resource: resource,
+      p_max_requests: maxRequests,
+      p_window_ms: windowMs,
+    });
+
+    if (error) {
+      console.error("Distributed rate limit check failed:", error);
+      // Fail open but log the error
+      return {
+        allowed: true,
+        remaining: maxRequests,
+        total: maxRequests,
+        resetAt: new Date(Date.now() + windowMs),
+      };
+    }
+
+    return {
+      allowed: data.allowed,
+      remaining: data.remaining,
+      total: data.total,
+      resetAt: new Date(data.reset_at),
+    };
+  } catch (err) {
+    console.error("Distributed rate limit error:", err);
+    // Fail open on unexpected errors
+    return {
+      allowed: true,
+      remaining: maxRequests,
+      total: maxRequests,
+      resetAt: new Date(Date.now() + windowMs),
+    };
+  }
+}
+
+/**
+ * Check concurrent request limit for a resource.
+ * Uses database-backed counter instead of in-memory.
+ */
+export async function checkConcurrentLimit(
+  supabase: SupabaseClient,
+  resource: string
+): Promise<{ allowed: boolean; current: number; max: number }> {
+  const maxConcurrent = CONCURRENT_LIMITS[resource] || CONCURRENT_LIMITS.default;
+
+  // Use a short window (5 seconds) to track "active" requests
+  const result = await checkDistributedRateLimit(
+    supabase,
+    `concurrent:${resource}`,
+    "concurrent",
+    maxConcurrent,
+    5000 // 5 second window
+  );
+
+  return {
+    allowed: result.allowed,
+    current: result.total - result.remaining,
+    max: maxConcurrent,
+  };
+}
+
+/**
+ * Create a concurrency limit error response
+ */
+export function createConcurrencyLimitResponse(
+  corsHeaders: Record<string, string>
+): Response {
+  return new Response(
+    JSON.stringify({
+      error: "Server is busy",
+      message: "High demand detected. Please try again in a few seconds.",
+      retryAfter: 5,
+    }),
+    {
+      status: 503,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+        "Retry-After": "5",
       },
     }
   );

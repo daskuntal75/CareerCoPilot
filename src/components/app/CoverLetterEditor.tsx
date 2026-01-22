@@ -2,15 +2,15 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { 
-  ArrowLeft, Download, Copy, RefreshCw, Check, FileText, FileType, 
+import {
+  ArrowLeft, Download, Copy, RefreshCw, Check, FileText, FileType,
   MessageSquare, ChevronDown, FileEdit, Sparkles, Target, MessageCircle,
   Eye, Clock, History
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } from "docx";
+import { downloadAsDocx } from "@/utils/docx-export";
 import type { JobData } from "@/pages/App";
 import {
   Dialog,
@@ -219,110 +219,16 @@ const CoverLetterEditor = ({
       toast.error("No content to export");
       return;
     }
-    
+
     setIsExporting(true);
     try {
-      const lines = content.split('\n');
-      const paragraphs: Paragraph[] = [];
-      
-      // Add title
-      paragraphs.push(new Paragraph({
-        children: [
-          new TextRun({ 
-            text: `Cover Letter - ${jobData.title} at ${jobData.company}`, 
-            bold: true, 
-            size: 32 
-          })
-        ],
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 400 },
-      }));
-      
-      for (const line of lines) {
-        if (line.trim() === '') {
-          paragraphs.push(new Paragraph({ text: '', spacing: { after: 120 } }));
-        } else if (line.startsWith('## ')) {
-          // Section header
-          paragraphs.push(new Paragraph({
-            children: [
-              new TextRun({ 
-                text: line.replace('## ', ''), 
-                bold: true, 
-                size: 28 
-              })
-            ],
-            heading: HeadingLevel.HEADING_2,
-            spacing: { before: 300, after: 150 },
-          }));
-        } else if (line.startsWith('# ')) {
-          // Main header
-          paragraphs.push(new Paragraph({
-            children: [
-              new TextRun({ 
-                text: line.replace('# ', ''), 
-                bold: true, 
-                size: 32 
-              })
-            ],
-            heading: HeadingLevel.HEADING_1,
-            spacing: { before: 400, after: 200 },
-          }));
-        } else if (line.startsWith('• ') || line.startsWith('- ') || line.startsWith('* ')) {
-          // Bullet point
-          paragraphs.push(new Paragraph({
-            children: [new TextRun({ text: line.replace(/^[•\-\*]\s*/, ''), size: 24 })],
-            bullet: { level: 0 },
-            spacing: { after: 80 },
-          }));
-        } else if (line.match(/^\*\*.*\*\*$/)) {
-          // Bold text line
-          paragraphs.push(new Paragraph({
-            children: [new TextRun({ text: line.replace(/\*\*/g, ''), bold: true, size: 24 })],
-            spacing: { after: 120 },
-          }));
-        } else {
-          // Regular paragraph - handle inline bold
-          const parts = line.split(/(\*\*[^*]+\*\*)/g);
-          const runs: TextRun[] = [];
-          
-          for (const part of parts) {
-            if (part.startsWith('**') && part.endsWith('**')) {
-              runs.push(new TextRun({ text: part.replace(/\*\*/g, ''), bold: true, size: 24 }));
-            } else if (part) {
-              runs.push(new TextRun({ text: part, size: 24 }));
-            }
-          }
-          
-          paragraphs.push(new Paragraph({
-            children: runs,
-            spacing: { after: 120 },
-          }));
-        }
-      }
-      
-      const doc = new Document({
-        sections: [{
-          properties: {
-            page: {
-              margin: {
-                top: 1440, // 1 inch in twips
-                right: 1440,
-                bottom: 1440,
-                left: 1440,
-              },
-            },
-          },
-          children: paragraphs,
-        }],
+      // Use lazy-loaded DOCX export utility
+      await downloadAsDocx({
+        content,
+        title: jobData.title,
+        company: jobData.company,
+        type: 'cover-letter',
       });
-      
-      const blob = await Packer.toBlob(doc);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `CoverLetter_${jobData.company.replace(/\s+/g, "_")}.docx`;
-      a.click();
-      URL.revokeObjectURL(url);
       toast.success("DOCX downloaded!");
     } catch (error) {
       console.error("DOCX export error:", error);
