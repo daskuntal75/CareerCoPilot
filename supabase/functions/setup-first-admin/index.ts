@@ -203,9 +203,11 @@ serve(async (req) => {
 
     } finally {
       // Always release the advisory lock
-      await supabaseClient.rpc("pg_advisory_unlock", { key: lockKey }).catch((err: Error) => {
+      try {
+        await supabaseClient.rpc("pg_advisory_unlock", { key: lockKey });
+      } catch (err) {
         console.error("Failed to release lock:", err);
-      });
+      }
     }
 
   } catch (error) {

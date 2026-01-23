@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
 
 const CONSENT_STORAGE_KEY = "privacy_consent";
 const CONSENT_VERSION = "1.0";
@@ -21,16 +20,6 @@ const DEFAULT_CONSENT: ConsentPreferences = {
   consentGiven: false,
   consentVersion: CONSENT_VERSION,
   consentTimestamp: null,
-};
-
-// Generate a simple anonymous ID for non-logged-in users
-const getAnonymousId = (): string => {
-  let anonymousId = localStorage.getItem("anonymous_consent_id");
-  if (!anonymousId) {
-    anonymousId = `anon_${crypto.randomUUID()}`;
-    localStorage.setItem("anonymous_consent_id", anonymousId);
-  }
-  return anonymousId;
 };
 
 export function useConsentManagement() {
@@ -55,40 +44,12 @@ export function useConsentManagement() {
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load consent from database for logged-in users
+  // Load consent from localStorage (consent is stored locally, not in database)
   useEffect(() => {
-    const loadConsent = async () => {
-      if (user) {
-        try {
-          const { data, error } = await supabase
-            .from("profiles")
-            .select("analytics_consent, marketing_consent, consent_updated_at")
-            .eq("user_id", user.id)
-            .single();
-
-          if (!error && data && data.consent_updated_at) {
-            const dbConsent: ConsentPreferences = {
-              analytics: data.analytics_consent ?? false,
-              marketing: data.marketing_consent ?? false,
-              functional: true,
-              consentGiven: true,
-              consentVersion: CONSENT_VERSION,
-              consentTimestamp: data.consent_updated_at,
-            };
-            setConsent(dbConsent);
-            localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify(dbConsent));
-          }
-        } catch (err) {
-          console.error("Error loading consent:", err);
-        }
-      }
-      setIsLoading(false);
-    };
-
-    loadConsent();
+    setIsLoading(false);
   }, [user]);
 
-  // Save consent to database and localStorage
+  // Save consent to localStorage
   const updateConsent = useCallback(async (
     newConsent: Partial<Omit<ConsentPreferences, "functional" | "consentVersion">>
   ) => {
@@ -102,57 +63,10 @@ export function useConsentManagement() {
       consentTimestamp: timestamp,
     };
 
-    // Save to localStorage immediately
+    // Save to localStorage
     localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify(updatedConsent));
     setConsent(updatedConsent);
-
-    // Save to database
-    try {
-      if (user) {
-        // Update profile for logged-in users
-        await supabase
-          .from("profiles")
-          .update({
-            analytics_consent: updatedConsent.analytics,
-            marketing_consent: updatedConsent.marketing,
-            consent_updated_at: timestamp,
-          })
-          .eq("user_id", user.id);
-
-        // Also store detailed consent record
-        await supabase.from("user_consent").upsert({
-          user_id: user.id,
-          analytics_consent: updatedConsent.analytics,
-          marketing_consent: updatedConsent.marketing,
-          functional_consent: true,
-          consent_given_at: timestamp,
-          consent_updated_at: timestamp,
-          consent_method: "settings",
-          consent_version: CONSENT_VERSION,
-        }, {
-          onConflict: "user_id",
-        });
-      } else {
-        // Store anonymous consent
-        const anonymousId = getAnonymousId();
-        await supabase.from("user_consent").upsert({
-          anonymous_id: anonymousId,
-          analytics_consent: updatedConsent.analytics,
-          marketing_consent: updatedConsent.marketing,
-          functional_consent: true,
-          consent_given_at: timestamp,
-          consent_updated_at: timestamp,
-          consent_method: "banner",
-          consent_version: CONSENT_VERSION,
-        }, {
-          onConflict: "anonymous_id",
-        });
-      }
-    } catch (err) {
-      console.error("Error saving consent:", err);
-      // Consent still saved locally, so functionality continues
-    }
-  }, [user, consent]);
+  }, [consent]);
 
   // Accept all cookies
   const acceptAll = useCallback(() => {
