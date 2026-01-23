@@ -141,7 +141,7 @@ serve(async (req) => {
  * Handle checkout.session.completed - new subscription created
  */
 async function handleCheckoutCompleted(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   stripe: Stripe,
   session: Stripe.Checkout.Session
 ) {
@@ -165,7 +165,7 @@ async function handleCheckoutCompleted(
     return;
   }
 
-  const user = users.users.find(u => u.email === customerEmail);
+  const user = users.users.find((u: any) => u.email === customerEmail);
   if (!user) {
     logStep("User not found for email", { email: customerEmail });
     return;
@@ -191,7 +191,7 @@ async function handleCheckoutCompleted(
  * Handle subscription created/updated
  */
 async function handleSubscriptionChange(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   stripe: Stripe,
   subscription: Stripe.Subscription
 ) {
@@ -209,7 +209,7 @@ async function handleSubscriptionChange(
 
   // Find the user
   const { data: users } = await supabase.auth.admin.listUsers();
-  const user = users?.users.find(u => u.email === customer.email);
+  const user = users?.users.find((u: any) => u.email === customer.email);
 
   if (!user) {
     logStep("User not found for customer", { email: customer.email });
@@ -267,7 +267,7 @@ async function handleSubscriptionChange(
  * Handle subscription deleted/cancelled
  */
 async function handleSubscriptionDeleted(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   stripe: Stripe,
   subscription: Stripe.Subscription
 ) {
@@ -282,7 +282,7 @@ async function handleSubscriptionDeleted(
 
   // Find the user
   const { data: users } = await supabase.auth.admin.listUsers();
-  const user = users?.users.find(u => u.email === customer.email);
+  const user = users?.users.find((u: any) => u.email === customer.email);
 
   if (!user) {
     logStep("User not found for customer", { email: customer.email });
@@ -321,7 +321,7 @@ async function handleSubscriptionDeleted(
  * Handle successful payment
  */
 async function handlePaymentSucceeded(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   invoice: Stripe.Invoice
 ) {
   logStep("Processing payment succeeded", { invoiceId: invoice.id });
@@ -333,7 +333,7 @@ async function handlePaymentSucceeded(
 
   // Find the user
   const { data: users } = await supabase.auth.admin.listUsers();
-  const user = users?.users.find(u => u.email === invoice.customer_email);
+  const user = users?.users.find((u: any) => u.email === invoice.customer_email);
 
   if (!user) {
     logStep("User not found", { email: invoice.customer_email });
@@ -359,7 +359,7 @@ async function handlePaymentSucceeded(
  * Handle failed payment
  */
 async function handlePaymentFailed(
-  supabase: ReturnType<typeof createClient>,
+  supabase: any,
   stripe: Stripe,
   invoice: Stripe.Invoice
 ) {
@@ -372,7 +372,7 @@ async function handlePaymentFailed(
 
   // Find the user
   const { data: users } = await supabase.auth.admin.listUsers();
-  const user = users?.users.find(u => u.email === invoice.customer_email);
+  const user = users?.users.find((u: any) => u.email === invoice.customer_email);
 
   if (!user) {
     logStep("User not found", { email: invoice.customer_email });
