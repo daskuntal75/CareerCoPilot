@@ -15,6 +15,13 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  // Fallback environment variables for Supabase connection
+  // These are used when .env file is not properly synced
+  define: {
+    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(process.env.VITE_SUPABASE_URL || "https://vyijbdrvixngzklwgdsw.supabase.co"),
+    'import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY': JSON.stringify(process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ5aWpiZHJ2aXhuZ3prbHdnZHN3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc5OTQwNTcsImV4cCI6MjA4MzU3MDA1N30.0YXt5r-1Z8i8FfIcgEU1ddOSWB1x2ZOgN8aOHBaVD_Y"),
+    'import.meta.env.VITE_SUPABASE_PROJECT_ID': JSON.stringify(process.env.VITE_SUPABASE_PROJECT_ID || "vyijbdrvixngzklwgdsw"),
+  },
   build: {
     // Generate source maps for production debugging (optional)
     sourcemap: mode === "development",
