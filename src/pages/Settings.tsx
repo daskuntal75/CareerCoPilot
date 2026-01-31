@@ -5,7 +5,7 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
-import { User, Bell, Mail, Clock, Save, Check, Lock, Shield, Fingerprint, ShieldCheck, CreditCard, Monitor, Zap, Key } from "lucide-react";
+import { User, Bell, Mail, Clock, Save, Check, Lock, Shield, Fingerprint, ShieldCheck, CreditCard, Monitor, Zap, Key, Cookie } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,7 @@ import TrustedDevicesManagement from "@/components/settings/TrustedDevicesManage
 import SessionTimeoutSettings from "@/components/settings/SessionTimeoutSettings";
 import { BackupCodesSetup } from "@/components/auth/BackupCodesSetup";
 import { PasskeyLogin } from "@/components/auth/PasskeyLogin";
+import CookiePreferencesManager from "@/components/settings/CookiePreferencesManager";
 
 interface ProfileSettings {
   full_name: string | null;
@@ -448,7 +449,8 @@ const Settings = () => {
                 </TabsContent>
 
                 {/* Privacy Tab */}
-                <TabsContent value="privacy">
+                <TabsContent value="privacy" className="space-y-6">
+                  <CookiePreferencesManager />
                   <SecurityPrivacyDashboard />
                 </TabsContent>
               </Tabs>

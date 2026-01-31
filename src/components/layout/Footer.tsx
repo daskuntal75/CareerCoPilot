@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Rocket, Shield, Cookie, Accessibility, Scale } from "lucide-react";
+import { Rocket, Shield, Cookie, Accessibility, Scale, Mail } from "lucide-react";
 
 const Footer = () => {
   return (
@@ -37,6 +37,12 @@ const Footer = () => {
               <li>
                 <Link to="/app" className="text-muted-foreground hover:text-foreground transition-colors">
                   Get Started
+                </Link>
+              </li>
+              <li>
+                <Link to="/contact" className="text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1">
+                  <Mail className="w-3 h-3" />
+                  Contact Us
                 </Link>
               </li>
             </ul>
