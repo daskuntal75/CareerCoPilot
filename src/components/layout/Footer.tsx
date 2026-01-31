@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Rocket, Shield } from "lucide-react";
+import { Rocket, Shield, Cookie, Accessibility } from "lucide-react";
 
 const Footer = () => {
   return (
@@ -53,6 +53,18 @@ const Footer = () => {
               <li>
                 <Link to="/terms" className="text-muted-foreground hover:text-foreground transition-colors">
                   Terms of Service
+                </Link>
+              </li>
+              <li>
+                <Link to="/cookies" className="text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1">
+                  <Cookie className="w-3 h-3" />
+                  Cookie Policy
+                </Link>
+              </li>
+              <li>
+                <Link to="/accessibility" className="text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1">
+                  <Accessibility className="w-3 h-3" />
+                  Accessibility
                 </Link>
               </li>
               <li>
