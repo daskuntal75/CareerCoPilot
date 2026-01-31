@@ -155,15 +155,37 @@ const RAGDebugPanel = ({ applicationId }: RAGDebugPanelProps) => {
     
     setIsLoading(true);
     try {
-      // Fetch resume chunks
-      const { data: chunksData, error: chunksError } = await supabase
+      // First get the application to find the user_id
+      const { data: application } = await supabase
+        .from("applications")
+        .select("user_id")
+        .eq("id", applicationId)
+        .single();
+
+      // Fetch resume chunks - try by application_id first, then by user_id
+      let chunksData: ResumeChunk[] = [];
+      
+      // First try fetching by application_id
+      const { data: appChunks, error: appChunksError } = await supabase
         .from("resume_chunks")
         .select("id, chunk_index, chunk_type, content, token_count")
         .eq("application_id", applicationId)
         .order("chunk_index");
-
-      if (chunksError) throw chunksError;
-      setChunks(chunksData || []);
+      
+      if (appChunks && appChunks.length > 0) {
+        chunksData = appChunks;
+      } else if (application?.user_id) {
+        // Fallback: fetch by user_id (for resumes not linked to specific application)
+        const { data: userChunks } = await supabase
+          .from("resume_chunks")
+          .select("id, chunk_index, chunk_type, content, token_count")
+          .eq("user_id", application.user_id)
+          .order("chunk_index");
+        
+        chunksData = userChunks || [];
+      }
+      
+      setChunks(chunksData);
 
       // Fetch job requirements
       const { data: reqsData, error: reqsError } = await supabase
