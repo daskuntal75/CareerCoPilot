@@ -25,6 +25,7 @@ const Terms = lazy(() => import("./pages/Terms"));
 const CookiePolicy = lazy(() => import("./pages/CookiePolicy"));
 const Accessibility = lazy(() => import("./pages/Accessibility"));
 const DataProcessingAgreement = lazy(() => import("./pages/DataProcessingAgreement"));
+const Contact = lazy(() => import("./pages/Contact"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const HowItWorks = lazy(() => import("./pages/HowItWorks"));
 const Analytics = lazy(() => import("./pages/Analytics"));
@@ -88,6 +89,7 @@ const AppContent = () => (
         <Route path="/cookies" element={<CookiePolicy />} />
         <Route path="/accessibility" element={<Accessibility />} />
         <Route path="/dpa" element={<DataProcessingAgreement />} />
+        <Route path="/contact" element={<Contact />} />
         <Route path="/pricing" element={<Pricing />} />
         <Route path="/how-it-works" element={<HowItWorks />} />
         <Route path="/subscription/success" element={<SubscriptionSuccess />} />
