@@ -35,9 +35,9 @@ const Hero = () => {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-tight mb-6"
           >
-            Perfect Applications, Every Time.
+            Fully customized cover letter
             <br />
-            <span className="text-accent">Tailored to Perfection.</span>
+            <span className="text-accent">+ interview preparation guide</span>
           </motion.h1>
 
           {/* Subheadline */}
