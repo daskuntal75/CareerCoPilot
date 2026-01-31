@@ -35,10 +35,20 @@ const Hero = () => {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-tight mb-6"
           >
-            Fully customized cover letter
+            Your Skills. Their Job.
             <br />
-            <span className="text-accent">+ interview preparation guide</span>
+            <span className="text-accent">Perfect Fit.</span>
           </motion.h1>
+
+          {/* Subheadline with extended description */}
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.15 }}
+            className="text-lg md:text-xl text-foreground/80 max-w-2xl mx-auto mb-4"
+          >
+            AI-generated cover letters, fit scores & interview guides grounded in your actual experience
+          </motion.p>
 
           {/* Subheadline */}
           <motion.p
