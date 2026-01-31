@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Rocket, Shield, Cookie, Accessibility } from "lucide-react";
+import { Rocket, Shield, Cookie, Accessibility, Scale } from "lucide-react";
 
 const Footer = () => {
   return (
@@ -65,6 +65,12 @@ const Footer = () => {
                 <Link to="/accessibility" className="text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1">
                   <Accessibility className="w-3 h-3" />
                   Accessibility
+                </Link>
+              </li>
+              <li>
+                <Link to="/dpa" className="text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1">
+                  <Scale className="w-3 h-3" />
+                  Data Processing Agreement
                 </Link>
               </li>
               <li>
