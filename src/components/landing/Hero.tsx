@@ -57,8 +57,8 @@ const Hero = () => {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8"
           >
-            Generate sophisticated, tailored job application materials in under 5 minutes. 
-            Our AI precisely maps your experience to job requirements—with integrity and precision.
+            Upload your resume, paste a job description, and get a tailored cover letter 
+            plus complete interview prep—all in under 5 minutes.
           </motion.p>
 
           {/* Early Adopter Badge */}
@@ -83,7 +83,7 @@ const Hero = () => {
           >
             <Link to="/auth?mode=signup">
               <Button variant="hero" size="xl" className="group">
-                Try Demo Free
+                Find Your Perfect Fit
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             </Link>
