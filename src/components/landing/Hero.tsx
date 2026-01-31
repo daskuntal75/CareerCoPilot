@@ -37,7 +37,19 @@ const Hero = () => {
           >
             Your Skills. Their Job.
             <br />
-            <span className="text-accent">Perfect Fit.</span>
+            <motion.span 
+              className="text-accent inline-block"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ 
+                duration: 0.6, 
+                delay: 0.4,
+                type: "spring",
+                stiffness: 200
+              }}
+            >
+              Perfect Fit.
+            </motion.span>
           </motion.h1>
 
           {/* Subheadline with extended description */}
@@ -101,7 +113,7 @@ const Hero = () => {
             transition={{ duration: 0.5, delay: 0.35 }}
             className="text-sm text-muted-foreground mb-8"
           >
-            Sign up to try 3 free job applications. Provide feedback for discounted pricing!
+            Try 3 free job applications to find your perfect fit. Early feedback unlocks discounted pricing!
           </motion.p>
 
           {/* Trust indicators */}
