@@ -94,7 +94,7 @@ const Hero = () => {
             className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-8"
           >
             <Link to="/auth?mode=signup">
-              <Button variant="hero" size="xl" className="group">
+              <Button variant="hero" size="xl" className="group shimmer-button glow-button">
                 Find Your Perfect Fit
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
