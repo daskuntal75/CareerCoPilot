@@ -12,7 +12,7 @@ const FeedbackButton = () => {
         onClick={() => setIsOpen(true)}
         variant="outline"
         size="sm"
-        className="fixed bottom-4 right-4 z-50 shadow-lg hover:shadow-xl transition-all bg-background border-border"
+        className="fixed bottom-4 left-4 z-50 shadow-lg hover:shadow-xl transition-all bg-background border-border"
       >
         <MessageSquarePlus className="w-4 h-4 mr-2" />
         Feedback

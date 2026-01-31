@@ -14,23 +14,21 @@ const getAllowedOrigins = (): string[] => {
     return originsEnv.split(",").map(origin => origin.trim()).filter(Boolean);
   }
 
-  // Fallback for development only - check if we're in development mode
-  const isDevelopment = Deno.env.get("ENVIRONMENT") === "development" ||
-                        Deno.env.get("DENO_DEPLOYMENT_ID") === undefined;
-
-  if (isDevelopment) {
-    return [
-      "http://localhost:8080",
-      "http://localhost:5173",
-      "http://localhost:3000",
-      "http://127.0.0.1:8080",
-      "http://127.0.0.1:5173",
-    ];
-  }
-
-  // Production fallback - require explicit configuration
-  console.warn("CRITICAL: ALLOWED_ORIGINS not configured. Using restrictive default.");
-  return [];
+  // Default allowed origins for Lovable projects
+  // Includes all Lovable preview and production domains
+  return [
+    // Lovable preview domains
+    "https://id-preview--70f9a460-b040-4f1b-a4d1-53f34b83932c.lovable.app",
+    "https://70f9a460-b040-4f1b-a4d1-53f34b83932c.lovableproject.com",
+    // Lovable published domain
+    "https://tailoredapply.lovable.app",
+    // Local development
+    "http://localhost:8080",
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:8080",
+    "http://127.0.0.1:5173",
+  ];
 };
 
 /**
