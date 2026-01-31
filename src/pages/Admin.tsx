@@ -50,6 +50,10 @@ import SessionManagement from "@/components/admin/SessionManagement";
 import AIPromptManagement from "@/components/admin/AIPromptManagement";
 import PromptTelemetryDashboard from "@/components/admin/PromptTelemetryDashboard";
 import PromptInjectionTrends from "@/components/admin/PromptInjectionTrends";
+import AdminStatsCard from "@/components/admin/AdminStatsCard";
+import UserDetailsModal from "@/components/admin/UserDetailsModal";
+import ApplicationDetailsModal from "@/components/admin/ApplicationDetailsModal";
+
 interface UserSummary {
   total_users: number;
   users_with_applications: number;
@@ -82,6 +86,12 @@ const Admin = () => {
   const [userSummary, setUserSummary] = useState<UserSummary | null>(null);
   const [usageStats, setUsageStats] = useState<UsageStats[]>([]);
   const [applicationStats, setApplicationStats] = useState<ApplicationStats[]>([]);
+  
+  // Modal states for drill-down
+  const [userModalOpen, setUserModalOpen] = useState(false);
+  const [userModalFilter, setUserModalFilter] = useState<"all" | "new_this_month" | "with_applications" | "active">("all");
+  const [userModalTitle, setUserModalTitle] = useState("All Users");
+  const [applicationModalOpen, setApplicationModalOpen] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -242,77 +252,73 @@ const Admin = () => {
           {/* Demo Mode Quick Stats */}
           <DemoModeStats refreshTrigger={refreshTrigger} />
 
-          {/* Summary Stats */}
+          {/* Summary Stats - Clickable Cards */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
             className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8"
           >
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl bg-accent/10">
-                    <Users className="w-6 h-6 text-accent" />
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-foreground">
-                      {userSummary?.total_users || 0}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Total Users</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <AdminStatsCard
+              icon={<Users className="w-6 h-6 text-accent" />}
+              iconBgColor="bg-accent/10"
+              value={userSummary?.total_users || 0}
+              label="Total Users"
+              isClickable
+              onClick={() => {
+                setUserModalFilter("all");
+                setUserModalTitle("All Users");
+                setUserModalOpen(true);
+              }}
+            />
             
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl bg-blue-500/10">
-                    <TrendingUp className="w-6 h-6 text-blue-500" />
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-foreground">
-                      {userSummary?.users_this_month || 0}
-                    </div>
-                    <div className="text-sm text-muted-foreground">New This Month</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <AdminStatsCard
+              icon={<TrendingUp className="w-6 h-6 text-blue-500" />}
+              iconBgColor="bg-blue-500/10"
+              value={userSummary?.users_this_month || 0}
+              label="New This Month"
+              isClickable
+              onClick={() => {
+                setUserModalFilter("new_this_month");
+                setUserModalTitle("Users Joined This Month");
+                setUserModalOpen(true);
+              }}
+            />
             
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl bg-purple-500/10">
-                    <Briefcase className="w-6 h-6 text-purple-500" />
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-foreground">
-                      {userSummary?.total_applications || 0}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Applications</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <AdminStatsCard
+              icon={<Briefcase className="w-6 h-6 text-purple-500" />}
+              iconBgColor="bg-purple-500/10"
+              value={userSummary?.total_applications || 0}
+              label="Applications"
+              isClickable
+              onClick={() => setApplicationModalOpen(true)}
+            />
             
-            <Card>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl bg-green-500/10">
-                    <FileText className="w-6 h-6 text-green-500" />
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold text-foreground">
-                      {userSummary?.users_with_applications || 0}
-                    </div>
-                    <div className="text-sm text-muted-foreground">Active Users</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <AdminStatsCard
+              icon={<FileText className="w-6 h-6 text-green-500" />}
+              iconBgColor="bg-green-500/10"
+              value={userSummary?.users_with_applications || 0}
+              label="Active Users"
+              isClickable
+              onClick={() => {
+                setUserModalFilter("with_applications");
+                setUserModalTitle("Users with Applications");
+                setUserModalOpen(true);
+              }}
+            />
           </motion.div>
+
+          {/* Modals for drill-down */}
+          <UserDetailsModal
+            open={userModalOpen}
+            onOpenChange={setUserModalOpen}
+            title={userModalTitle}
+            filterType={userModalFilter}
+          />
+          <ApplicationDetailsModal
+            open={applicationModalOpen}
+            onOpenChange={setApplicationModalOpen}
+          />
 
           {/* Charts */}
           <motion.div
