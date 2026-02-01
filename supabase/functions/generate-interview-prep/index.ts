@@ -20,10 +20,18 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const sanitizeJson = (str: string): string => {
   return str
+    // Remove control characters
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    // Remove trailing commas before closing brackets
     .replace(/,(\s*[}\]])/g, '$1')
+    // Convert single quotes to double quotes for values
     .replace(/:\s*'([^']*)'/g, ': "$1"')
-    .replace(/[\uFEFF\u200B-\u200D\u2060]/g, '');
+    // Remove BOM and zero-width characters
+    .replace(/[\uFEFF\u200B-\u200D\u2060]/g, '')
+    // Fix unescaped newlines in strings
+    .replace(/(?<!\\)\\n/g, '\\n')
+    // Remove any trailing text after the final closing brace
+    .replace(/\}[^}]*$/, '}');
 };
 
 const parseAIResponse = (content: string): any => {
@@ -31,27 +39,67 @@ const parseAIResponse = (content: string): any => {
 
   let jsonString = content;
   
+  // Try to extract JSON from markdown code blocks first
   const codeBlockMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (codeBlockMatch) {
     jsonString = codeBlockMatch[1].trim();
   } else {
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      jsonString = jsonMatch[0];
+    // Find the outermost JSON object
+    const startIdx = content.indexOf('{');
+    const endIdx = content.lastIndexOf('}');
+    if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+      jsonString = content.substring(startIdx, endIdx + 1);
     }
   }
 
+  // Strategy 1: Direct parse after sanitization
   try {
     return JSON.parse(sanitizeJson(jsonString));
-  } catch {
-    const aggressiveCleanup = jsonString
-      .replace(/[^\x20-\x7E\s]/g, '')
-      .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3');
+  } catch (e1) {
+    console.log("Strategy 1 failed, trying strategy 2...");
     
+    // Strategy 2: More aggressive cleanup
     try {
-      return JSON.parse(aggressiveCleanup);
-    } catch {
-      console.error("JSON parse failed. Length:", content.length);
+      const cleaned = jsonString
+        .replace(/[^\x20-\x7E\s\n]/g, '') // Keep only printable ASCII
+        .replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*:)/g, '$1"$2"$3') // Quote unquoted keys
+        .replace(/:\s*"([^"]*)"([^,}\]]*)"([^"]*)"/, ': "$1$2$3"') // Fix broken strings
+        .replace(/,(\s*[}\]])/g, '$1'); // Remove trailing commas
+      return JSON.parse(cleaned);
+    } catch (e2) {
+      console.log("Strategy 2 failed, trying strategy 3...");
+      
+      // Strategy 3: Extract key fields manually and reconstruct
+      try {
+        // Try to parse by finding balanced braces
+        let depth = 0;
+        let start = -1;
+        let end = -1;
+        
+        for (let i = 0; i < content.length; i++) {
+          if (content[i] === '{') {
+            if (depth === 0) start = i;
+            depth++;
+          } else if (content[i] === '}') {
+            depth--;
+            if (depth === 0) {
+              end = i;
+              break;
+            }
+          }
+        }
+        
+        if (start !== -1 && end !== -1) {
+          const extracted = content.substring(start, end + 1);
+          return JSON.parse(sanitizeJson(extracted));
+        }
+      } catch (e3) {
+        console.log("Strategy 3 failed");
+      }
+      
+      console.error("All JSON parse strategies failed. Content length:", content.length);
+      console.error("First 500 chars:", content.substring(0, 500));
+      console.error("Last 500 chars:", content.substring(content.length - 500));
       throw new Error("Failed to parse AI response as valid JSON");
     }
   }
@@ -65,8 +113,8 @@ const makeAIRequestWithRetry = async (
 ): Promise<any> => {
   let lastError: Error | null = null;
   
-  // Use faster model for regeneration of single sections
-  const model = isRegeneration ? "google/gemini-2.5-flash-lite" : "google/gemini-2.5-flash";
+  // Use gemini-3-flash-preview for better structured JSON output
+  const model = isRegeneration ? "google/gemini-2.5-flash-lite" : "google/gemini-3-flash-preview";
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
@@ -142,7 +190,7 @@ const makeStreamingAIRequest = async (
   userPrompt: string,
   isRegeneration = false
 ): Promise<Response> => {
-  const model = isRegeneration ? "google/gemini-2.5-flash-lite" : "google/gemini-2.5-flash";
+  const model = isRegeneration ? "google/gemini-2.5-flash-lite" : "google/gemini-3-flash-preview";
   
   const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
