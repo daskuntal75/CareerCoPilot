@@ -566,9 +566,18 @@ const AppPage = () => {
       setGenerationStage("complete");
       await new Promise(resolve => setTimeout(resolve, 500));
       
+      // Normalize the response data to handle legacy format
+      const normalizedData = normalizeInterviewPrepData(response.data);
+      
+      if (!normalizedData) {
+        throw new Error("Failed to process interview prep data");
+      }
+      
       // If regenerating a section, merge the data
       if (sectionToRegenerate && interviewPrep) {
-        const updatedPrep = { ...interviewPrep, ...response.data };
+        // For section regeneration, merge the regenerated section with existing data
+        const regeneratedSection = normalizeInterviewPrepData(response.data);
+        const updatedPrep = { ...interviewPrep, ...regeneratedSection };
         setInterviewPrep(updatedPrep);
         if (user) {
           await saveApplication({ interview_prep: updatedPrep });
@@ -589,7 +598,7 @@ const AppPage = () => {
           },
         });
       } else {
-        setInterviewPrep(response.data);
+        setInterviewPrep(normalizedData);
         setCurrentStep("interview");
         
         // Track analytics
@@ -609,7 +618,7 @@ const AppPage = () => {
         });
         
         if (user) {
-          await saveApplication({ interview_prep: response.data });
+          await saveApplication({ interview_prep: normalizedData });
         }
       }
     } catch (error) {
