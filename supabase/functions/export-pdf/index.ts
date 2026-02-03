@@ -5,16 +5,29 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// PDF Generation with proper formatting
-function generatePDF(pages: { title: string; content: string }[], mainTitle: string): Uint8Array {
-  // Build PDF structure
+// Theme colors (RGB values)
+const THEME = {
+  accent: [37, 99, 235], // Blue
+  accentLight: [219, 234, 254], // Light blue
+  headerBg: [30, 64, 175], // Dark blue
+  white: [255, 255, 255],
+  gray: [100, 116, 139],
+  border: [203, 213, 225],
+  starColors: {
+    situation: [59, 130, 246],
+    task: [139, 92, 246],
+    action: [16, 185, 129],
+    result: [245, 158, 11],
+  },
+};
+
+// PDF Generation with professional table formatting
+function generateProfessionalPDF(pages: { title: string; content: string; sections?: any[] }[], mainTitle: string): Uint8Array {
   let pdf = "%PDF-1.4\n";
   let objects: string[] = [];
-  let objectOffsets: number[] = [];
   
   const addObject = (content: string): number => {
     const objNum = objects.length + 1;
-    objectOffsets.push(pdf.length + objects.join("").length);
     objects.push(`${objNum} 0 obj\n${content}\nendobj\n`);
     return objNum;
   };
@@ -24,7 +37,7 @@ function generatePDF(pages: { title: string; content: string }[], mainTitle: str
       .replace(/\\/g, "\\\\")
       .replace(/\(/g, "\\(")
       .replace(/\)/g, "\\)")
-      .replace(/[^\x20-\x7E\n]/g, ""); // Keep printable ASCII and newlines
+      .replace(/[^\x20-\x7E\n]/g, "");
   };
 
   const wrapText = (text: string, maxChars: number): string[] => {
@@ -46,92 +59,128 @@ function generatePDF(pages: { title: string; content: string }[], mainTitle: str
     return lines;
   };
 
-  // Content streams for each page
+  const toRGB = (arr: number[]) => `${arr[0]/255} ${arr[1]/255} ${arr[2]/255}`;
+
   const pageContentRefs: number[] = [];
   const pageRefs: number[] = [];
   
-  // Generate content stream for each page
   for (const page of pages) {
-    let stream = "BT\n";
+    let stream = "";
     let y = 750;
     const lineHeight = 14;
-    const headerHeight = 20;
-    const leftMargin = 72;
+    const leftMargin = 50;
+    const rightMargin = 562;
+    const pageWidth = rightMargin - leftMargin;
     const maxChars = 85;
     
-    // Page title - bold and larger
-    stream += `/F2 16 Tf\n`;
-    stream += `1 0 0 1 ${leftMargin} ${y} Tm\n`;
-    stream += `(${escapeText(page.title)}) Tj\n`;
-    y -= 30;
+    // Draw header box with accent background
+    stream += `q\n`;
+    stream += `${toRGB(THEME.headerBg)} rg\n`;
+    stream += `${leftMargin} ${y - 5} ${pageWidth} 35 re f\n`;
+    stream += `Q\n`;
     
-    // Underline for title
-    stream += `ET\n`;
-    stream += `q\n0.8 0.8 0.8 RG\n1 w\n${leftMargin} ${y + 5} m ${540} ${y + 5} l S\nQ\n`;
+    // Page title in white
     stream += `BT\n`;
-    y -= 20;
+    stream += `/F2 14 Tf\n`;
+    stream += `1 1 1 rg\n`; // White text
+    stream += `1 0 0 1 ${leftMargin + 10} ${y + 8} Tm\n`;
+    stream += `(${escapeText(page.title)}) Tj\n`;
+    stream += `ET\n`;
+    y -= 55;
     
-    // Switch to regular font
-    stream += `/F1 11 Tf\n`;
+    // Reset to black text
+    stream += `BT\n0 0 0 rg\n/F1 11 Tf\n`;
     
-    // Process content lines
     const lines = page.content.split("\n");
     
     for (const line of lines) {
-      if (y < 60) {
-        // Would need a new page - for now just stop
-        break;
-      }
+      if (y < 60) break;
       
       if (line.trim() === '') {
         y -= 8;
         continue;
       }
       
-      // Section headers (##)
+      // Section headers (##) - Draw with accent background
       if (line.startsWith("## ")) {
-        y -= 10; // Extra space before header
-        stream += `/F2 13 Tf\n`;
-        stream += `1 0 0 1 ${leftMargin} ${y} Tm\n`;
-        stream += `(${escapeText(line.replace("## ", ""))}) Tj\n`;
+        y -= 15;
+        const headerText = line.replace("## ", "");
+        
+        // Draw accent bar on left + light background
+        stream += `ET\n`;
+        stream += `q\n`;
+        stream += `${toRGB(THEME.accentLight)} rg\n`;
+        stream += `${leftMargin} ${y - 8} ${pageWidth} 24 re f\n`;
+        stream += `${toRGB(THEME.accent)} rg\n`;
+        stream += `${leftMargin} ${y - 8} 4 24 re f\n`;
+        stream += `Q\n`;
+        stream += `BT\n`;
+        
+        stream += `/F2 12 Tf\n`;
+        stream += `0 0 0 rg\n`;
+        stream += `1 0 0 1 ${leftMargin + 12} ${y} Tm\n`;
+        stream += `(${escapeText(headerText)}) Tj\n`;
         stream += `/F1 11 Tf\n`;
-        y -= headerHeight;
+        y -= 35;
         continue;
       }
       
-      // Main headers (#)
+      // Main headers (#) - Full accent background
       if (line.startsWith("# ")) {
-        y -= 12;
-        stream += `/F2 14 Tf\n`;
-        stream += `1 0 0 1 ${leftMargin} ${y} Tm\n`;
-        stream += `(${escapeText(line.replace("# ", ""))}) Tj\n`;
-        stream += `/F1 11 Tf\n`;
-        y -= headerHeight + 4;
+        y -= 20;
+        const headerText = line.replace("# ", "");
+        
+        stream += `ET\n`;
+        stream += `q\n`;
+        stream += `${toRGB(THEME.accent)} rg\n`;
+        stream += `${leftMargin} ${y - 8} ${pageWidth} 28 re f\n`;
+        stream += `Q\n`;
+        stream += `BT\n`;
+        
+        stream += `/F2 13 Tf\n`;
+        stream += `1 1 1 rg\n`; // White text
+        stream += `1 0 0 1 ${leftMargin + 10} ${y + 2} Tm\n`;
+        stream += `(${escapeText(headerText)}) Tj\n`;
+        stream += `0 0 0 rg\n/F1 11 Tf\n`;
+        y -= 40;
         continue;
       }
       
       // Sub-headers (###)
       if (line.startsWith("### ")) {
-        y -= 6;
-        stream += `/F2 12 Tf\n`;
+        y -= 8;
+        stream += `/F2 11 Tf\n`;
+        stream += `${toRGB(THEME.accent)} rg\n`;
         stream += `1 0 0 1 ${leftMargin} ${y} Tm\n`;
         stream += `(${escapeText(line.replace("### ", ""))}) Tj\n`;
-        stream += `/F1 11 Tf\n`;
+        stream += `0 0 0 rg\n/F1 11 Tf\n`;
         y -= lineHeight + 4;
         continue;
       }
       
-      // STAR labels (SITUATION:, TASK:, etc.)
+      // STAR labels with colored backgrounds
       if (/^(SITUATION|TASK|ACTION|RESULT):/.test(line)) {
-        y -= 4;
+        y -= 6;
         const [label, ...rest] = line.split(": ");
-        stream += `/F2 11 Tf\n`;
-        stream += `1 0 0 1 ${leftMargin} ${y} Tm\n`;
-        stream += `(${escapeText(label + ":")}) Tj\n`;
-        stream += `/F1 11 Tf\n`;
-        
-        // Wrap the rest of the content
         const restText = rest.join(": ");
+        
+        // Draw colored label box
+        stream += `ET\n`;
+        stream += `q\n`;
+        const labelColor = THEME.starColors[label.toLowerCase() as keyof typeof THEME.starColors] || THEME.accent;
+        stream += `${toRGB(labelColor)} rg\n`;
+        stream += `${leftMargin} ${y - 4} 70 18 re f\n`;
+        stream += `Q\n`;
+        stream += `BT\n`;
+        
+        // Label text in white
+        stream += `/F2 10 Tf\n`;
+        stream += `1 1 1 rg\n`;
+        stream += `1 0 0 1 ${leftMargin + 8} ${y + 2} Tm\n`;
+        stream += `(${escapeText(label)}) Tj\n`;
+        
+        // Content text
+        stream += `0 0 0 rg\n/F1 10 Tf\n`;
         const wrappedLines = wrapText(restText, maxChars - 12);
         y -= lineHeight;
         for (const wrappedLine of wrappedLines) {
@@ -140,6 +189,7 @@ function generatePDF(pages: { title: string; content: string }[], mainTitle: str
           stream += `(${escapeText(wrappedLine)}) Tj\n`;
           y -= lineHeight;
         }
+        stream += `/F1 11 Tf\n`;
         continue;
       }
       
@@ -152,10 +202,15 @@ function generatePDF(pages: { title: string; content: string }[], mainTitle: str
         for (let i = 0; i < wrappedLines.length; i++) {
           if (y < 60) break;
           if (i === 0) {
-            stream += `1 0 0 1 ${leftMargin} ${y} Tm\n`;
-            stream += `(\\267 ${escapeText(wrappedLines[i])}) Tj\n`; // \\267 is bullet character
+            // Draw bullet point
+            stream += `ET\n`;
+            stream += `q\n${toRGB(THEME.accent)} rg\n`;
+            stream += `${leftMargin + 4} ${y + 3} 4 4 re f\n`;
+            stream += `Q\nBT\n/F1 11 Tf\n0 0 0 rg\n`;
+            stream += `1 0 0 1 ${leftMargin + 14} ${y} Tm\n`;
+            stream += `(${escapeText(wrappedLines[i])}) Tj\n`;
           } else {
-            stream += `1 0 0 1 ${leftMargin + 12} ${y} Tm\n`;
+            stream += `1 0 0 1 ${leftMargin + 14} ${y} Tm\n`;
             stream += `(${escapeText(wrappedLines[i])}) Tj\n`;
           }
           y -= lineHeight;
@@ -164,8 +219,8 @@ function generatePDF(pages: { title: string; content: string }[], mainTitle: str
       }
       
       // Category/Difficulty line
-      if (line.includes("Category:") && line.includes("Difficulty:")) {
-        stream += `/F1 10 Tf\n0.4 0.4 0.4 rg\n`;
+      if (line.includes("Category:") || line.includes("Difficulty:")) {
+        stream += `/F1 10 Tf\n${toRGB(THEME.gray)} rg\n`;
         stream += `1 0 0 1 ${leftMargin} ${y} Tm\n`;
         stream += `(${escapeText(line)}) Tj\n`;
         stream += `0 0 0 rg\n/F1 11 Tf\n`;
@@ -176,13 +231,13 @@ function generatePDF(pages: { title: string; content: string }[], mainTitle: str
       // Separator line
       if (line.trim() === "---") {
         stream += `ET\n`;
-        stream += `q\n0.85 0.85 0.85 RG\n0.5 w\n${leftMargin} ${y} m ${540} ${y} l S\nQ\n`;
-        stream += `BT\n/F1 11 Tf\n`;
+        stream += `q\n${toRGB(THEME.border)} RG\n1 w\n${leftMargin} ${y} m ${rightMargin} ${y} l S\nQ\n`;
+        stream += `BT\n/F1 11 Tf\n0 0 0 rg\n`;
         y -= 15;
         continue;
       }
       
-      // Bold text (**text**)
+      // Bold text
       if (line.startsWith("**") && line.endsWith("**")) {
         stream += `/F2 11 Tf\n`;
         stream += `1 0 0 1 ${leftMargin} ${y} Tm\n`;
@@ -192,7 +247,7 @@ function generatePDF(pages: { title: string; content: string }[], mainTitle: str
         continue;
       }
       
-      // Regular paragraph - wrap text
+      // Regular paragraph
       const wrappedLines = wrapText(line.trim(), maxChars);
       for (const wrappedLine of wrappedLines) {
         if (y < 60) break;
@@ -208,12 +263,12 @@ function generatePDF(pages: { title: string; content: string }[], mainTitle: str
     pageContentRefs.push(contentRef);
   }
   
-  // Font objects - Helvetica (regular) and Helvetica-Bold
+  // Font objects
   const font1Ref = addObject(`<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>`);
   const font2Ref = addObject(`<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>`);
   
   // Create page objects
-  const pagesRef = objects.length + pages.length + 2; // Reserve for pages object
+  const pagesRef = objects.length + pages.length + 2;
   for (let i = 0; i < pages.length; i++) {
     const pageRef = addObject(
       `<< /Type /Page /Parent ${pagesRef} 0 R /MediaBox [0 0 612 792] ` +
@@ -239,13 +294,12 @@ function generatePDF(pages: { title: string; content: string }[], mainTitle: str
   let xref = `xref\n0 ${objects.length + 1}\n`;
   xref += "0000000000 65535 f \n";
   
-  let offset = 9; // After %PDF-1.4\n
+  let offset = 9;
   for (const obj of objects) {
     xref += offset.toString().padStart(10, "0") + " 00000 n \n";
     offset += obj.length;
   }
   
-  // Trailer
   const trailer = `trailer\n<< /Size ${objects.length + 1} /Root ${catalogRef} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
   
   return new TextEncoder().encode(pdf + xref + trailer);
@@ -329,7 +383,7 @@ function formatInterviewPrepPages(data: any, jobTitle: string, company: string):
     }
   }
   
-  // Pages for questions (2-3 questions per page)
+  // Pages for questions (2 questions per page)
   if (data.questions && data.questions.length > 0) {
     const questionsPerPage = 2;
     for (let i = 0; i < data.questions.length; i += questionsPerPage) {
@@ -338,17 +392,17 @@ function formatInterviewPrepPages(data: any, jobTitle: string, company: string):
       
       pageQuestions.forEach((q: any, idx: number) => {
         pageContent += `## Q${i + idx + 1}: ${q.question}\n\n`;
-        pageContent += `Category: ${q.category || 'General'} | Difficulty: ${q.difficulty || 'Medium'}\n\n`;
+        pageContent += `Category: ${q.category || 'General'} • Difficulty: ${q.difficulty || 'Medium'}\n\n`;
         
         if (q.whyAsked) {
           pageContent += `### Why This Question\n${q.whyAsked}\n\n`;
         }
         
         if (q.starAnswer) {
-          pageContent += `### STAR Answer\n`;
-          pageContent += `SITUATION: ${q.starAnswer.situation || ''}\n\n`;
-          pageContent += `TASK: ${q.starAnswer.task || ''}\n\n`;
-          pageContent += `ACTION: ${q.starAnswer.action || ''}\n\n`;
+          pageContent += `### STAR Answer Framework\n`;
+          pageContent += `SITUATION: ${q.starAnswer.situation || ''}\n`;
+          pageContent += `TASK: ${q.starAnswer.task || ''}\n`;
+          pageContent += `ACTION: ${q.starAnswer.action || ''}\n`;
           pageContent += `RESULT: ${q.starAnswer.result || ''}\n\n`;
         }
         
@@ -462,21 +516,18 @@ serve(async (req) => {
     let filename: string;
     
     if (type === "interview-prep" && interviewPrepData) {
-      // Generate multi-page interview prep PDF
       const pages = formatInterviewPrepPages(interviewPrepData, jobTitle || "Position", company || "Company");
       console.log("Generated interview prep pages:", pages.length);
-      pdfBytes = generatePDF(pages, `Interview Prep - ${jobTitle} at ${company}`);
+      pdfBytes = generateProfessionalPDF(pages, `Interview Prep - ${jobTitle} at ${company}`);
       filename = `InterviewPrep_${(company || "Company").replace(/\s+/g, "_")}_${(jobTitle || "Position").replace(/\s+/g, "_")}.pdf`;
     } else if (type === "cover-letter" && content) {
-      // Cover letter PDF
       const pages = formatCoverLetterPages(content, jobTitle || "Position", company || "Company");
       console.log("Generated cover letter pages:", pages.length, "Content length:", content.length);
-      pdfBytes = generatePDF(pages, `Cover Letter - ${jobTitle} at ${company}`);
+      pdfBytes = generateProfessionalPDF(pages, `Cover Letter - ${jobTitle} at ${company}`);
       filename = `CoverLetter_${(company || "Company").replace(/\s+/g, "_")}_${(jobTitle || "Position").replace(/\s+/g, "_")}.pdf`;
     } else if (content) {
-      // Generic content PDF (fallback)
       const pages = [{ title: title || "Document", content }];
-      pdfBytes = generatePDF(pages, title || "Document");
+      pdfBytes = generateProfessionalPDF(pages, title || "Document");
       filename = `Document_${(company || "Export").replace(/\s+/g, "_")}.pdf`;
     } else {
       console.error("No content or interview prep data provided");
@@ -485,20 +536,21 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    
-    console.log("PDF generated, bytes:", pdfBytes.length);
-    
-    // Convert to base64
-    const base64 = btoa(String.fromCharCode(...pdfBytes));
 
+    console.log("PDF generated successfully, size:", pdfBytes.length);
+
+    return new Response(new Uint8Array(pdfBytes), {
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+      },
+    });
+  } catch (error: unknown) {
+    console.error("PDF export error:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
     return new Response(
-      JSON.stringify({ pdf: base64, filename }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  } catch (error) {
-    console.error("Error in export-pdf:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify({ error: "Failed to generate PDF", details: message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

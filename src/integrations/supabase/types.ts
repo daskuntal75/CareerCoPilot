@@ -1089,15 +1089,21 @@ export type Database = {
       get_admin_users_with_subscriptions: {
         Args: { page_number?: number; page_size?: number; search_term?: string }
         Returns: {
+          apps_with_cover_letter: number
           cover_letters_used: number
           created_at: string
           email: string
           full_name: string
+          is_admin: boolean
+          is_whitelisted: boolean
+          last_activity: string
+          submitted_applications: number
           subscription_end: string
           subscription_status: string
           subscription_tier: string
           total_applications: number
           user_id: string
+          user_type: string
         }[]
       }
       has_role: {
