@@ -363,12 +363,18 @@ ${customUserPromptTemplate || defaultUserPromptTemplate}`;
     
     // Determine model to use (admin-configured, override, or default)
     let model = isRegeneration ? "google/gemini-2.5-flash-lite" : "google/gemini-3-flash-preview";
-   let temperature = overrideTemperature ?? 0.7;
-   let maxTokens = overrideMaxTokens ?? (isRegeneration ? 2000 : 4000);
+    let temperature = overrideTemperature ?? 0.7;
+    let maxTokens = overrideMaxTokens ?? (isRegeneration ? 2000 : 4000);
+    let isExternalModel = false;
+    let externalModelConfig: { apiEndpoint?: string; apiKeyEnvVar?: string } = {};
     
     // Check for model override (used in comparisons)
     if (overrideModel) {
       model = overrideModel;
+      // Check if it's an external model
+      if (overrideModel.startsWith("external/")) {
+        isExternalModel = true;
+      }
     } else if (!isRegeneration) {
       // Fetch admin-configured model for cover letter generation
       try {
@@ -383,38 +389,131 @@ ${customUserPromptTemplate || defaultUserPromptTemplate}`;
           if (setting.model) {
             model = setting.model;
             console.log(`Using admin-configured model: ${model}`);
+            
+            // Check if it's an external model
+            if (model.startsWith("external/")) {
+              isExternalModel = true;
+            }
           }
         }
       } catch (e) {
         console.error("Failed to fetch model setting:", e);
       }
     }
+
+    // If external model, fetch its configuration
+    if (isExternalModel) {
+      const externalModelId = model.replace("external/", "");
+      try {
+        const { data: extModels } = await supabase
+          .from("admin_settings")
+          .select("setting_value")
+          .eq("setting_key", "external_ai_models")
+          .maybeSingle();
+        
+        if (extModels?.setting_value) {
+          const modelsData = extModels.setting_value as { models?: Array<{
+            id: string;
+            apiEndpoint: string;
+            apiKeyEnvVar: string;
+            modelId: string;
+            maxTokens: number;
+            defaultTemperature: number;
+          }> };
+          const extModel = modelsData.models?.find(m => m.id === externalModelId);
+          if (extModel) {
+            externalModelConfig = {
+              apiEndpoint: extModel.apiEndpoint,
+              apiKeyEnvVar: extModel.apiKeyEnvVar,
+            };
+            model = extModel.modelId;
+            maxTokens = overrideMaxTokens ?? extModel.maxTokens;
+            temperature = overrideTemperature ?? extModel.defaultTemperature;
+            console.log(`Using external model: ${model} via ${extModel.apiEndpoint}`);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch external model config:", e);
+      }
+    }
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        stream: stream,
-        // OpenAI GPT-5 models don't support custom temperature, only default (1)
-       ...(model.startsWith("openai/") ? {} : { temperature }),
-        // Use max_completion_tokens for OpenAI models, max_tokens for others
-       ...(model.startsWith("openai/") 
-         ? { max_completion_tokens: maxTokens }
-         : { max_tokens: maxTokens }),
-      }),
-      signal: controller.signal,
-    });
+    let response: Response;
+    
+    if (isExternalModel && externalModelConfig.apiEndpoint) {
+      // Call external model API
+      const apiKey = Deno.env.get(externalModelConfig.apiKeyEnvVar || "");
+      if (!apiKey) {
+        throw new Error(`API key ${externalModelConfig.apiKeyEnvVar} is not configured`);
+      }
+      
+      const isAnthropic = externalModelConfig.apiEndpoint.includes("anthropic.com");
+      
+      if (isAnthropic) {
+        // Anthropic Messages API format
+        response = await fetch(externalModelConfig.apiEndpoint, {
+          method: "POST",
+          headers: {
+            "x-api-key": apiKey,
+            "Content-Type": "application/json",
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model,
+            system: systemPrompt,
+            messages: [{ role: "user", content: userPrompt }],
+            max_tokens: maxTokens,
+          }),
+          signal: controller.signal,
+        });
+      } else {
+        // OpenAI-compatible format
+        response = await fetch(externalModelConfig.apiEndpoint, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt },
+            ],
+            temperature,
+            max_tokens: maxTokens,
+            stream: stream,
+          }),
+          signal: controller.signal,
+        });
+      }
+    } else {
+      // Use Lovable AI Gateway
+      response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          stream: stream,
+          // OpenAI GPT-5 models don't support custom temperature, only default (1)
+          ...(model.startsWith("openai/") ? {} : { temperature }),
+          // Use max_completion_tokens for OpenAI models, max_tokens for others
+          ...(model.startsWith("openai/") 
+            ? { max_completion_tokens: maxTokens }
+            : { max_tokens: maxTokens }),
+        }),
+        signal: controller.signal,
+      });
+    }
     
     clearTimeout(timeoutId);
 
@@ -450,7 +549,16 @@ ${customUserPromptTemplate || defaultUserPromptTemplate}`;
     }
 
     const data = await response.json();
-    const coverLetter = data.choices?.[0]?.message?.content;
+    
+    // Handle different response formats
+    let coverLetter: string;
+    if (isExternalModel && externalModelConfig.apiEndpoint?.includes("anthropic.com")) {
+      // Anthropic format
+      coverLetter = data.content?.[0]?.text;
+    } else {
+      // OpenAI-compatible format
+      coverLetter = data.choices?.[0]?.message?.content;
+    }
     
     if (!coverLetter) {
       throw new Error("Empty response from AI");
