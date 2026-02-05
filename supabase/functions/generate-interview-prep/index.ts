@@ -109,12 +109,13 @@ const makeAIRequestWithRetry = async (
   apiKey: string,
   systemPrompt: string,
   userPrompt: string,
-  isRegeneration = false
+  isRegeneration = false,
+  modelOverride?: string
 ): Promise<any> => {
   let lastError: Error | null = null;
   
   // Use gemini-3-flash-preview for better structured JSON output
-  const model = isRegeneration ? "google/gemini-2.5-flash-lite" : "google/gemini-3-flash-preview";
+  const model = modelOverride || (isRegeneration ? "google/gemini-2.5-flash-lite" : "google/gemini-3-flash-preview");
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {

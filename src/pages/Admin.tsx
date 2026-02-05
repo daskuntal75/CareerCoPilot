@@ -48,6 +48,7 @@ import AdminSecurityDashboard from "@/components/admin/AdminSecurityDashboard";
 import Admin2FAEnforcement from "@/components/admin/Admin2FAEnforcement";
 import SessionManagement from "@/components/admin/SessionManagement";
 import AIPromptManagement from "@/components/admin/AIPromptManagement";
+import AIModelSelector from "@/components/admin/AIModelSelector";
 import PromptTelemetryDashboard from "@/components/admin/PromptTelemetryDashboard";
 import PromptInjectionTrends from "@/components/admin/PromptInjectionTrends";
 import AdminStatsCard from "@/components/admin/AdminStatsCard";
@@ -364,6 +365,10 @@ const Admin = () => {
                   <Wand2 className="w-4 h-4" />
                   AI Prompts
                 </TabsTrigger>
+                <TabsTrigger value="ai-models" className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  AI Models
+                </TabsTrigger>
                 <TabsTrigger value="telemetry" className="flex items-center gap-2">
                   <BarChart3 className="w-4 h-4" />
                   Telemetry
@@ -518,6 +523,10 @@ const Admin = () => {
 
               <TabsContent value="ai-prompts">
                 <AIPromptManagement refreshTrigger={refreshTrigger} />
+              </TabsContent>
+
+              <TabsContent value="ai-models">
+                <AIModelSelector refreshTrigger={refreshTrigger} />
               </TabsContent>
 
               <TabsContent value="telemetry">
