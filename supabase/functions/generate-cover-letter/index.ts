@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { sanitizeInput, hashString, sandboxUntrustedInput } from "../_shared/security-utils.ts";
 import { logSecurityThreat } from "../_shared/audit-utils.ts";
 import { checkRateLimit, logUsage, createRateLimitResponse } from "../_shared/rate-limit-utils.ts";
