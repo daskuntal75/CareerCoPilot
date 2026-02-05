@@ -83,6 +83,8 @@ serve(async (req) => {
       existingCoverLetter,
       stream = false,
       overrideModel,
+       overrideTemperature,
+       overrideMaxTokens,
     } = await req.json();
     
     if (!resumeContent || !jobDescription) {
@@ -361,6 +363,8 @@ ${customUserPromptTemplate || defaultUserPromptTemplate}`;
     
     // Determine model to use (admin-configured, override, or default)
     let model = isRegeneration ? "google/gemini-2.5-flash-lite" : "google/gemini-3-flash-preview";
+   let temperature = overrideTemperature ?? 0.7;
+   let maxTokens = overrideMaxTokens ?? (isRegeneration ? 2000 : 4000);
     
     // Check for model override (used in comparisons)
     if (overrideModel) {
@@ -403,11 +407,11 @@ ${customUserPromptTemplate || defaultUserPromptTemplate}`;
         ],
         stream: stream,
         // OpenAI GPT-5 models don't support custom temperature, only default (1)
-        ...(model.startsWith("openai/") ? {} : { temperature: 0.7 }),
+       ...(model.startsWith("openai/") ? {} : { temperature }),
         // Use max_completion_tokens for OpenAI models, max_tokens for others
-        ...(model.startsWith("openai/") 
-          ? { max_completion_tokens: isRegeneration ? 2000 : 4000 }
-          : { max_tokens: isRegeneration ? 2000 : 4000 }),
+       ...(model.startsWith("openai/") 
+         ? { max_completion_tokens: maxTokens }
+         : { max_tokens: maxTokens }),
       }),
       signal: controller.signal,
     });

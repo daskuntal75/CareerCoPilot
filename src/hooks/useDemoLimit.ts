@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
-const DEMO_APP_LIMIT = 3;
+ const DEFAULT_DEMO_APP_LIMIT = 3;
 const SUPPORT_EMAIL = "daskuntal@gmail.com";
 
 interface DemoLimitState {
@@ -22,11 +22,26 @@ export function useDemoLimit() {
   });
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [isWhitelisted, setIsWhitelisted] = useState(false);
+   const [demoLimit, setDemoLimit] = useState(DEFAULT_DEMO_APP_LIMIT);
 
   const checkDemoMode = useCallback(async () => {
     try {
       const { data } = await supabase.functions.invoke("check-demo-mode");
       setIsDemoMode(data?.demo_mode && !data?.stripe_enabled);
+       
+       // Also fetch the configurable demo limit
+       const { data: limitData } = await supabase
+         .from("admin_settings")
+         .select("setting_value")
+         .eq("setting_key", "demo_app_limit")
+         .maybeSingle();
+       
+       if (limitData?.setting_value) {
+         const limit = typeof limitData.setting_value === 'number' 
+           ? limitData.setting_value 
+           : (limitData.setting_value as { limit?: number })?.limit || DEFAULT_DEMO_APP_LIMIT;
+         setDemoLimit(limit);
+       }
     } catch (error) {
       console.error("Error checking demo mode:", error);
     }
@@ -70,19 +85,19 @@ export function useDemoLimit() {
 
       const appCount = count || 0;
       // User can bypass limit if whitelisted
-      const limitReached = isDemoMode && !isWhitelisted && appCount >= DEMO_APP_LIMIT;
+       const limitReached = isDemoMode && !isWhitelisted && appCount >= demoLimit;
 
       setState({
         applicationCount: appCount,
         isLimitReached: limitReached,
         loading: false,
-        canCreateApplication: !isDemoMode || isWhitelisted || appCount < DEMO_APP_LIMIT,
+         canCreateApplication: !isDemoMode || isWhitelisted || appCount < demoLimit,
       });
     } catch (error) {
       console.error("Error fetching application count:", error);
       setState(prev => ({ ...prev, loading: false }));
     }
-  }, [user?.id, isDemoMode, isWhitelisted]);
+   }, [user?.id, isDemoMode, isWhitelisted, demoLimit]);
 
   useEffect(() => {
     checkDemoMode();
@@ -95,10 +110,10 @@ export function useDemoLimit() {
   }, [user?.email, checkWhitelist]);
 
   useEffect(() => {
-    if (isDemoMode !== undefined) {
+     if (isDemoMode !== undefined && demoLimit > 0) {
       fetchApplicationCount();
     }
-  }, [fetchApplicationCount, isDemoMode, isWhitelisted]);
+   }, [fetchApplicationCount, isDemoMode, isWhitelisted, demoLimit]);
 
   const refreshCount = useCallback(() => {
     fetchApplicationCount();
@@ -108,9 +123,9 @@ export function useDemoLimit() {
     ...state,
     isDemoMode,
     isWhitelisted,
-    demoLimit: DEMO_APP_LIMIT,
+     demoLimit,
     supportEmail: SUPPORT_EMAIL,
     refreshCount,
-    remainingJobApplications: Math.max(0, DEMO_APP_LIMIT - state.applicationCount),
+     remainingJobApplications: Math.max(0, demoLimit - state.applicationCount),
   };
 }
