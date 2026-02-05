@@ -136,8 +136,12 @@ const makeAIRequestWithRetry = async (
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },
           ],
-          temperature: 0.7, // Slightly lower for faster, more deterministic responses
-          max_tokens: isRegeneration ? 4000 : 8000, // Limit tokens for faster response
+          // OpenAI GPT-5 models don't support custom temperature, only default (1)
+          ...(model.startsWith("openai/") ? {} : { temperature: 0.7 }),
+          // Use max_completion_tokens for OpenAI models, max_tokens for others
+          ...(model.startsWith("openai/") 
+            ? { max_completion_tokens: isRegeneration ? 4000 : 8000 }
+            : { max_tokens: isRegeneration ? 4000 : 8000 }),
         }),
         signal: controller.signal,
       });
@@ -206,8 +210,12 @@ const makeStreamingAIRequest = async (
         { role: "user", content: userPrompt },
       ],
       stream: true,
-      temperature: 0.7,
-      max_tokens: isRegeneration ? 4000 : 8000,
+      // OpenAI GPT-5 models don't support custom temperature, only default (1)
+      ...(model.startsWith("openai/") ? {} : { temperature: 0.7 }),
+      // Use max_completion_tokens for OpenAI models, max_tokens for others
+      ...(model.startsWith("openai/") 
+        ? { max_completion_tokens: isRegeneration ? 4000 : 8000 }
+        : { max_tokens: isRegeneration ? 4000 : 8000 }),
     }),
   });
 

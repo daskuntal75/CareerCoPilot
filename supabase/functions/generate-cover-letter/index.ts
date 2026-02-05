@@ -402,8 +402,12 @@ ${customUserPromptTemplate || defaultUserPromptTemplate}`;
           { role: "user", content: userPrompt },
         ],
         stream: stream,
-        temperature: 0.7,
-        max_tokens: isRegeneration ? 2000 : 4000,
+        // OpenAI GPT-5 models don't support custom temperature, only default (1)
+        ...(model.startsWith("openai/") ? {} : { temperature: 0.7 }),
+        // Use max_completion_tokens for OpenAI models, max_tokens for others
+        ...(model.startsWith("openai/") 
+          ? { max_completion_tokens: isRegeneration ? 2000 : 4000 }
+          : { max_tokens: isRegeneration ? 2000 : 4000 }),
       }),
       signal: controller.signal,
     });
