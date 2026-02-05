@@ -9,7 +9,7 @@
  * sliding window algorithm for scalability across edge function instances.
  */
 
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 export interface RateLimitConfig {
   maxRequestsPerHour: number;
