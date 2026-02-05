@@ -1,5 +1,5 @@
-import type { Json } from "@/integrations/supabase/types";
- import { useState, useEffect } from "react";
+ import type { Json } from "@/integrations/supabase/types";
+ import { useState, useEffect, useMemo } from "react";
  import { supabase } from "@/integrations/supabase/client";
  import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
  import { Button } from "@/components/ui/button";
@@ -8,18 +8,21 @@ import type { Json } from "@/integrations/supabase/types";
  import { toast } from "sonner";
  import { Skeleton } from "@/components/ui/skeleton";
  import { 
- Save, 
- RefreshCw, 
- Cpu, 
- Zap, 
- Brain, 
- Sparkles,
- Play,
- GitCompare,
- CheckCircle,
+   Save, 
+   RefreshCw, 
+   Cpu, 
+   Zap, 
+   Brain, 
+   Sparkles,
+   Play,
+   GitCompare,
+   CheckCircle,
    AlertCircle,
    Clock,
-   Timer
+   Timer,
+   DollarSign,
+   Sliders,
+   Settings2
  } from "lucide-react";
  import {
  Select,
@@ -58,11 +61,15 @@ import type { Json } from "@/integrations/supabase/types";
    speed: "fast" | "medium" | "slow";
    quality: "standard" | "high" | "premium";
    costTier: "low" | "medium" | "high";
+   costPer1kInput: number;
+   costPer1kOutput: number;
  }
  
  interface ModelSelection {
    model: string;
    displayName: string;
+   temperature?: number;
+   maxTokens?: number;
  }
  
  interface ComparisonResult {
@@ -71,6 +78,11 @@ import type { Json } from "@/integrations/supabase/types";
    latencyMs: number;
    wordCount: number;
    error?: string;
+   estimatedCost?: number;
+   inputTokens?: number;
+   outputTokens?: number;
+   temperature?: number;
+   maxTokens?: number;
  }
  
  interface CRISPEvaluation {
@@ -93,6 +105,8 @@ import type { Json } from "@/integrations/supabase/types";
      speed: "fast",
      quality: "high",
      costTier: "low",
+     costPer1kInput: 0.000075,
+     costPer1kOutput: 0.0003,
    },
    {
      id: "google/gemini-2.5-pro",
@@ -103,6 +117,8 @@ import type { Json } from "@/integrations/supabase/types";
      speed: "slow",
      quality: "premium",
      costTier: "high",
+     costPer1kInput: 0.00125,
+     costPer1kOutput: 0.005,
    },
    {
      id: "google/gemini-2.5-flash",
@@ -113,6 +129,8 @@ import type { Json } from "@/integrations/supabase/types";
      speed: "medium",
      quality: "high",
      costTier: "medium",
+     costPer1kInput: 0.000075,
+     costPer1kOutput: 0.0003,
    },
    {
      id: "google/gemini-2.5-flash-lite",
@@ -123,6 +141,8 @@ import type { Json } from "@/integrations/supabase/types";
      speed: "fast",
      quality: "standard",
      costTier: "low",
+     costPer1kInput: 0.00005,
+     costPer1kOutput: 0.0002,
    },
    {
      id: "openai/gpt-5",
@@ -133,6 +153,8 @@ import type { Json } from "@/integrations/supabase/types";
      speed: "slow",
      quality: "premium",
      costTier: "high",
+     costPer1kInput: 0.005,
+     costPer1kOutput: 0.015,
    },
    {
      id: "openai/gpt-5-mini",
@@ -143,6 +165,8 @@ import type { Json } from "@/integrations/supabase/types";
      speed: "medium",
      quality: "high",
      costTier: "medium",
+     costPer1kInput: 0.00015,
+     costPer1kOutput: 0.0006,
    },
    {
      id: "openai/gpt-5-nano",
@@ -153,6 +177,8 @@ import type { Json } from "@/integrations/supabase/types";
      speed: "fast",
      quality: "standard",
      costTier: "low",
+     costPer1kInput: 0.00005,
+     costPer1kOutput: 0.0002,
    },
    {
      id: "openai/gpt-5.2",
@@ -163,6 +189,8 @@ import type { Json } from "@/integrations/supabase/types";
      speed: "medium",
      quality: "premium",
      costTier: "high",
+     costPer1kInput: 0.003,
+     costPer1kOutput: 0.012,
    },
    {
      id: "google/gemini-3-pro-preview",
@@ -173,6 +201,8 @@ import type { Json } from "@/integrations/supabase/types";
      speed: "medium",
      quality: "premium",
      costTier: "high",
+     costPer1kInput: 0.00125,
+     costPer1kOutput: 0.005,
    },
  ];
  
@@ -208,6 +238,11 @@ import type { Json } from "@/integrations/supabase/types";
    const [comparisonResults, setComparisonResults] = useState<ComparisonResult[]>([]);
    const [comparisonRunning, setComparisonRunning] = useState(false);
    const [evaluations, setEvaluations] = useState<Record<string, CRISPEvaluation>>({});
+   
+   // Model configuration state for comparison
+   const [modelConfigs, setModelConfigs] = useState<Record<string, { temperature: number; maxTokens: number }>>({});
+   const [configDialogOpen, setConfigDialogOpen] = useState(false);
+   const [configEditModel, setConfigEditModel] = useState<string | null>(null);
    
    // Test data for comparisons
    const [testJobDescription, setTestJobDescription] = useState(`Senior Software Engineer at TechCorp
@@ -260,6 +295,28 @@ import type { Json } from "@/integrations/supabase/types";
        setLoading(false);
      }
    };
+ 
+   // Helper functions for cost calculation
+   const estimateTokens = (text: string): number => {
+     return Math.ceil(text.length / 4);
+   };
+ 
+   const calculateCost = (modelId: string, inputTokens: number, outputTokens: number): number => {
+     const model = AVAILABLE_MODELS.find(m => m.id === modelId);
+     if (!model) return 0;
+     return (inputTokens / 1000) * model.costPer1kInput + (outputTokens / 1000) * model.costPer1kOutput;
+   };
+ 
+   const openModelConfig = (modelId: string) => {
+     const existingConfig = modelConfigs[modelId] || { temperature: 0.7, maxTokens: 4000 };
+     setModelConfigs(prev => ({ ...prev, [modelId]: existingConfig }));
+     setConfigEditModel(modelId);
+     setConfigDialogOpen(true);
+   };
+ 
+   const totalComparisonCost = useMemo(() => {
+     return comparisonResults.reduce((sum, r) => sum + (r.estimatedCost || 0), 0);
+   }, [comparisonResults]);
  
    const saveModelSettings = async () => {
      setSaving(true);
@@ -338,9 +395,12 @@ import type { Json } from "@/integrations/supabase/types";
  
      try {
        const results: ComparisonResult[] = [];
+       const inputText = testJobDescription + testResume;
+       const estimatedInputTokens = estimateTokens(inputText);
  
        for (const modelId of selectedModelsForComparison) {
          const startTime = Date.now();
+         const config = modelConfigs[modelId] || { temperature: 0.7, maxTokens: 4000 };
          
          try {
            const functionName = comparisonType === "cover_letter" 
@@ -354,7 +414,9 @@ import type { Json } from "@/integrations/supabase/types";
                jobTitle: "Senior Software Engineer",
                company: "TechCorp",
                stream: false,
-               overrideModel: modelId, // Custom parameter for model override
+               overrideModel: modelId,
+               overrideTemperature: config.temperature,
+               overrideMaxTokens: config.maxTokens,
              },
            });
  
@@ -367,17 +429,27 @@ import type { Json } from "@/integrations/supabase/types";
                latencyMs,
                wordCount: 0,
                error: response.error.message,
+               temperature: config.temperature,
+               maxTokens: config.maxTokens,
              });
            } else {
              const output = comparisonType === "cover_letter"
                ? response.data.coverLetter || JSON.stringify(response.data)
                : JSON.stringify(response.data, null, 2);
              
+             const outputTokens = estimateTokens(output);
+             const estimatedCost = calculateCost(modelId, estimatedInputTokens, outputTokens);
+             
              results.push({
                model: modelId,
                output,
                latencyMs,
                wordCount: output.split(/\s+/).length,
+               estimatedCost,
+               inputTokens: estimatedInputTokens,
+               outputTokens,
+               temperature: config.temperature,
+               maxTokens: config.maxTokens,
              });
            }
          } catch (error) {
@@ -387,6 +459,8 @@ import type { Json } from "@/integrations/supabase/types";
              latencyMs: Date.now() - startTime,
              wordCount: 0,
              error: error instanceof Error ? error.message : "Unknown error",
+             temperature: config.temperature,
+             maxTokens: config.maxTokens,
            });
          }
          

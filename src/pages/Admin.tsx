@@ -52,8 +52,10 @@ import AIModelSelector from "@/components/admin/AIModelSelector";
 import PromptTelemetryDashboard from "@/components/admin/PromptTelemetryDashboard";
 import PromptInjectionTrends from "@/components/admin/PromptInjectionTrends";
 import AdminStatsCard from "@/components/admin/AdminStatsCard";
-import UserDetailsModal from "@/components/admin/UserDetailsModal";
-import ApplicationDetailsModal from "@/components/admin/ApplicationDetailsModal";
+ import UserDetailsModal from "@/components/admin/UserDetailsModal";
+ import ApplicationDetailsModal from "@/components/admin/ApplicationDetailsModal";
+ import DemoUserAppManager from "@/components/admin/DemoUserAppManager";
+ import ExternalModelManager from "@/components/admin/ExternalModelManager";
 
 interface UserSummary {
   total_users: number;
@@ -502,7 +504,10 @@ const Admin = () => {
               </TabsContent>
 
               <TabsContent value="whitelist">
-                <DemoWhitelistManagement refreshTrigger={refreshTrigger} />
+               <div className="space-y-6">
+                 <DemoUserAppManager refreshTrigger={refreshTrigger} />
+                 <DemoWhitelistManagement refreshTrigger={refreshTrigger} />
+               </div>
               </TabsContent>
 
               <TabsContent value="early-adopters">
@@ -526,7 +531,10 @@ const Admin = () => {
               </TabsContent>
 
               <TabsContent value="ai-models">
-                <AIModelSelector refreshTrigger={refreshTrigger} />
+               <div className="space-y-6">
+                 <AIModelSelector refreshTrigger={refreshTrigger} />
+                 <ExternalModelManager refreshTrigger={refreshTrigger} />
+               </div>
               </TabsContent>
 
               <TabsContent value="telemetry">
