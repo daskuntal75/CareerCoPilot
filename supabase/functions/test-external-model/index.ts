@@ -32,27 +32,50 @@
        );
      }
  
-     // Test the model with a simple prompt
-     const testPayload = {
-       model: modelId,
-       messages: [
-         { role: "user", content: "Say 'Hello, I am working!' in exactly 5 words." }
-       ],
-       max_tokens: 50,
-       temperature: 0.1,
-     };
- 
-     console.log(`Testing model ${modelId} at ${apiEndpoint}`);
- 
-     const response = await fetch(apiEndpoint, {
-       method: "POST",
-       headers: {
-         "Authorization": `Bearer ${apiKey}`,
-         "Content-Type": "application/json",
-         "anthropic-version": "2023-06-01", // For Anthropic API
-       },
-       body: JSON.stringify(testPayload),
-     });
+    // Detect provider based on endpoint to format request correctly
+    const isAnthropic = apiEndpoint.includes("anthropic.com");
+    
+    // Build appropriate payload based on provider
+    let testPayload: Record<string, unknown>;
+    let headers: Record<string, string>;
+    
+    if (isAnthropic) {
+      // Anthropic Messages API format
+      testPayload = {
+        model: modelId,
+        messages: [
+          { role: "user", content: "Say 'Hello, I am working!' in exactly 5 words." }
+        ],
+        max_tokens: 50,
+      };
+      headers = {
+        "x-api-key": apiKey,
+        "Content-Type": "application/json",
+        "anthropic-version": "2023-06-01",
+      };
+    } else {
+      // OpenAI-compatible format
+      testPayload = {
+        model: modelId,
+        messages: [
+          { role: "user", content: "Say 'Hello, I am working!' in exactly 5 words." }
+        ],
+        max_tokens: 50,
+        temperature: 0.1,
+      };
+      headers = {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      };
+    }
+
+    console.log(`Testing model ${modelId} at ${apiEndpoint} (Anthropic: ${isAnthropic})`);
+
+    const response = await fetch(apiEndpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(testPayload),
+    });
  
      if (!response.ok) {
        const errorText = await response.text();

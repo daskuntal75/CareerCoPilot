@@ -23,24 +23,28 @@
    DialogTitle,
    DialogFooter,
  } from "@/components/ui/dialog";
- import { 
-   RotateCcw, 
-   Plus, 
-   Minus, 
-   Search, 
-   User, 
-   FileText,
-   RefreshCw,
-   Settings
- } from "lucide-react";
+import { 
+  RotateCcw, 
+  Plus, 
+  Minus, 
+  Search, 
+  User, 
+  FileText,
+  RefreshCw,
+  Settings,
+  CheckSquare,
+  Square,
+  Users
+} from "lucide-react";
  
- interface DemoUser {
-   user_id: string;
-   email: string;
-   full_name: string | null;
-   application_count: number;
-   is_whitelisted: boolean;
- }
+interface DemoUser {
+  user_id: string;
+  email: string;
+  full_name: string | null;
+  application_count: number;
+  is_whitelisted: boolean;
+  selected?: boolean;
+}
  
  interface DemoUserAppManagerProps {
    refreshTrigger?: number;
@@ -48,16 +52,18 @@
  
  const DEMO_APP_LIMIT = 3;
  
- const DemoUserAppManager = ({ refreshTrigger }: DemoUserAppManagerProps) => {
-   const [users, setUsers] = useState<DemoUser[]>([]);
-   const [loading, setLoading] = useState(true);
-   const [searchTerm, setSearchTerm] = useState("");
-   const [selectedUser, setSelectedUser] = useState<DemoUser | null>(null);
-   const [dialogOpen, setDialogOpen] = useState(false);
-   const [newLimit, setNewLimit] = useState(DEMO_APP_LIMIT);
-   const [processing, setProcessing] = useState(false);
-   const [globalLimit, setGlobalLimit] = useState(DEMO_APP_LIMIT);
-   const [globalSettingsOpen, setGlobalSettingsOpen] = useState(false);
+const DemoUserAppManager = ({ refreshTrigger }: DemoUserAppManagerProps) => {
+  const [users, setUsers] = useState<DemoUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedUser, setSelectedUser] = useState<DemoUser | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [newLimit, setNewLimit] = useState(DEMO_APP_LIMIT);
+  const [processing, setProcessing] = useState(false);
+  const [globalLimit, setGlobalLimit] = useState(DEMO_APP_LIMIT);
+  const [globalSettingsOpen, setGlobalSettingsOpen] = useState(false);
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+  const [bulkResetDialogOpen, setBulkResetDialogOpen] = useState(false);
  
    const fetchUsers = useCallback(async () => {
      setLoading(true);
@@ -231,13 +237,58 @@
      }
    };
  
-   const filteredUsers = users.filter(
-     (u) =>
-       u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-       (u.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
-   );
- 
-   const usersAtLimit = users.filter(u => !u.is_whitelisted && u.application_count >= globalLimit);
+  const filteredUsers = users.filter(
+    (u) =>
+      u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (u.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
+  );
+
+  const usersAtLimit = users.filter(u => !u.is_whitelisted && u.application_count >= globalLimit);
+
+  const toggleUserSelection = (userId: string) => {
+    setSelectedUsers(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(userId)) {
+        newSet.delete(userId);
+      } else {
+        newSet.add(userId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleAllUsers = () => {
+    if (selectedUsers.size === filteredUsers.length) {
+      setSelectedUsers(new Set());
+    } else {
+      setSelectedUsers(new Set(filteredUsers.map(u => u.user_id)));
+    }
+  };
+
+  const bulkResetApplications = async () => {
+    if (selectedUsers.size === 0) return;
+
+    setProcessing(true);
+    try {
+      const userIds = Array.from(selectedUsers);
+      const { error } = await supabase
+        .from("applications")
+        .delete()
+        .in("user_id", userIds);
+
+      if (error) throw error;
+
+      toast.success(`Reset applications for ${userIds.length} user(s)`);
+      setBulkResetDialogOpen(false);
+      setSelectedUsers(new Set());
+      fetchUsers();
+    } catch (error) {
+      console.error("Error bulk resetting applications:", error);
+      toast.error("Failed to bulk reset applications");
+    } finally {
+      setProcessing(false);
+    }
+  };
  
    return (
      <>
@@ -286,18 +337,28 @@
              </div>
            </div>
  
-           {/* Search */}
-           <div className="mb-4">
-             <div className="relative">
-               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-               <Input
-                 placeholder="Search by email or name..."
-                 value={searchTerm}
-                 onChange={(e) => setSearchTerm(e.target.value)}
-                 className="pl-10 max-w-sm"
-               />
-             </div>
-           </div>
+            {/* Search and Bulk Actions */}
+            <div className="flex items-center justify-between gap-4 mb-4">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by email or name..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              {selectedUsers.size > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setBulkResetDialogOpen(true)}
+                >
+                  <Users className="w-4 h-4 mr-2" />
+                  Reset {selectedUsers.size} User{selectedUsers.size > 1 ? "s" : ""}
+                </Button>
+              )}
+            </div>
  
            {/* Table */}
            {loading ? (
@@ -309,28 +370,56 @@
                {searchTerm ? "No matching users found" : "No demo users with applications yet"}
              </div>
            ) : (
-             <div className="rounded-md border">
-               <Table>
-                 <TableHeader>
-                   <TableRow>
-                     <TableHead>User</TableHead>
-                     <TableHead className="text-center">Applications</TableHead>
-                     <TableHead className="text-center">Status</TableHead>
-                     <TableHead className="text-right">Actions</TableHead>
-                   </TableRow>
-                 </TableHeader>
-                 <TableBody>
-                   {filteredUsers.map((user) => (
-                     <TableRow key={user.user_id}>
-                       <TableCell>
-                         <div className="flex items-center gap-2">
-                           <User className="w-4 h-4 text-muted-foreground" />
-                           <div>
-                             <div className="font-medium">{user.full_name || "Unknown"}</div>
-                             <div className="text-xs text-muted-foreground">{user.email}</div>
-                           </div>
-                         </div>
-                       </TableCell>
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="p-0 h-auto"
+                          onClick={toggleAllUsers}
+                        >
+                          {selectedUsers.size === filteredUsers.length && filteredUsers.length > 0 ? (
+                            <CheckSquare className="w-4 h-4" />
+                          ) : (
+                            <Square className="w-4 h-4" />
+                          )}
+                        </Button>
+                      </TableHead>
+                      <TableHead>User</TableHead>
+                      <TableHead className="text-center">Applications</TableHead>
+                      <TableHead className="text-center">Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredUsers.map((user) => (
+                      <TableRow key={user.user_id}>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="p-0 h-auto"
+                            onClick={() => toggleUserSelection(user.user_id)}
+                          >
+                            {selectedUsers.has(user.user_id) ? (
+                              <CheckSquare className="w-4 h-4 text-primary" />
+                            ) : (
+                              <Square className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <User className="w-4 h-4 text-muted-foreground" />
+                            <div>
+                              <div className="font-medium">{user.full_name || "Unknown"}</div>
+                              <div className="text-xs text-muted-foreground">{user.email}</div>
+                            </div>
+                          </div>
+                        </TableCell>
                        <TableCell className="text-center">
                          <Badge 
                            variant={user.application_count >= globalLimit ? "destructive" : "secondary"}
@@ -456,68 +545,116 @@
          </DialogContent>
        </Dialog>
  
-       {/* Global Settings Dialog */}
-       <Dialog open={globalSettingsOpen} onOpenChange={setGlobalSettingsOpen}>
-         <DialogContent>
-           <DialogHeader>
-             <DialogTitle>Global Demo Limit Settings</DialogTitle>
-             <DialogDescription>
-               Set the maximum number of applications for demo users
-             </DialogDescription>
-           </DialogHeader>
- 
-           <div className="space-y-6 py-4">
-             <div className="space-y-3">
-               <Label>Application Limit</Label>
-               <div className="flex items-center gap-4">
-                 <Button
-                   variant="outline"
-                   size="icon"
-                   onClick={() => setGlobalLimit(Math.max(1, globalLimit - 1))}
-                 >
-                   <Minus className="w-4 h-4" />
-                 </Button>
-                 <div className="flex-1 text-center">
-                   <div className="text-4xl font-bold">{globalLimit}</div>
-                   <div className="text-sm text-muted-foreground">applications per user</div>
-                 </div>
-                 <Button
-                   variant="outline"
-                   size="icon"
-                   onClick={() => setGlobalLimit(globalLimit + 1)}
-                 >
-                   <Plus className="w-4 h-4" />
-                 </Button>
-               </div>
-             </div>
- 
-             {/* Preset buttons */}
-             <div className="flex justify-center gap-2">
-               {[3, 5, 10, 25].map((preset) => (
-                 <Button
-                   key={preset}
-                   variant={globalLimit === preset ? "default" : "outline"}
-                   size="sm"
-                   onClick={() => setGlobalLimit(preset)}
-                 >
-                   {preset}
-                 </Button>
-               ))}
-             </div>
-           </div>
- 
-           <DialogFooter>
-             <Button variant="outline" onClick={() => setGlobalSettingsOpen(false)}>
-               Cancel
-             </Button>
-             <Button onClick={saveGlobalLimit} disabled={processing}>
-               {processing ? "Saving..." : "Save Limit"}
-             </Button>
-           </DialogFooter>
-         </DialogContent>
-       </Dialog>
-     </>
-   );
- };
- 
- export default DemoUserAppManager;
+        {/* Global Settings Dialog */}
+        <Dialog open={globalSettingsOpen} onOpenChange={setGlobalSettingsOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Global Demo Limit Settings</DialogTitle>
+              <DialogDescription>
+                Set the maximum number of applications for demo users
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-6 py-4">
+              <div className="space-y-3">
+                <Label>Application Limit</Label>
+                <div className="flex items-center gap-4">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setGlobalLimit(Math.max(1, globalLimit - 1))}
+                  >
+                    <Minus className="w-4 h-4" />
+                  </Button>
+                  <div className="flex-1 text-center">
+                    <div className="text-4xl font-bold">{globalLimit}</div>
+                    <div className="text-sm text-muted-foreground">applications per user</div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setGlobalLimit(globalLimit + 1)}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Preset buttons */}
+              <div className="flex justify-center gap-2">
+                {[3, 5, 10, 25].map((preset) => (
+                  <Button
+                    key={preset}
+                    variant={globalLimit === preset ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setGlobalLimit(preset)}
+                  >
+                    {preset}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setGlobalSettingsOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={saveGlobalLimit} disabled={processing}>
+                {processing ? "Saving..." : "Save Limit"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Bulk Reset Confirmation Dialog */}
+        <Dialog open={bulkResetDialogOpen} onOpenChange={setBulkResetDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-destructive">
+                <RotateCcw className="w-5 h-5" />
+                Bulk Reset Applications
+              </DialogTitle>
+              <DialogDescription>
+                This will delete ALL applications for the selected {selectedUsers.size} user(s). This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="py-4">
+              <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/30">
+                <div className="text-sm font-medium text-destructive mb-2">Users to be reset:</div>
+                <ul className="text-sm text-muted-foreground space-y-1 max-h-40 overflow-y-auto">
+                  {Array.from(selectedUsers).map(userId => {
+                    const user = users.find(u => u.user_id === userId);
+                    return (
+                      <li key={userId} className="flex items-center gap-2">
+                        <User className="w-3 h-3" />
+                        {user?.full_name || user?.email || userId.slice(0, 8)}
+                        <span className="text-muted-foreground/60">
+                          ({user?.application_count || 0} apps)
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setBulkResetDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={bulkResetApplications} 
+                disabled={processing}
+              >
+                {processing ? "Resetting..." : `Reset ${selectedUsers.size} User${selectedUsers.size > 1 ? "s" : ""}`}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  };
+
+export default DemoUserAppManager;
