@@ -491,6 +491,112 @@ const AppPage = () => {
     }
   };
 
+  const handleRegenerateCoverLetter = async (
+    section: string,
+    feedback: string,
+    tips: string[]
+  ) => {
+    if (!jobData || !detailedResume) return;
+    
+    setIsLoading(true);
+    setGenerationType("cover-letter");
+    setGenerationStage("analyzing");
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Authentication required");
+
+      setGenerationStage("drafting");
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-cover-letter`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({
+            resumeContent: detailedResume.content,
+            jobDescription: jobData.description,
+            jobTitle: jobData.title,
+            company: jobData.company,
+            analysisData,
+            applicationId: applicationId,
+            userId: user?.id,
+            sectionToRegenerate: section,
+            userFeedback: feedback,
+            selectedTips: tips,
+            existingCoverLetter: coverLetter,
+            stream: true,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Request failed with status ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let buffer = "";
+
+      setGenerationStage("refining");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const data = line.slice(6).trim();
+            if (data === "[DONE]") break;
+            
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) {
+                fullContent += content;
+              }
+            } catch {
+              // Ignore parse errors for partial chunks
+            }
+          }
+        }
+      }
+
+      setGenerationStage("complete");
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // For section regeneration, the AI returns just the section content
+      // We need to merge it appropriately (for now, just use the full regenerated content)
+      setCoverLetter(fullContent);
+      
+      toast.success(`${section} regenerated successfully`);
+      
+      if (user) {
+        await saveApplication({
+          cover_letter: fullContent,
+        });
+      }
+    } catch (error) {
+      console.error("Error regenerating cover letter:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to regenerate. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleGenerateInterviewPrep = async (
     sectionToRegenerate?: string,
     userFeedback?: string,
@@ -758,6 +864,7 @@ const AppPage = () => {
                   data={analysisData}
                   jobData={jobData}
                   onGenerate={handleGenerateCoverLetter}
+                  onGenerateInterviewPrep={() => handleGenerateInterviewPrep()}
                   onBack={() => setCurrentStep("job")}
                   applicationId={applicationId}
                 />
@@ -771,9 +878,8 @@ const AppPage = () => {
                   onBack={() => setCurrentStep("analysis")}
                   onGenerateInterviewPrep={() => handleGenerateInterviewPrep()}
                   onRegenerateCoverLetter={(section, feedback, tips) => {
-                    // TODO: Implement section-based cover letter regeneration
                     toast.info(`Regenerating ${section} with your feedback...`);
-                    handleGenerateCoverLetter();
+                    handleRegenerateCoverLetter(section, feedback, tips);
                   }}
                   isRegenerating={isLoading}
                   hasInterviewPrep={!!interviewPrep}
@@ -782,17 +888,17 @@ const AppPage = () => {
                 />
               )}
 
-              {currentStep === "interview" && jobData && interviewPrep && (
+              {currentStep === "interview" && jobData && (interviewPrep || isLoading) && (
                 <InterviewPrep
-                  data={interviewPrep}
+                  data={interviewPrep || { questions: [], keyStrengths: [], potentialConcerns: [], questionsToAsk: [] }}
                   jobData={jobData}
-                  onBack={() => setCurrentStep("editor")}
+                  onBack={() => coverLetter ? setCurrentStep("editor") : setCurrentStep("analysis")}
                   onRegenerateSection={(section, feedback, tips) => {
                     toast.info(`Regenerating ${section} with your feedback...`);
                     handleGenerateInterviewPrep(section, feedback, tips);
                   }}
                   isRegenerating={isLoading}
-                  onGoToCoverLetter={() => setCurrentStep("editor")}
+                  onGoToCoverLetter={coverLetter ? () => setCurrentStep("editor") : undefined}
                   applicationId={applicationId}
                   onDataChange={(newData) => {
                     setInterviewPrep(newData);

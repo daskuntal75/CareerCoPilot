@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ChevronDown, ChevronRight, Sparkles, Check, Minus, X, AlertCircle } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, Sparkles, Check, Minus, X, AlertCircle, MessageCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { AnalysisData, JobData, RequirementMatch } from "@/pages/App";
@@ -15,6 +15,7 @@ interface AnalysisResultsProps {
   data: AnalysisData;
   jobData: JobData;
   onGenerate: () => void;
+  onGenerateInterviewPrep?: () => void;
   onBack: () => void;
   applicationId: string | null;
 }
@@ -81,7 +82,7 @@ const RequirementRow = ({ item, index }: { item: RequirementMatch; index: number
   );
 };
 
-const AnalysisResults = ({ data, jobData, onGenerate, onBack, applicationId }: AnalysisResultsProps) => {
+const AnalysisResults = ({ data, jobData, onGenerate, onGenerateInterviewPrep, onBack, applicationId }: AnalysisResultsProps) => {
   const { subscription } = useAuth();
   const { canUseFeature, getRemainingUsage, limits } = useUsageTracking();
   const { canGenerate: canGenerateHourly, isExhausted: isHourlyExhausted } = useHourlyQuota();
@@ -237,6 +238,18 @@ const AnalysisResults = ({ data, jobData, onGenerate, onBack, applicationId }: A
                     <Sparkles className="w-4 h-4" />
                     Upgrade for Unlimited
                   </Link>
+                </Button>
+              )}
+              
+              {/* Interview Prep Button - Independent from Cover Letter */}
+              {onGenerateInterviewPrep && canGenerate && (
+                <Button 
+                  variant="outline" 
+                  className="w-full" 
+                  onClick={onGenerateInterviewPrep}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Prepare for Interview
                 </Button>
               )}
             </div>

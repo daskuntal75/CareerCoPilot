@@ -354,6 +354,7 @@ serve(async (req) => {
 - Base ALL responses ONLY on actual experiences from the provided resume
 - DO NOT fabricate metrics, outcomes, or experiences
 - Maintain complete accuracy to resume content
+- Generate COMPLETE content for ALL sections - do not leave any section empty or with minimal content
 
 # OUTPUT FORMAT
 Return a JSON object with this structure:
@@ -393,7 +394,7 @@ Return a JSON object with this structure:
   "questions": [
     {
       "question": "Interview question",
-      "category": "recruiter|hiring_manager|peer|technical|vp|panel",
+      "category": "recruiter|hiring_manager|peer|technical|vp",
       "difficulty": "easy|medium|hard",
       "whyAsked": "Why this question is likely",
       "starAnswer": {
@@ -406,11 +407,11 @@ Return a JSON object with this structure:
     }
   ],
   "questionsToAsk": {
-    "forRecruiter": ["3 questions"],
-    "forHiringManager": ["3 questions"],
-    "forPeer": ["3 questions"],
-    "forTechnicalLead": ["3 questions"],
-    "forVP": ["3 questions"]
+    "forRecruiter": ["Question 1", "Question 2", "Question 3"],
+    "forHiringManager": ["Question 1", "Question 2", "Question 3"],
+    "forPeer": ["Question 1", "Question 2", "Question 3"],
+    "forTechnicalLead": ["Question 1", "Question 2", "Question 3"],
+    "forVP": ["Question 1", "Question 2", "Question 3"]
   },
   "keyStrengths": ["5-7 strengths to emphasize"],
   "potentialConcerns": ["3-5 concerns to address"],
@@ -422,7 +423,28 @@ Return a JSON object with this structure:
   }
 }
 
-Generate 10-12 interview questions across different interviewer types.
+# CONTENT REQUIREMENTS
+
+CRITICAL: You MUST generate complete content for ALL sections:
+
+1. **questions**: Generate EXACTLY 12 interview questions distributed as follows:
+   - recruiter: 2-3 questions (screening, culture fit)
+   - hiring_manager: 2-3 questions (role-specific, expectations)
+   - peer: 2-3 questions (collaboration, technical)
+   - technical: 2-3 questions (skills validation)
+   - vp: 2 questions (strategic alignment, leadership)
+
+2. **questionsToAsk**: Generate EXACTLY 3 thoughtful questions for EACH interviewer type:
+   - forRecruiter: 3 questions about company culture, team, hiring process
+   - forHiringManager: 3 questions about role expectations, success metrics, team dynamics
+   - forPeer: 3 questions about day-to-day work, collaboration, challenges
+   - forTechnicalLead: 3 questions about tech stack, architecture, technical challenges
+   - forVP: 3 questions about company vision, growth, strategic direction
+
+3. **keyStrengths**: List 5-7 specific strengths from the resume
+
+4. **potentialConcerns**: List 3-5 potential gaps or concerns to address proactively
+
 Return ONLY valid JSON, no markdown.`;
 
     const systemPrompt = customSystemPrompt || defaultSystemPrompt;
