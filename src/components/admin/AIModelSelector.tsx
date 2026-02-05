@@ -17,7 +17,9 @@ import type { Json } from "@/integrations/supabase/types";
  Play,
  GitCompare,
  CheckCircle,
- AlertCircle
+   AlertCircle,
+   Clock,
+   Timer
  } from "lucide-react";
  import {
  Select,
@@ -742,10 +744,12 @@ import type { Json } from "@/integrations/supabase/types";
                        {rankedResults.map((result, index) => {
                          const model = getModelConfig(result.model);
                          const eval_ = evaluations[result.model];
+                          const maxLatency = Math.max(...rankedResults.map(r => r.latencyMs));
+                          const latencyPercent = (result.latencyMs / maxLatency) * 100;
                          return (
                            <div
                              key={result.model}
-                             className="flex items-center gap-3 p-2 rounded bg-background"
+                               className="flex items-center gap-3 p-3 rounded bg-background"
                            >
                              <span className="font-bold text-lg w-6">{index + 1}</span>
                              <span className="font-medium flex-1">{model?.name}</span>
@@ -759,13 +763,60 @@ import type { Json } from "@/integrations/supabase/types";
                              <Badge className="bg-accent text-accent-foreground">
                                Score: {eval_.total}/10
                              </Badge>
-                             <span className="text-xs text-muted-foreground">
-                               {(result.latencyMs / 1000).toFixed(1)}s
-                             </span>
+                               <div className="flex items-center gap-2 min-w-[120px]">
+                                 <Timer className="w-3 h-3 text-muted-foreground" />
+                                 <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                   <div 
+                                     className="h-full bg-gradient-to-r from-success to-warning transition-all duration-300"
+                                     style={{ width: `${latencyPercent}%` }}
+                                   />
+                                 </div>
+                                 <span className="text-xs text-muted-foreground font-mono w-12 text-right">
+                                   {(result.latencyMs / 1000).toFixed(1)}s
+                                 </span>
+                               </div>
                            </div>
                          );
                        })}
                      </div>
+                       
+                       {/* Latency Summary */}
+                       <div className="mt-4 pt-3 border-t border-accent/20">
+                         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                           <Clock className="w-4 h-4" />
+                           <span className="font-medium">Latency Comparison</span>
+                         </div>
+                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                           {rankedResults.map((result) => {
+                             const model = getModelConfig(result.model);
+                             const isFastest = result.latencyMs === Math.min(...rankedResults.map(r => r.latencyMs));
+                             const isSlowest = result.latencyMs === Math.max(...rankedResults.map(r => r.latencyMs));
+                             return (
+                               <div 
+                                 key={result.model + '-latency'} 
+                                 className={`p-2 rounded-lg border ${
+                                   isFastest ? 'border-success bg-success/10' : 
+                                   isSlowest ? 'border-warning bg-warning/10' : 
+                                   'border-border bg-secondary/20'
+                                 }`}
+                               >
+                                 <div className="text-xs text-muted-foreground truncate">{model?.name}</div>
+                                 <div className="flex items-center gap-1">
+                                   <span className={`text-lg font-bold ${
+                                     isFastest ? 'text-success' : isSlowest ? 'text-warning' : ''
+                                   }`}>
+                                     {(result.latencyMs / 1000).toFixed(1)}s
+                                   </span>
+                                   {isFastest && <Zap className="w-4 h-4 text-success" />}
+                                 </div>
+                                 <div className="text-xs text-muted-foreground">
+                                   {result.wordCount} words • {Math.round(result.wordCount / (result.latencyMs / 1000))} w/s
+                                 </div>
+                               </div>
+                             );
+                           })}
+                         </div>
+                       </div>
                    </div>
                  )}
  
