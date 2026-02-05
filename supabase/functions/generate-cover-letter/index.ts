@@ -82,6 +82,7 @@ serve(async (req) => {
       selectedTips,
       existingCoverLetter,
       stream = false,
+      overrideModel,
     } = await req.json();
     
     if (!resumeContent || !jobDescription) {
@@ -357,7 +358,33 @@ ${customUserPromptTemplate || defaultUserPromptTemplate}`;
 
     // Use faster model for section regeneration
     const isRegeneration = sectionToRegenerate && sectionToRegenerate !== "full";
-    const model = isRegeneration ? "google/gemini-2.5-flash-lite" : "google/gemini-2.5-flash";
+    
+    // Determine model to use (admin-configured, override, or default)
+    let model = isRegeneration ? "google/gemini-2.5-flash-lite" : "google/gemini-3-flash-preview";
+    
+    // Check for model override (used in comparisons)
+    if (overrideModel) {
+      model = overrideModel;
+    } else if (!isRegeneration) {
+      // Fetch admin-configured model for cover letter generation
+      try {
+        const { data: modelSetting } = await supabase
+          .from("admin_settings")
+          .select("setting_value")
+          .eq("setting_key", "ai_model_cover_letter")
+          .maybeSingle();
+        
+        if (modelSetting?.setting_value) {
+          const setting = modelSetting.setting_value as { model?: string };
+          if (setting.model) {
+            model = setting.model;
+            console.log(`Using admin-configured model: ${model}`);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch model setting:", e);
+      }
+    }
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
