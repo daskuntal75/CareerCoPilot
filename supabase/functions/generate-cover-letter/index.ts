@@ -115,11 +115,11 @@ async function resolveModel(supabase: SupabaseClient, isRegen: boolean, override
   return { model, isExternal, endpoint, apiKeyVar };
 }
 
-// Make AI request
+// Make AI request - returns { response, isAnthropicNonStreaming }
 async function callAI(params: {
   model: string; systemPrompt: string; userPrompt: string; maxTokens: number; stream: boolean;
   isExternal: boolean; endpoint?: string; apiKeyVar?: string;
-}): Promise<Response> {
+}): Promise<{ response: Response; isAnthropicNonStreaming: boolean }> {
   const { model, systemPrompt, userPrompt, maxTokens, stream, isExternal, endpoint, apiKeyVar } = params;
   
   if (isExternal && endpoint) {
@@ -127,23 +127,26 @@ async function callAI(params: {
     if (!apiKey) throw new Error(`API key ${apiKeyVar} not configured`);
     
     if (endpoint.includes("anthropic.com")) {
-      return fetch(endpoint, {
+      // Anthropic API - always non-streaming for now
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "x-api-key": apiKey, "Content-Type": "application/json", "anthropic-version": "2023-06-01" },
         body: JSON.stringify({ model, system: systemPrompt, messages: [{ role: "user", content: userPrompt }], max_tokens: maxTokens }),
       });
+      return { response, isAnthropicNonStreaming: true };
     }
-    return fetch(endpoint, {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model, messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }], temperature: 0.7, max_tokens: maxTokens, stream }),
     });
+    return { response, isAnthropicNonStreaming: false };
   }
   
   const LOVABLE_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_KEY) throw new Error("LOVABLE_API_KEY not configured");
   
-  return fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+  const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${LOVABLE_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -152,6 +155,28 @@ async function callAI(params: {
       stream,
       ...(model.startsWith("openai/") ? { max_completion_tokens: maxTokens } : { temperature: 0.7, max_tokens: maxTokens }),
     }),
+  });
+  return { response, isAnthropicNonStreaming: false };
+}
+
+// Create SSE stream from content for Anthropic responses
+function createSseStream(content: string): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  let sent = false;
+  
+  return new ReadableStream({
+    start(controller) {
+      if (!sent) {
+        // Send the content as an SSE event in OpenAI format
+        const event = {
+          choices: [{ delta: { content }, index: 0 }]
+        };
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        sent = true;
+        controller.close();
+      }
+    }
   });
 }
 
@@ -207,7 +232,7 @@ serve(async (req) => {
       userPrompt += USER_PROMPT;
     }
 
-    const response = await callAI({
+    const { response, isAnthropicNonStreaming } = await callAI({
       model: modelConfig.model, systemPrompt: SYSTEM_PROMPT, userPrompt,
       maxTokens: isRegen ? 2000 : 4000, stream,
       isExternal: modelConfig.isExternal, endpoint: modelConfig.endpoint, apiKeyVar: modelConfig.apiKeyVar,
@@ -221,14 +246,26 @@ serve(async (req) => {
       throw new Error(`AI error: ${response.status}`);
     }
 
+    // For Anthropic, always parse JSON and optionally convert to SSE format
+    if (isAnthropicNonStreaming) {
+      const data = await response.json();
+      const coverLetter = data.content?.[0]?.text;
+      if (!coverLetter) throw new Error("Empty AI response");
+      
+      if (stream) {
+        // Convert to SSE format for frontend compatibility
+        const sseStream = createSseStream(coverLetter);
+        return new Response(sseStream, { headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
+      }
+      return new Response(JSON.stringify({ coverLetter, regeneratedSection: sectionToRegenerate || null }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     if (stream) {
       return new Response(response.body, { headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
     }
 
     const data = await response.json();
-    const coverLetter = modelConfig.isExternal && modelConfig.endpoint?.includes("anthropic.com")
-      ? data.content?.[0]?.text
-      : data.choices?.[0]?.message?.content;
+    const coverLetter = data.choices?.[0]?.message?.content;
 
     if (!coverLetter) throw new Error("Empty AI response");
 

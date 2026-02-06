@@ -7,23 +7,25 @@
  import { Badge } from "@/components/ui/badge";
  import { toast } from "sonner";
  import { Skeleton } from "@/components/ui/skeleton";
- import { 
-   Save, 
-   RefreshCw, 
-   Cpu, 
-   Zap, 
-   Brain, 
-   Sparkles,
-   Play,
-   GitCompare,
-   CheckCircle,
-   AlertCircle,
-   Clock,
-   Timer,
-   DollarSign,
-   Sliders,
-   Settings2
- } from "lucide-react";
+import { 
+  Save, 
+  RefreshCw, 
+  Cpu, 
+  Zap, 
+  Brain, 
+  Sparkles,
+  Play,
+  GitCompare,
+  CheckCircle,
+  AlertCircle,
+  Clock,
+  Timer,
+  DollarSign,
+  Sliders,
+  Settings2,
+  ExternalLink,
+  Server
+} from "lucide-react";
  import {
  Select,
  SelectContent,
@@ -218,54 +220,117 @@
    premium: "bg-gradient-to-r from-purple-500 to-pink-500 text-white",
  };
  
- const AIModelSelector = ({ refreshTrigger }: AIModelSelectorProps) => {
-   const [loading, setLoading] = useState(true);
-   const [saving, setSaving] = useState(false);
-   const [coverLetterModel, setCoverLetterModel] = useState<ModelSelection>({
-     model: "google/gemini-3-flash-preview",
-     displayName: "Gemini 3 Flash Preview",
-   });
-   const [interviewPrepModel, setInterviewPrepModel] = useState<ModelSelection>({
-     model: "google/gemini-3-flash-preview",
-     displayName: "Gemini 3 Flash Preview",
-   });
-   const [hasChanges, setHasChanges] = useState(false);
-   
-   // Comparison state
-   const [comparisonOpen, setComparisonOpen] = useState(false);
-   const [comparisonType, setComparisonType] = useState<"cover_letter" | "interview_prep">("cover_letter");
-   const [selectedModelsForComparison, setSelectedModelsForComparison] = useState<string[]>([]);
-   const [comparisonResults, setComparisonResults] = useState<ComparisonResult[]>([]);
-   const [comparisonRunning, setComparisonRunning] = useState(false);
-   const [evaluations, setEvaluations] = useState<Record<string, CRISPEvaluation>>({});
-   
-   // Model configuration state for comparison
-   const [modelConfigs, setModelConfigs] = useState<Record<string, { temperature: number; maxTokens: number }>>({});
-   const [configDialogOpen, setConfigDialogOpen] = useState(false);
-   const [configEditModel, setConfigEditModel] = useState<string | null>(null);
-   
-   // Test data for comparisons
-   const [testJobDescription, setTestJobDescription] = useState(`Senior Software Engineer at TechCorp
- 
- Requirements:
- - 5+ years of experience with React and TypeScript
- - Experience with cloud platforms (AWS/GCP)
- - Strong problem-solving skills
- - Team leadership experience preferred
- - Excellent communication skills`);
-   
-   const [testResume, setTestResume] = useState(`Jane Smith - Software Engineer
- 
- Experience:
- - 6 years at StartupABC as Lead Frontend Engineer
- - Built React applications serving 1M+ users
- - Led team of 4 developers
- - Implemented CI/CD pipelines on AWS
- - Reduced page load times by 40%`);
- 
-   useEffect(() => {
-     fetchModelSettings();
-   }, [refreshTrigger]);
+// External model interface
+interface ExternalModelConfig {
+  id: string;
+  name: string;
+  provider: string;
+  modelId: string;
+  isEnabled: boolean;
+  costPer1kInput: number;
+  costPer1kOutput: number;
+  defaultTemperature: number;
+  maxTokens: number;
+}
+
+const AIModelSelector = ({ refreshTrigger }: AIModelSelectorProps) => {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [coverLetterModel, setCoverLetterModel] = useState<ModelSelection>({
+    model: "google/gemini-3-flash-preview",
+    displayName: "Gemini 3 Flash Preview",
+  });
+  const [interviewPrepModel, setInterviewPrepModel] = useState<ModelSelection>({
+    model: "google/gemini-3-flash-preview",
+    displayName: "Gemini 3 Flash Preview",
+  });
+  const [hasChanges, setHasChanges] = useState(false);
+  
+  // External models state
+  const [externalModels, setExternalModels] = useState<ExternalModelConfig[]>([]);
+  
+  // Comparison state
+  const [comparisonOpen, setComparisonOpen] = useState(false);
+  const [comparisonType, setComparisonType] = useState<"cover_letter" | "interview_prep">("cover_letter");
+  const [selectedModelsForComparison, setSelectedModelsForComparison] = useState<string[]>([]);
+  const [comparisonResults, setComparisonResults] = useState<ComparisonResult[]>([]);
+  const [comparisonRunning, setComparisonRunning] = useState(false);
+  const [evaluations, setEvaluations] = useState<Record<string, CRISPEvaluation>>({});
+  
+  // Model configuration state for comparison
+  const [modelConfigs, setModelConfigs] = useState<Record<string, { temperature: number; maxTokens: number }>>({});
+  const [configDialogOpen, setConfigDialogOpen] = useState(false);
+  const [configEditModel, setConfigEditModel] = useState<string | null>(null);
+  
+  // Test data for comparisons
+  const [testJobDescription, setTestJobDescription] = useState(`Senior Software Engineer at TechCorp
+
+Requirements:
+- 5+ years of experience with React and TypeScript
+- Experience with cloud platforms (AWS/GCP)
+- Strong problem-solving skills
+- Team leadership experience preferred
+- Excellent communication skills`);
+  
+  const [testResume, setTestResume] = useState(`Jane Smith - Software Engineer
+
+Experience:
+- 6 years at StartupABC as Lead Frontend Engineer
+- Built React applications serving 1M+ users
+- Led team of 4 developers
+- Implemented CI/CD pipelines on AWS
+- Reduced page load times by 40%`);
+
+  // Combined models for comparison (built-in + external)
+  const allModelsForComparison = useMemo(() => {
+    const builtIn = AVAILABLE_MODELS.map(m => ({
+      id: m.id,
+      name: m.name,
+      provider: m.provider,
+      isExternal: false,
+      speed: m.speed,
+      costPer1kInput: m.costPer1kInput,
+      costPer1kOutput: m.costPer1kOutput,
+    }));
+    
+    const external = externalModels
+      .filter(m => m.isEnabled)
+      .map(m => ({
+        id: `external/${m.id}`,
+        name: m.name,
+        provider: m.provider,
+        isExternal: true,
+        speed: "medium" as const,
+        costPer1kInput: m.costPer1kInput,
+        costPer1kOutput: m.costPer1kOutput,
+      }));
+    
+    return [...builtIn, ...external];
+  }, [externalModels]);
+
+  useEffect(() => {
+    fetchModelSettings();
+    fetchExternalModels();
+  }, [refreshTrigger]);
+
+  const fetchExternalModels = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("admin_settings")
+        .select("setting_value")
+        .eq("setting_key", "external_ai_models")
+        .maybeSingle();
+
+      if (error && error.code !== "PGRST116") throw error;
+
+      if (data?.setting_value) {
+        const modelsData = data.setting_value as { models?: ExternalModelConfig[] };
+        setExternalModels(modelsData.models || []);
+      }
+    } catch (error) {
+      console.error("Error fetching external models:", error);
+    }
+  };
  
    const fetchModelSettings = async () => {
      setLoading(true);
@@ -775,34 +840,73 @@
                  </div>
                </div>
  
-               {/* Model Selection */}
-               <div className="space-y-2">
-                 <Label>Select Models to Compare (2-4)</Label>
-                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                   {AVAILABLE_MODELS.map((model) => (
-                     <button
-                       key={model.id}
-                       onClick={() => toggleModelForComparison(model.id)}
-                       className={`p-3 rounded-lg border text-left transition-colors ${
-                         selectedModelsForComparison.includes(model.id)
-                           ? "border-accent bg-accent/10"
-                           : "border-border hover:bg-secondary/50"
-                       }`}
-                     >
-                       <div className="flex items-center justify-between">
-                         <span className="font-medium text-sm">{model.name}</span>
-                         {selectedModelsForComparison.includes(model.id) && (
-                           <CheckCircle className="w-4 h-4 text-accent" />
-                         )}
-                       </div>
-                       <div className="flex items-center gap-1 mt-1">
-                         {speedIcons[model.speed]}
-                         <span className="text-xs text-muted-foreground">{model.provider}</span>
-                       </div>
-                     </button>
-                   ))}
-                 </div>
-               </div>
+              {/* Model Selection */}
+              <div className="space-y-2">
+                <Label>Select Models to Compare (2-4)</Label>
+                
+                {/* Built-in Models */}
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground font-medium">Lovable AI Gateway Models</span>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {AVAILABLE_MODELS.map((model) => (
+                      <button
+                        key={model.id}
+                        onClick={() => toggleModelForComparison(model.id)}
+                        className={`p-3 rounded-lg border text-left transition-colors ${
+                          selectedModelsForComparison.includes(model.id)
+                            ? "border-accent bg-accent/10"
+                            : "border-border hover:bg-secondary/50"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium text-sm">{model.name}</span>
+                          {selectedModelsForComparison.includes(model.id) && (
+                            <CheckCircle className="w-4 h-4 text-accent" />
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 mt-1">
+                          {speedIcons[model.speed]}
+                          <span className="text-xs text-muted-foreground">{model.provider}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                
+                {/* External Models */}
+                {externalModels.filter(m => m.isEnabled).length > 0 && (
+                  <div className="space-y-1 mt-4">
+                    <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                      <ExternalLink className="w-3 h-3" />
+                      External Models
+                    </span>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                      {externalModels.filter(m => m.isEnabled).map((model) => (
+                        <button
+                          key={model.id}
+                          onClick={() => toggleModelForComparison(`external/${model.id}`)}
+                          className={`p-3 rounded-lg border text-left transition-colors ${
+                            selectedModelsForComparison.includes(`external/${model.id}`)
+                              ? "border-accent bg-accent/10"
+                              : "border-border hover:bg-secondary/50"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-sm">{model.name}</span>
+                            {selectedModelsForComparison.includes(`external/${model.id}`) && (
+                              <CheckCircle className="w-4 h-4 text-accent" />
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 mt-1">
+                            <Server className="w-3 h-3 text-accent" />
+                            <span className="text-xs text-muted-foreground">{model.provider}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
              </TabsContent>
  
              <TabsContent value="results" className="mt-4">
