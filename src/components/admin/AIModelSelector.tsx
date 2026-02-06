@@ -419,14 +419,24 @@ Experience:
   };
  
    const handleModelChange = (type: "cover_letter" | "interview_prep", modelId: string) => {
-     const model = AVAILABLE_MODELS.find((m) => m.id === modelId);
-     if (!model) return;
- 
+     // Check built-in models first
+     let model = AVAILABLE_MODELS.find((m) => m.id === modelId);
+     let displayName = model?.name || modelId;
+     
+     // Check external models if not found in built-in
+     if (!model && modelId.startsWith("external/")) {
+       const externalId = modelId.replace("external/", "");
+       const externalModel = externalModels.find((m) => m.id === externalId);
+       if (externalModel) {
+         displayName = externalModel.name;
+       }
+     }
+
      const selection: ModelSelection = {
        model: modelId,
-       displayName: model.name,
+       displayName,
      };
- 
+
      if (type === "cover_letter") {
        setCoverLetterModel(selection);
      } else {
@@ -595,7 +605,32 @@ Experience:
      };
    };
  
-   const getModelConfig = (modelId: string) => AVAILABLE_MODELS.find((m) => m.id === modelId);
+   const getModelConfig = (modelId: string): ModelConfig | { id: string; name: string; provider: string; description: string; speed: "fast" | "medium" | "slow"; quality: "standard" | "high" | "premium"; costTier: "low" | "medium" | "high"; costPer1kInput: number; costPer1kOutput: number; strengths: string[] } | undefined => {
+     // Check built-in models first
+     const builtIn = AVAILABLE_MODELS.find((m) => m.id === modelId);
+     if (builtIn) return builtIn;
+     
+     // Check external models
+     if (modelId.startsWith("external/")) {
+       const externalId = modelId.replace("external/", "");
+       const external = externalModels.find((m) => m.id === externalId);
+       if (external) {
+         return {
+           id: modelId,
+           name: external.name,
+           provider: external.provider,
+           description: `External model via ${external.provider}`,
+           speed: "medium",
+           quality: "high",
+           costTier: "medium",
+           costPer1kInput: external.costPer1kInput,
+           costPer1kOutput: external.costPer1kOutput,
+           strengths: ["External API", external.provider],
+         };
+       }
+     }
+     return undefined;
+   };
  
    const rankedResults = [...comparisonResults]
      .filter((r) => !r.error && evaluations[r.model])
@@ -673,19 +708,39 @@ Experience:
                <SelectTrigger className="w-full">
                  <SelectValue />
                </SelectTrigger>
-               <SelectContent>
-                 {AVAILABLE_MODELS.map((model) => (
-                   <SelectItem key={model.id} value={model.id}>
-                     <div className="flex items-center gap-2">
-                       {speedIcons[model.speed]}
-                       <span>{model.name}</span>
-                       <Badge variant="secondary" className="text-xs">
-                         {model.provider}
-                       </Badge>
-                     </div>
-                   </SelectItem>
-                 ))}
-               </SelectContent>
+                <SelectContent>
+                  {/* Built-in Models */}
+                  {AVAILABLE_MODELS.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      <div className="flex items-center gap-2">
+                        {speedIcons[model.speed]}
+                        <span>{model.name}</span>
+                        <Badge variant="secondary" className="text-xs">
+                          {model.provider}
+                        </Badge>
+                      </div>
+                    </SelectItem>
+                  ))}
+                  {/* External Models */}
+                  {externalModels.filter(m => m.isEnabled).length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-t mt-1 pt-2">
+                        External Models
+                      </div>
+                      {externalModels.filter(m => m.isEnabled).map((model) => (
+                        <SelectItem key={`external/${model.id}`} value={`external/${model.id}`}>
+                          <div className="flex items-center gap-2">
+                            <Server className="w-3 h-3 text-muted-foreground" />
+                            <span>{model.name}</span>
+                            <Badge variant="outline" className="text-xs">
+                              {model.provider}
+                            </Badge>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                </SelectContent>
              </Select>
              {getModelConfig(coverLetterModel.model) && (
                <div className="flex flex-wrap gap-2 mt-2">
@@ -715,19 +770,39 @@ Experience:
                <SelectTrigger className="w-full">
                  <SelectValue />
                </SelectTrigger>
-               <SelectContent>
-                 {AVAILABLE_MODELS.map((model) => (
-                   <SelectItem key={model.id} value={model.id}>
-                     <div className="flex items-center gap-2">
-                       {speedIcons[model.speed]}
-                       <span>{model.name}</span>
-                       <Badge variant="secondary" className="text-xs">
-                         {model.provider}
-                       </Badge>
-                     </div>
-                   </SelectItem>
-                 ))}
-               </SelectContent>
+                <SelectContent>
+                  {/* Built-in Models */}
+                  {AVAILABLE_MODELS.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      <div className="flex items-center gap-2">
+                        {speedIcons[model.speed]}
+                        <span>{model.name}</span>
+                        <Badge variant="secondary" className="text-xs">
+                          {model.provider}
+                        </Badge>
+                      </div>
+                    </SelectItem>
+                  ))}
+                  {/* External Models */}
+                  {externalModels.filter(m => m.isEnabled).length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground border-t mt-1 pt-2">
+                        External Models
+                      </div>
+                      {externalModels.filter(m => m.isEnabled).map((model) => (
+                        <SelectItem key={`external/${model.id}`} value={`external/${model.id}`}>
+                          <div className="flex items-center gap-2">
+                            <Server className="w-3 h-3 text-muted-foreground" />
+                            <span>{model.name}</span>
+                            <Badge variant="outline" className="text-xs">
+                              {model.provider}
+                            </Badge>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                </SelectContent>
              </Select>
              {getModelConfig(interviewPrepModel.model) && (
                <div className="flex flex-wrap gap-2 mt-2">

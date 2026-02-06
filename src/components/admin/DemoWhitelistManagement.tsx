@@ -124,22 +124,33 @@ const DemoWhitelistManagement = ({ refreshTrigger }: DemoWhitelistManagementProp
   };
 
   const addToWhitelist = async () => {
-    if (!foundUser || !user) return;
+    if (!user) return;
+    
+    // Allow adding without search validation - just validate email format
+    const emailToAdd = newEmail.trim().toLowerCase();
+    if (!emailToAdd) {
+      toast.error("Please enter an email address");
+      return;
+    }
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailToAdd)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
 
     setIsAdding(true);
     try {
-      // First, try to find the user_id from profiles by matching with auth
-      // Since we can't directly query auth.users, we'll need to handle this differently
-      
       // Check if user already exists in whitelist
       const { data: existing } = await supabase
         .from("demo_whitelist")
         .select("id")
-        .eq("email", newEmail)
+        .eq("email", emailToAdd)
         .maybeSingle();
 
       if (existing) {
         toast.error("This email is already in the whitelist");
+        setIsAdding(false);
         return;
       }
 
@@ -149,14 +160,14 @@ const DemoWhitelistManagement = ({ refreshTrigger }: DemoWhitelistManagementProp
         .from("demo_whitelist")
         .insert({
           user_id: crypto.randomUUID(), // Temporary - will be updated when user matches
-          email: newEmail.toLowerCase(),
+          email: emailToAdd,
           reason: newReason || null,
           whitelisted_by: user.id,
         });
 
       if (error) throw error;
 
-      toast.success(`Added ${newEmail} to whitelist`);
+      toast.success(`Added ${emailToAdd} to whitelist`);
       setIsAddDialogOpen(false);
       setNewEmail("");
       setNewReason("");
@@ -267,7 +278,7 @@ const DemoWhitelistManagement = ({ refreshTrigger }: DemoWhitelistManagementProp
                   </Button>
                   <Button 
                     onClick={addToWhitelist} 
-                    disabled={!foundUser || isAdding}
+                    disabled={!newEmail.trim() || isAdding}
                   >
                     {isAdding ? "Adding..." : "Add to Whitelist"}
                   </Button>

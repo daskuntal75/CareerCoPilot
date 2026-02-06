@@ -109,10 +109,12 @@ const UserDetailsModal = ({
           (u) => new Date(u.created_at) >= startOfMonth
         );
       } else if (filterType === "with_applications") {
+        // "Active Users" card shows users WITH applications - this is correct
         filteredData = filteredData.filter(
           (u) => u.total_applications > 0
         );
       } else if (filterType === "active") {
+        // This filter is for "active subscription" users, not the same as "active users"
         filteredData = filteredData.filter(
           (u) => u.subscription_status === "active"
         );
