@@ -381,7 +381,7 @@ const GenerationProgress = ({
           <p className="text-[10px] text-muted-foreground text-center">
             {retryInfo?.isRetrying 
               ? `Retry ${retryInfo.attempt}/${retryInfo.maxAttempts}` 
-              : "Using Gemini 2.5 Flash for fast, accurate results"}
+              : "Powered by advanced AI for fast, accurate results"}
           </p>
         </div>
 
