@@ -64,6 +64,7 @@ const actionTypeLabels: Record<string, { label: string; color: string }> = {
   settings_updated: { label: "Settings Updated", color: "bg-muted text-muted-foreground" },
   password_changed: { label: "Password Changed", color: "bg-warning/20 text-warning" },
   export_requested: { label: "Export Requested", color: "bg-primary/20 text-primary" },
+  security_settings_changed: { label: "Security Settings Changed", color: "bg-warning/20 text-warning" },
 };
 
 const CONFIRM_DELETE_TEXT = "DELETE MY ACCOUNT";
