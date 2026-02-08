@@ -30,11 +30,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import ExportPreviewModal from "./ExportPreviewModal";
 import VersionHistoryPanel from "./VersionHistoryPanel";
+import ReferenceEmailSection from "./ReferenceEmailSection";
 import { useDocumentVersions, DocumentVersion } from "@/hooks/useDocumentVersions";
 import { usePromptTelemetry } from "@/hooks/usePromptTelemetry";
 import { HourlyQuotaIndicator } from "./HourlyQuotaIndicator";
 import { useHourlyQuota } from "@/hooks/useHourlyQuota";
 import { AIQualityRating } from "./AIQualityRating";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface CoverLetterEditorProps {
   content: string;
@@ -83,6 +85,7 @@ const CoverLetterEditor = ({
   applicationId,
   telemetryId,
 }: CoverLetterEditorProps) => {
+  const { user } = useAuth();
   const [copied, setCopied] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [showRegenerateDialog, setShowRegenerateDialog] = useState(false);
@@ -416,6 +419,15 @@ const CoverLetterEditor = ({
               placeholder="Your cover letter will appear here..."
             />
           </div>
+
+          {/* Reference Email Section */}
+          <ReferenceEmailSection
+            jobTitle={jobData.title}
+            company={jobData.company}
+            coverLetterContent={content}
+            applicationId={applicationId}
+            userId={user?.id}
+          />
         </motion.div>
 
         {/* Export Panel */}
