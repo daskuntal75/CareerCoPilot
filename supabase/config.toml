@@ -46,5 +46,8 @@ verify_jwt = false
 [functions.get-profile]
 verify_jwt = false
  
- [functions.test-external-model]
- verify_jwt = false
+[functions.test-external-model]
+verify_jwt = false
+
+[functions.parse-resume]
+verify_jwt = false
