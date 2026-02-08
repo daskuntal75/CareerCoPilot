@@ -4,7 +4,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { 
-  Mail, Copy, Check, RefreshCw, Sparkles, ChevronDown, ChevronUp 
+  Copy, Check, RefreshCw, Sparkles, ChevronDown, ChevronUp,
+  LucideIcon
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -12,7 +13,21 @@ import { supabase } from "@/integrations/supabase/client";
 import { useHourlyQuota } from "@/hooks/useHourlyQuota";
 import { HourlyQuotaIndicator } from "./HourlyQuotaIndicator";
 
-interface ReferenceEmailSectionProps {
+export interface EmailSectionConfig {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  functionName: string;
+  fields: {
+    name: string;
+    label: string;
+    placeholder: string;
+    type?: "text" | "textarea";
+  }[];
+}
+
+interface JobSearchEmailSectionProps {
+  config: EmailSectionConfig;
   jobTitle: string;
   company: string;
   coverLetterContent: string;
@@ -20,21 +35,26 @@ interface ReferenceEmailSectionProps {
   userId?: string;
 }
 
-const ReferenceEmailSection = ({
+const JobSearchEmailSection = ({
+  config,
   jobTitle,
   company,
   coverLetterContent,
   applicationId,
   userId,
-}: ReferenceEmailSectionProps) => {
+}: JobSearchEmailSectionProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [referenceEmail, setReferenceEmail] = useState("");
+  const [emailContent, setEmailContent] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [referenceName, setReferenceName] = useState("");
-  const [referenceRelationship, setReferenceRelationship] = useState("");
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   
   const { canGenerate, isExhausted, refreshQuota } = useHourlyQuota();
+  const IconComponent = config.icon;
+
+  const handleFieldChange = (fieldName: string, value: string) => {
+    setFieldValues(prev => ({ ...prev, [fieldName]: value }));
+  };
 
   const handleGenerate = async () => {
     if (!coverLetterContent.trim()) {
@@ -49,13 +69,12 @@ const ReferenceEmailSection = ({
 
     setIsGenerating(true);
     try {
-      const { data, error } = await supabase.functions.invoke("generate-reference-email", {
+      const { data, error } = await supabase.functions.invoke(config.functionName, {
         body: {
           jobTitle,
           company,
           coverLetterContent,
-          referenceName: referenceName.trim() || undefined,
-          referenceRelationship: referenceRelationship.trim() || undefined,
+          ...fieldValues,
           applicationId,
           userId,
         },
@@ -64,31 +83,31 @@ const ReferenceEmailSection = ({
       if (error) throw error;
 
       if (data?.email) {
-        setReferenceEmail(data.email);
-        toast.success("Reference email generated!");
+        setEmailContent(data.email);
+        toast.success(`${config.title} generated!`);
         refreshQuota();
       } else {
         throw new Error("No email content received");
       }
     } catch (error) {
-      console.error("Error generating reference email:", error);
-      toast.error("Failed to generate reference email");
+      console.error(`Error generating ${config.title}:`, error);
+      toast.error(`Failed to generate ${config.title.toLowerCase()}`);
     } finally {
       setIsGenerating(false);
     }
   };
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(referenceEmail);
+    await navigator.clipboard.writeText(emailContent);
     setCopied(true);
     toast.success("Copied to clipboard");
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const wordCount = referenceEmail.trim().split(/\s+/).filter(Boolean).length;
+  const wordCount = emailContent.trim().split(/\s+/).filter(Boolean).length;
 
   return (
-    <div className="bg-card rounded-xl border border-border overflow-hidden">
+    <div className="bg-card rounded-xl border border-border overflow-hidden mt-4">
       {/* Header - Always visible */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
@@ -96,12 +115,12 @@ const ReferenceEmailSection = ({
       >
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-accent/10 flex items-center justify-center">
-            <Mail className="w-5 h-5 text-accent" />
+            <IconComponent className="w-5 h-5 text-accent" />
           </div>
           <div className="text-left">
-            <h3 className="font-semibold text-foreground">Reference Request Email</h3>
+            <h3 className="font-semibold text-foreground">{config.title}</h3>
             <p className="text-sm text-muted-foreground">
-              Generate an email to request a professional reference
+              {config.description}
             </p>
           </div>
         </div>
@@ -123,33 +142,38 @@ const ReferenceEmailSection = ({
             className="overflow-hidden"
           >
             <div className="p-4 pt-0 space-y-4 border-t border-border">
-              {/* Optional inputs for personalization */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="referenceName">Reference Name (optional)</Label>
-                  <Input
-                    id="referenceName"
-                    placeholder="e.g., John Smith"
-                    value={referenceName}
-                    onChange={(e) => setReferenceName(e.target.value)}
-                  />
+              {/* Dynamic fields */}
+              {config.fields.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {config.fields.map((field) => (
+                    <div key={field.name} className="space-y-2">
+                      <Label htmlFor={field.name}>{field.label}</Label>
+                      {field.type === "textarea" ? (
+                        <Textarea
+                          id={field.name}
+                          placeholder={field.placeholder}
+                          value={fieldValues[field.name] || ""}
+                          onChange={(e) => handleFieldChange(field.name, e.target.value)}
+                          className="min-h-[80px]"
+                        />
+                      ) : (
+                        <Input
+                          id={field.name}
+                          placeholder={field.placeholder}
+                          value={fieldValues[field.name] || ""}
+                          onChange={(e) => handleFieldChange(field.name, e.target.value)}
+                        />
+                      )}
+                    </div>
+                  ))}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="referenceRelationship">Your Relationship (optional)</Label>
-                  <Input
-                    id="referenceRelationship"
-                    placeholder="e.g., Former Manager at ABC Corp"
-                    value={referenceRelationship}
-                    onChange={(e) => setReferenceRelationship(e.target.value)}
-                  />
-                </div>
-              </div>
+              )}
 
               {/* Quota indicator */}
               <HourlyQuotaIndicator showUpgradeLink={false} />
 
               {/* Generate button */}
-              {!referenceEmail && (
+              {!emailContent && (
                 <Button
                   variant="hero"
                   className="w-full"
@@ -164,14 +188,14 @@ const ReferenceEmailSection = ({
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4" />
-                      {isExhausted ? "Hourly Limit Reached" : "Generate Reference Email"}
+                      {isExhausted ? "Hourly Limit Reached" : `Generate ${config.title}`}
                     </>
                   )}
                 </Button>
               )}
 
               {/* Generated email display */}
-              {referenceEmail && (
+              {emailContent && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -212,10 +236,10 @@ const ReferenceEmailSection = ({
                   </div>
 
                   <Textarea
-                    value={referenceEmail}
-                    onChange={(e) => setReferenceEmail(e.target.value)}
+                    value={emailContent}
+                    onChange={(e) => setEmailContent(e.target.value)}
                     className="min-h-[250px] resize-y font-mono text-sm leading-relaxed"
-                    placeholder="Your reference request email will appear here..."
+                    placeholder="Your email will appear here..."
                   />
                 </motion.div>
               )}
@@ -227,4 +251,4 @@ const ReferenceEmailSection = ({
   );
 };
 
-export default ReferenceEmailSection;
+export default JobSearchEmailSection;
