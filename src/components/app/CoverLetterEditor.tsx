@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import ExportPreviewModal from "./ExportPreviewModal";
 import VersionHistoryPanel from "./VersionHistoryPanel";
-import ReferenceEmailSection from "./ReferenceEmailSection";
+import JobSearchEmailsContainer from "./JobSearchEmailsContainer";
 import { useDocumentVersions, DocumentVersion } from "@/hooks/useDocumentVersions";
 import { usePromptTelemetry } from "@/hooks/usePromptTelemetry";
 import { HourlyQuotaIndicator } from "./HourlyQuotaIndicator";
@@ -420,8 +420,8 @@ const CoverLetterEditor = ({
             />
           </div>
 
-          {/* Reference Email Section */}
-          <ReferenceEmailSection
+          {/* Job Search Emails Section */}
+          <JobSearchEmailsContainer
             jobTitle={jobData.title}
             company={jobData.company}
             coverLetterContent={content}
