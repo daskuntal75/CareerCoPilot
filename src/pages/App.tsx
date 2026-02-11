@@ -1038,6 +1038,7 @@ const AppPage = () => {
                       hasInterviewPrep={!!interviewPrep}
                       onGoToInterviewPrep={() => setCurrentStep("interview")}
                       applicationId={applicationId}
+                      analysisData={analysisData}
                     />
                   )}
                 </>
