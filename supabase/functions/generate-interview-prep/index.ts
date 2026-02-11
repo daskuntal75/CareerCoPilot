@@ -95,7 +95,7 @@ serve(async (req) => {
 
   try {
     const { resumeContent, jobDescription, jobTitle, company, interviewGuidance, analysisData,
-      sectionToRegenerate, userFeedback, selectedTips, stream = false } = await req.json();
+      sectionToRegenerate, userFeedback, selectedTips, interviewerType, targetedGuidance, stream = false } = await req.json();
 
     if (!resumeContent || !jobDescription) {
       return new Response(JSON.stringify({ error: "Resume and job description required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -134,12 +134,43 @@ serve(async (req) => {
       if (selectedTips?.length) improvementInstructions += `\nGuidelines: ${selectedTips.map((t: string) => tipInstructions[t]).filter(Boolean).join("; ")}`;
     }
 
+    const isTargeted = !!(interviewerType && interviewerType.trim());
     const isRegen = !!sectionToRegenerate;
-    const model = isRegen ? "google/gemini-2.5-flash-lite" : "google/gemini-3-flash-preview";
+    const model = (isRegen || isTargeted) ? "google/gemini-2.5-flash-lite" : "google/gemini-3-flash-preview";
     
-    const userPrompt = isRegen && sectionPrompts[sectionToRegenerate]
-      ? `<resume>${resumeContent}</resume>\n<job_description>${jobDescription}</job_description>\n<job_title>${jobTitle} at ${company}</job_title>${analysisContext}${guidanceContext}\n\n# TASK\n${sectionPrompts[sectionToRegenerate]}${improvementInstructions}`
-      : `<resume>${resumeContent}</resume>\n<job_description>${jobDescription}</job_description>\n<job_title>${jobTitle} at ${company}</job_title>${analysisContext}${guidanceContext}\n\n# TASK\nCreate comprehensive interview preparation following the system prompt structure.`;
+    let userPrompt: string;
+
+    if (isTargeted) {
+      // Targeted interview prep: only regenerate questions for specific interviewer type
+      userPrompt = `<resume>${resumeContent}</resume>
+<job_description>${jobDescription}</job_description>
+<job_title>${jobTitle} at ${company}</job_title>${analysisContext}${guidanceContext}
+
+# TASK
+Generate 8-10 interview questions specifically for an interview with a **${interviewerType}**.
+${targetedGuidance ? `\nInterview Focus/Topic: ${targetedGuidance}` : ""}
+
+The questions should be tailored to what a ${interviewerType} would specifically ask, considering their perspective and priorities.
+Include STAR-format answers based ONLY on the resume content provided.
+
+Return JSON with only a 'questions' array in this format:
+{
+  "questions": [{
+    "question": "",
+    "category": "${interviewerType.toLowerCase().replace(/\s+/g, '_')}",
+    "difficulty": "easy|medium|hard",
+    "whyAsked": "Why a ${interviewerType} would ask this",
+    "starAnswer": { "situation": "", "task": "", "action": "", "result": "" },
+    "tips": []
+  }]
+}
+
+Return ONLY valid JSON, no markdown.`;
+    } else if (isRegen && sectionPrompts[sectionToRegenerate]) {
+      userPrompt = `<resume>${resumeContent}</resume>\n<job_description>${jobDescription}</job_description>\n<job_title>${jobTitle} at ${company}</job_title>${analysisContext}${guidanceContext}\n\n# TASK\n${sectionPrompts[sectionToRegenerate]}${improvementInstructions}`;
+    } else {
+      userPrompt = `<resume>${resumeContent}</resume>\n<job_description>${jobDescription}</job_description>\n<job_title>${jobTitle} at ${company}</job_title>${analysisContext}${guidanceContext}\n\n# TASK\nCreate comprehensive interview preparation following the system prompt structure.`;
+    }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

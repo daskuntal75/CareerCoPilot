@@ -11,7 +11,7 @@ interface UseKeyboardShortcutsOptions {
   hasInterviewPrep?: boolean;
 }
 
-const STEPS: AppStep[] = ["job", "analysis", "editor", "interview"];
+const STEPS: AppStep[] = ["job", "editor", "interview"];
 
 export function useKeyboardShortcuts({
   currentStep,
@@ -26,10 +26,8 @@ export function useKeyboardShortcuts({
     switch (step) {
       case "job":
         return true;
-      case "analysis":
-        return hasAnalysis;
       case "editor":
-        return hasCoverLetter;
+        return hasAnalysis || hasCoverLetter;
       case "interview":
         return hasInterviewPrep;
       default:
@@ -38,14 +36,12 @@ export function useKeyboardShortcuts({
   }, [hasAnalysis, hasCoverLetter, hasInterviewPrep]);
 
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    // Escape to cancel generation
     if (event.key === "Escape" && isLoading && onCancel) {
       event.preventDefault();
       onCancel();
       return;
     }
 
-    // Don't navigate if user is typing in an input
     const target = event.target as HTMLElement;
     if (
       target.tagName === "INPUT" ||
@@ -57,7 +53,6 @@ export function useKeyboardShortcuts({
 
     const currentIndex = STEPS.indexOf(currentStep);
 
-    // Arrow Left - go to previous step
     if (event.key === "ArrowLeft" && currentIndex > 0) {
       const prevStep = STEPS[currentIndex - 1];
       if (canGoToStep(prevStep)) {
@@ -66,7 +61,6 @@ export function useKeyboardShortcuts({
       }
     }
 
-    // Arrow Right - go to next step
     if (event.key === "ArrowRight" && currentIndex < STEPS.length - 1) {
       const nextStep = STEPS[currentIndex + 1];
       if (canGoToStep(nextStep)) {
@@ -81,7 +75,6 @@ export function useKeyboardShortcuts({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  // Return keyboard hints for UI display
   const getKeyboardHints = useCallback(() => {
     const hints: string[] = [];
     const currentIndex = STEPS.indexOf(currentStep);

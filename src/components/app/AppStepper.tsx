@@ -1,4 +1,4 @@
-import { Check, FileText, BarChart3, Edit, MessageSquare } from "lucide-react";
+import { Check, FileText, Edit, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AppStep } from "@/pages/App";
 
@@ -9,12 +9,11 @@ interface AppStepperProps {
 
 const steps: { id: AppStep; label: string; icon: React.ElementType }[] = [
   { id: "job", label: "Job Description", icon: FileText },
-  { id: "analysis", label: "Analysis", icon: BarChart3 },
-  { id: "editor", label: "Cover Letter", icon: Edit },
+  { id: "editor", label: "Analysis & Cover Letter", icon: Edit },
   { id: "interview", label: "Interview Prep", icon: MessageSquare },
 ];
 
-const stepOrder: AppStep[] = ["job", "analysis", "editor", "interview"];
+const stepOrder: AppStep[] = ["job", "editor", "interview"];
 
 const AppStepper = ({ currentStep, onStepClick }: AppStepperProps) => {
   const currentIndex = stepOrder.indexOf(currentStep);

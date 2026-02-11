@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { 
@@ -109,6 +110,7 @@ interface InterviewPrepProps {
   jobData: JobData;
   onBack: () => void;
   onRegenerateSection?: (section: string, feedback: string, tips: string[]) => void;
+  onGenerateTargeted?: (interviewerType: string, guidance: string) => void;
   isRegenerating?: boolean;
   onGoToCoverLetter?: () => void;
   applicationId?: string | null;
@@ -268,6 +270,7 @@ const InterviewPrep = ({
   jobData, 
   onBack, 
   onRegenerateSection, 
+  onGenerateTargeted,
   isRegenerating,
   onGoToCoverLetter,
   applicationId,
@@ -284,6 +287,8 @@ const InterviewPrep = ({
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [hasRated, setHasRated] = useState(false);
+  const [targetedInterviewerType, setTargetedInterviewerType] = useState("");
+  const [targetedGuidance, setTargetedGuidance] = useState("");
 
   // Version history hook
   const {
@@ -820,23 +825,82 @@ const InterviewPrep = ({
 
       {/* Questions Tab */}
       {activeTab === "questions" && (
-        <div className="grid lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-4">
+        <div className="space-y-6">
+          {/* Targeted Interview Prep Section */}
+          {onGenerateTargeted && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
+              className="bg-accent/5 border-2 border-accent/30 rounded-xl p-6"
             >
-              <h2 className="text-lg font-semibold text-foreground mb-4">
-                Predicted Questions ({data.questions?.length || 0})
-              </h2>
-              <div className="space-y-3">
-                {data.questions?.map((question, index) => (
-                  <QuestionCard key={index} question={question} index={index} />
-                ))}
+              <div className="flex items-center gap-2 text-foreground font-semibold mb-1">
+                <Users className="w-5 h-5 text-accent" />
+                Targeted Interview Prep
               </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                Generate questions tailored to a specific interviewer role and topic. Company research, strengths, and strategy are preserved.
+              </p>
+              <div className="grid md:grid-cols-2 gap-4 mb-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    Interviewer Type / Role
+                  </label>
+                  <Input
+                    value={targetedInterviewerType}
+                    onChange={(e) => setTargetedInterviewerType(e.target.value)}
+                    placeholder="e.g. UX Director, Engineering Manager, SVP Product"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    Interview Topic / Guidance
+                  </label>
+                  <Input
+                    value={targetedGuidance}
+                    onChange={(e) => setTargetedGuidance(e.target.value)}
+                    placeholder="e.g. Design systems, Team leadership, Product strategy"
+                  />
+                </div>
+              </div>
+              <Button
+                variant="hero"
+                size="sm"
+                onClick={() => {
+                  if (!targetedInterviewerType.trim()) {
+                    toast.error("Please enter an interviewer type or role");
+                    return;
+                  }
+                  onGenerateTargeted(targetedInterviewerType.trim(), targetedGuidance.trim());
+                }}
+                disabled={isRegenerating || !targetedInterviewerType.trim()}
+              >
+                {isRegenerating ? (
+                  <div className="w-4 h-4 border-2 border-accent-foreground/30 border-t-accent-foreground rounded-full animate-spin" />
+                ) : (
+                  <Sparkles className="w-4 h-4" />
+                )}
+                Generate Targeted Questions
+              </Button>
             </motion.div>
-          </div>
+          )}
+
+          <div className="grid lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-4">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+              >
+                <h2 className="text-lg font-semibold text-foreground mb-4">
+                  Predicted Questions ({data.questions?.length || 0})
+                </h2>
+                <div className="space-y-3">
+                  {data.questions?.map((question, index) => (
+                    <QuestionCard key={index} question={question} index={index} />
+                  ))}
+                </div>
+              </motion.div>
+            </div>
 
           <div className="space-y-6">
             {/* Key Strengths */}
@@ -920,6 +984,7 @@ const InterviewPrep = ({
               </div>
             </motion.div>
           </div>
+        </div>
         </div>
       )}
 

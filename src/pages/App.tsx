@@ -24,7 +24,7 @@ import { EmailVerificationRequired } from "@/components/auth/EmailVerificationRe
 import { useDemoLimit } from "@/hooks/useDemoLimit";
 import { DemoLimitBanner } from "@/components/feedback";
 
-export type AppStep = "job" | "analysis" | "editor" | "interview";
+export type AppStep = "job" | "editor" | "interview";
 
 // Transform legacy interview prep data format (phase_X) to expected format
 const normalizeInterviewPrepData = (data: any): InterviewPrepData | null => {
@@ -201,10 +201,8 @@ const AppPage = () => {
       // Set appropriate step based on data
       if (data.interview_prep) {
         setCurrentStep("interview");
-      } else if (data.cover_letter) {
+      } else if (data.cover_letter || data.requirements_analysis) {
         setCurrentStep("editor");
-      } else if (data.requirements_analysis) {
-        setCurrentStep("analysis");
       }
     } catch (error) {
       console.error("Error loading application:", error);
@@ -266,9 +264,16 @@ const AppPage = () => {
 
     setJobData(data);
     setIsLoading(true);
+    setGenerationType("cover-letter");
+    setGenerationStage("analyzing");
+    setCurrentStep("editor");
+
+    // Create abort controller for cancellation
+    const controller = new AbortController();
+    setAbortController(controller);
 
     try {
-      // Call AI for job fit analysis with RAG support
+      // Step 1: Analyze job fit
       const response = await supabase.functions.invoke("analyze-job-fit", {
         body: {
           resumeContent: detailedResume.content,
@@ -289,7 +294,6 @@ const AppPage = () => {
       };
       
       setAnalysisData(analysis);
-      setCurrentStep("analysis");
       
       // Track analytics
       trackApplicationEvent("analyzed", {
@@ -299,8 +303,9 @@ const AppPage = () => {
         fit_level: analysis.fitLevel,
       });
 
+      let newAppId = applicationId;
       if (user) {
-        const newAppId = await saveApplication({
+        newAppId = await saveApplication({
           company: data.company,
           job_title: data.title,
           job_description: data.description,
@@ -314,7 +319,6 @@ const AppPage = () => {
           refreshCount();
           const newAppCount = applicationCount + 1;
           
-          // Send reminder email when user completes their 2nd application
           if (newAppCount === 2) {
             supabase.functions.invoke("send-demo-reminder", {
               body: {
@@ -327,18 +331,136 @@ const AppPage = () => {
             }).catch(console.error);
           }
           
-          // Show feedback modal after completing the 3rd (final) demo application
           if (newAppCount === 3) {
             setTimeout(() => setShowFeedbackModal(true), 1500);
           }
         }
       }
+
+      // Step 2: Check usage limits before generating cover letter
+      if (!canUseFeature("cover_letter")) {
+        // Still show analysis results but don't generate cover letter
+        setIsLoading(false);
+        setAbortController(null);
+        toast.info("Analysis complete! Upgrade to generate a cover letter.");
+        return;
+      }
+
+      // Increment usage before generation
+      const usageIncremented = await incrementUsage("cover_letter");
+      if (!usageIncremented) {
+        setIsLoading(false);
+        setAbortController(null);
+        toast.error("Failed to track usage. Please try again.");
+        return;
+      }
+
+      // Step 3: Generate cover letter using the same analysis data
+      setGenerationStage("drafting");
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Authentication required");
+
+      const clResponse = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-cover-letter`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({
+            resumeContent: detailedResume.content,
+            jobDescription: data.description,
+            jobTitle: data.title,
+            company: data.company,
+            analysisData: analysis,
+            applicationId: newAppId || applicationId,
+            userId: user?.id,
+            stream: true,
+          }),
+          signal: controller.signal,
+        }
+      );
+
+      if (!clResponse.ok) {
+        const errorData = await clResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || `Request failed with status ${clResponse.status}`);
+      }
+
+      const reader = clResponse.body?.getReader();
+      if (!reader) throw new Error("No response body");
+
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let buffer = "";
+
+      setGenerationStage("refining");
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const lineData = line.slice(6).trim();
+            if (lineData === "[DONE]") break;
+            
+            try {
+              const parsed = JSON.parse(lineData);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) {
+                fullContent += content;
+              }
+            } catch {
+              // Ignore parse errors for partial chunks
+            }
+          }
+        }
+      }
+
+      setGenerationStage("complete");
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      setCoverLetter(fullContent);
+      
+      // Track prompt telemetry for initial generation
+      await trackCoverLetterPrompt(newAppId || applicationId, "generate", {
+        metadata: {
+          company: data.company,
+          jobTitle: data.title,
+          fitScore: analysis.fitScore,
+        },
+      });
+      
+      trackCoverLetterEvent("generated", {
+        company: data.company,
+        job_title: data.title,
+        application_id: newAppId || applicationId,
+      });
+
+      if (user) {
+        await saveApplication({
+          cover_letter: fullContent,
+        });
+      }
     } catch (error) {
-      console.error("Error analyzing job fit:", error);
-      toast.error("Failed to analyze job fit. Please try again.");
+      if (error instanceof Error && error.name === "AbortError") {
+        toast.info("Generation cancelled");
+        return;
+      }
+      console.error("Error:", error);
+      toast.error(error instanceof Error ? error.message : "Failed to analyze and generate. Please try again.");
       trackApplicationEvent("analysis_failed", { error: String(error) });
     } finally {
       setIsLoading(false);
+      setAbortController(null);
     }
   };
 
@@ -818,7 +940,7 @@ const AppPage = () => {
           </div>
 
           {/* Loading Overlay - show for interview step too */}
-          {isLoading && (currentStep === "analysis" || currentStep === "editor" || currentStep === "interview") && (
+          {isLoading && (currentStep === "editor" || currentStep === "interview") && (
             <GenerationProgress 
               currentStage={generationStage} 
               type={generationType}
@@ -859,16 +981,7 @@ const AppPage = () => {
                 />
               )}
               
-              {currentStep === "analysis" && analysisData && jobData && (
-                <AnalysisResults 
-                  data={analysisData}
-                  jobData={jobData}
-                  onGenerate={handleGenerateCoverLetter}
-                  onGenerateInterviewPrep={() => handleGenerateInterviewPrep()}
-                  onBack={() => setCurrentStep("job")}
-                  applicationId={applicationId}
-                />
-              )}
+              
               
               {currentStep === "editor" && jobData && (
                 <>
@@ -891,7 +1004,7 @@ const AppPage = () => {
                       <div className="flex flex-col sm:flex-row gap-3 justify-center">
                         <Button
                           variant="outline"
-                          onClick={() => setCurrentStep("analysis")}
+                          onClick={() => setCurrentStep("job")}
                         >
                           <ArrowLeft className="w-4 h-4 mr-2" />
                           Back to Analysis
@@ -915,7 +1028,7 @@ const AppPage = () => {
                       content={coverLetter}
                       jobData={jobData}
                       onContentChange={handleCoverLetterChange}
-                      onBack={() => setCurrentStep("analysis")}
+                      onBack={() => setCurrentStep("job")}
                       onGenerateInterviewPrep={() => handleGenerateInterviewPrep()}
                       onRegenerateCoverLetter={(section, feedback, tips) => {
                         toast.info(`Regenerating ${section} with your feedback...`);
@@ -934,10 +1047,48 @@ const AppPage = () => {
                 <InterviewPrep
                   data={interviewPrep || { questions: [], keyStrengths: [], potentialConcerns: [], questionsToAsk: [] }}
                   jobData={jobData}
-                  onBack={() => coverLetter ? setCurrentStep("editor") : setCurrentStep("analysis")}
+                  onBack={() => setCurrentStep("editor")}
                   onRegenerateSection={(section, feedback, tips) => {
                     toast.info(`Regenerating ${section} with your feedback...`);
                     handleGenerateInterviewPrep(section, feedback, tips);
+                  }}
+                  onGenerateTargeted={async (interviewerType, guidance) => {
+                    if (!jobData || !detailedResume) return;
+                    setIsLoading(true);
+                    setGenerationType("interview-prep");
+                    setGenerationStage("analyzing");
+                    try {
+                      setGenerationStage("drafting");
+                      const response = await supabase.functions.invoke("generate-interview-prep", {
+                        body: {
+                          resumeContent: detailedResume.content,
+                          jobDescription: jobData.description,
+                          jobTitle: jobData.title,
+                          company: jobData.company,
+                          analysisData,
+                          interviewerType,
+                          targetedGuidance: guidance,
+                          stream: false,
+                        },
+                      });
+                      if (response.error) throw new Error(response.error.message);
+                      setGenerationStage("complete");
+                      await new Promise(resolve => setTimeout(resolve, 500));
+                      const normalizedData = normalizeInterviewPrepData(response.data);
+                      if (!normalizedData) throw new Error("Failed to process response");
+                      // Merge: keep existing data, only replace questions
+                      const updatedPrep = { ...interviewPrep!, questions: normalizedData.questions };
+                      setInterviewPrep(updatedPrep);
+                      if (user && applicationId) {
+                        await saveApplication({ interview_prep: updatedPrep });
+                      }
+                      toast.success(`Targeted questions for ${interviewerType} generated!`);
+                    } catch (error) {
+                      console.error("Error:", error);
+                      toast.error(error instanceof Error ? error.message : "Failed to generate targeted prep");
+                    } finally {
+                      setIsLoading(false);
+                    }
                   }}
                   isRegenerating={isLoading}
                   onGoToCoverLetter={coverLetter ? () => setCurrentStep("editor") : undefined}

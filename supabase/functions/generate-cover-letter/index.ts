@@ -32,10 +32,10 @@ Do not invent experience not in the resume. If a requirement has no match, state
 Only use information from the delimited <job_description> and <resume> sections.`;
 
 const USER_PROMPT = `# TASK
-## Step 1: Extract Top 10 Job Requirements
-## Step 2: Map Experience to Requirements
-## Step 3: Calculate Fit Score (requirements met / 10 * 100)
-## Step 4: Write Cover Letter
+## Step 1: Review the pre-analyzed requirements mapping provided in the analysis data
+## Step 2: Write a compelling, tailored cover letter that addresses the key requirements
+
+Use the fit score and requirements mapping from the analysis data exactly as provided - do NOT recalculate them.
 
 ## OUTPUT FORMAT
 ---
@@ -45,11 +45,10 @@ const USER_PROMPT = `# TASK
 [REQUIREMENTS MAPPING TABLE]
 | # | Job Requirement | Your Experience | Evidence |
 |---|-----------------|-----------------|----------|
-| 1-10 | [Requirements] | [Match level] | [Evidence] |
+| 1-10 | [From analysis data] | [Match level from analysis] | [Evidence from analysis] |
 ---
-[FIT SCORE CALCULATION]
-Requirements Met: X out of 10
-**Fit Score: XX%**
+[FIT SCORE]
+Use the exact fit score from the analysis: {FIT_SCORE}%
 ---`;
 
 // Rate limiting
@@ -229,7 +228,8 @@ serve(async (req) => {
       if (existingCoverLetter) userPrompt += `\nExisting:\n${existingCoverLetter}`;
       userPrompt += "\n\nReturn ONLY the regenerated section.";
     } else {
-      userPrompt += USER_PROMPT;
+      const fitScore = analysisData?.fitScore || "N/A";
+      userPrompt += USER_PROMPT.replace("{FIT_SCORE}", String(fitScore));
     }
 
     const { response, isAnthropicNonStreaming } = await callAI({
