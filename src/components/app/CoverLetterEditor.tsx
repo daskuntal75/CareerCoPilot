@@ -316,7 +316,7 @@ const CoverLetterEditor = ({
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to analysis
+          Back to job description
         </button>
         
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

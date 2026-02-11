@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Search, AlertCircle, Shield, Lock, Eye } from "lucide-react";
+import { Sparkles, AlertCircle, Shield, Lock, Eye } from "lucide-react";
 import { motion } from "framer-motion";
 import type { JobData } from "@/pages/App";
 
@@ -182,12 +182,12 @@ const JobDescriptionInput = ({ onSubmit, initialData }: JobDescriptionInputProps
             {isAnalyzing ? (
               <>
                 <div className="w-4 h-4 border-2 border-accent-foreground/30 border-t-accent-foreground rounded-full animate-spin" />
-                Analyzing...
+                Analyzing & Generating...
               </>
             ) : (
               <>
-                Analyze Job Fit
-                <Search className="w-4 h-4" />
+                <Sparkles className="w-4 h-4" />
+                Analyze Fit & Generate Cover Letter
               </>
             )}
           </Button>
