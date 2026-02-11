@@ -5,13 +5,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   ArrowLeft, Download, Copy, RefreshCw, Check, FileText, FileType,
   MessageSquare, ChevronDown, FileEdit, Sparkles, Target, MessageCircle,
-  Eye, Clock, History
+  Eye, Clock, History, BarChart3, ChevronRight, CheckCircle, AlertCircle, XCircle
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { downloadAsDocx } from "@/utils/docx-export";
-import type { JobData } from "@/pages/App";
+import type { JobData, AnalysisData } from "@/pages/App";
 import {
   Dialog,
   DialogContent,
@@ -50,6 +50,7 @@ interface CoverLetterEditorProps {
   hasInterviewPrep?: boolean;
   applicationId?: string | null;
   telemetryId?: string | null;
+  analysisData?: AnalysisData | null;
 }
 
 const regenerationSections = [
@@ -84,6 +85,7 @@ const CoverLetterEditor = ({
   hasInterviewPrep,
   applicationId,
   telemetryId,
+  analysisData,
 }: CoverLetterEditorProps) => {
   const { user } = useAuth();
   const [copied, setCopied] = useState(false);
@@ -95,6 +97,7 @@ const CoverLetterEditor = ({
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [hasRated, setHasRated] = useState(false);
+  const [showAnalysis, setShowAnalysis] = useState(false);
 
   // Hourly quota hook
   const { canGenerate: canGenerateHourly, isExhausted: isHourlyExhausted } = useHourlyQuota();
@@ -389,13 +392,70 @@ const CoverLetterEditor = ({
         </div>
       </motion.div>
 
-      <div className="grid lg:grid-cols-4 gap-6">
+      <div className={`grid gap-6 ${showAnalysis && analysisData ? 'lg:grid-cols-12' : 'lg:grid-cols-4'}`}>
+        {/* Analysis Sidebar - Collapsible */}
+        {analysisData && (
+          <AnimatePresence>
+            {showAnalysis ? (
+              <motion.div
+                initial={{ width: 0, opacity: 0 }}
+                animate={{ width: "auto", opacity: 1 }}
+                exit={{ width: 0, opacity: 0 }}
+                transition={{ duration: 0.3 }}
+                className="lg:col-span-3"
+              >
+                <div className="bg-card rounded-xl border border-border p-5 sticky top-24 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 font-semibold text-foreground">
+                      <BarChart3 className="w-4 h-4 text-accent" />
+                      Analysis Results
+                    </div>
+                    <button onClick={() => setShowAnalysis(false)} className="text-muted-foreground hover:text-foreground">
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Fit Score */}
+                  <div className="text-center p-4 rounded-lg bg-accent/5 border border-accent/20">
+                    <div className="text-3xl font-bold text-accent">{analysisData.fitScore}%</div>
+                    <div className="text-xs text-muted-foreground capitalize">{analysisData.fitLevel} fit</div>
+                  </div>
+
+                  {/* Requirements */}
+                  <div>
+                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                      Requirements ({analysisData.requirements?.length || 0})
+                    </div>
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+                      {analysisData.requirements?.map((req, i) => (
+                        <div key={i} className="flex items-start gap-2 text-xs">
+                          {req.status === "yes" ? (
+                            <CheckCircle className="w-3.5 h-3.5 text-success flex-shrink-0 mt-0.5" />
+                          ) : req.status === "partial" ? (
+                            <AlertCircle className="w-3.5 h-3.5 text-warning flex-shrink-0 mt-0.5" />
+                          ) : (
+                            <XCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0 mt-0.5" />
+                          )}
+                          <div>
+                            <div className="font-medium text-foreground">{req.requirement}</div>
+                            <div className="text-muted-foreground">{req.evidence}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        )}
+
         {/* Editor */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="lg:col-span-3"
+          className={showAnalysis && analysisData ? "lg:col-span-6" : "lg:col-span-3"}
         >
           <div className="bg-card rounded-xl border border-border p-6">
             <div className="flex items-center justify-between mb-4">
@@ -406,6 +466,15 @@ const CoverLetterEditor = ({
                 <span className="text-xs text-muted-foreground">
                   Auto-saved
                 </span>
+                {analysisData && !showAnalysis && (
+                  <button
+                    onClick={() => setShowAnalysis(true)}
+                    className="flex items-center gap-1 px-2 py-1 bg-accent/10 text-accent text-xs font-medium rounded-full hover:bg-accent/20 transition-colors"
+                  >
+                    <BarChart3 className="w-3 h-3" />
+                    {analysisData.fitScore}% Fit
+                  </button>
+                )}
               </div>
               <span className="text-xs text-muted-foreground">
                 {wordCount} words
@@ -435,7 +504,7 @@ const CoverLetterEditor = ({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="lg:col-span-1"
+          className="lg:col-span-3"
         >
           <div className="bg-card rounded-xl border border-border p-6 sticky top-24 space-y-6">
             <div>

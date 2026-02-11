@@ -6,7 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { 
   ArrowLeft, ChevronDown, ChevronRight, MessageCircle, Lightbulb, AlertTriangle, 
   HelpCircle, Building, Target, TrendingUp, Users, Briefcase, RefreshCw, 
-  Download, Play, FileEdit, FileType, Sparkles, Eye, History
+  Download, Play, FileEdit, FileType, Sparkles, Eye, History, Save, Trash2, Layers
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -289,6 +289,15 @@ const InterviewPrep = ({
   const [hasRated, setHasRated] = useState(false);
   const [targetedInterviewerType, setTargetedInterviewerType] = useState("");
   const [targetedGuidance, setTargetedGuidance] = useState("");
+  const [savedPrepSets, setSavedPrepSets] = useState<Array<{
+    id: string;
+    interviewerType: string;
+    guidance: string;
+    questions: InterviewQuestion[];
+    createdAt: string;
+  }>>([]);
+  const [viewingSetId, setViewingSetId] = useState<string | null>(null);
+  const [showSavedSets, setShowSavedSets] = useState(false);
 
   // Version history hook
   const {
@@ -862,25 +871,157 @@ const InterviewPrep = ({
                   />
                 </div>
               </div>
-              <Button
-                variant="hero"
-                size="sm"
-                onClick={() => {
-                  if (!targetedInterviewerType.trim()) {
-                    toast.error("Please enter an interviewer type or role");
-                    return;
-                  }
-                  onGenerateTargeted(targetedInterviewerType.trim(), targetedGuidance.trim());
-                }}
-                disabled={isRegenerating || !targetedInterviewerType.trim()}
-              >
-                {isRegenerating ? (
-                  <div className="w-4 h-4 border-2 border-accent-foreground/30 border-t-accent-foreground rounded-full animate-spin" />
-                ) : (
-                  <Sparkles className="w-4 h-4" />
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="hero"
+                  size="sm"
+                  onClick={() => {
+                    if (!targetedInterviewerType.trim()) {
+                      toast.error("Please enter an interviewer type or role");
+                      return;
+                    }
+                    onGenerateTargeted(targetedInterviewerType.trim(), targetedGuidance.trim());
+                  }}
+                  disabled={isRegenerating || !targetedInterviewerType.trim()}
+                >
+                  {isRegenerating ? (
+                    <div className="w-4 h-4 border-2 border-accent-foreground/30 border-t-accent-foreground rounded-full animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4" />
+                  )}
+                  Generate Targeted Questions
+                </Button>
+                {data.questions?.length > 0 && targetedInterviewerType.trim() && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const newSet = {
+                        id: crypto.randomUUID(),
+                        interviewerType: targetedInterviewerType.trim() || "General",
+                        guidance: targetedGuidance.trim(),
+                        questions: [...data.questions],
+                        createdAt: new Date().toISOString(),
+                      };
+                      setSavedPrepSets(prev => [...prev, newSet]);
+                      toast.success(`Saved "${newSet.interviewerType}" prep set`);
+                    }}
+                  >
+                    <Save className="w-4 h-4" />
+                    Save Current Set
+                  </Button>
                 )}
-                Generate Targeted Questions
-              </Button>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Saved Targeted Prep Sets */}
+          {savedPrepSets.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-card border border-border rounded-xl p-5"
+            >
+              <button
+                onClick={() => setShowSavedSets(!showSavedSets)}
+                className="w-full flex items-center justify-between"
+              >
+                <div className="flex items-center gap-2 text-foreground font-semibold">
+                  <Layers className="w-5 h-5 text-accent" />
+                  Saved Prep Sets ({savedPrepSets.length})
+                </div>
+                <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${showSavedSets ? "rotate-180" : ""}`} />
+              </button>
+              
+              <AnimatePresence>
+                {showSavedSets && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mt-4 space-y-3">
+                      {savedPrepSets.map((set) => (
+                        <div key={set.id} className={`border rounded-lg p-3 transition-colors ${viewingSetId === set.id ? "border-accent bg-accent/5" : "border-border"}`}>
+                          <div className="flex items-center justify-between mb-1">
+                            <div className="font-medium text-sm text-foreground">{set.interviewerType}</div>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => {
+                                  if (viewingSetId === set.id) {
+                                    setViewingSetId(null);
+                                  } else {
+                                    setViewingSetId(set.id);
+                                  }
+                                }}
+                              >
+                                <Eye className="w-3 h-3 mr-1" />
+                                {viewingSetId === set.id ? "Hide" : "View"}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => {
+                                  if (onDataChange) {
+                                    onDataChange({ ...data, questions: set.questions });
+                                    toast.success(`Loaded "${set.interviewerType}" questions`);
+                                    setViewingSetId(null);
+                                  }
+                                }}
+                              >
+                                <RefreshCw className="w-3 h-3 mr-1" />
+                                Load
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                                onClick={() => {
+                                  setSavedPrepSets(prev => prev.filter(s => s.id !== set.id));
+                                  if (viewingSetId === set.id) setViewingSetId(null);
+                                  toast.success("Prep set removed");
+                                }}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
+                          {set.guidance && (
+                            <div className="text-xs text-muted-foreground">Topic: {set.guidance}</div>
+                          )}
+                          <div className="text-xs text-muted-foreground">{set.questions.length} questions</div>
+                          
+                          {/* Expanded view of saved set questions */}
+                          <AnimatePresence>
+                            {viewingSetId === set.id && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="mt-3 pt-3 border-t border-border space-y-2">
+                                  {set.questions.map((q, qi) => (
+                                    <div key={qi} className="text-xs text-muted-foreground flex items-start gap-2">
+                                      <span className="text-accent font-medium flex-shrink-0">{qi + 1}.</span>
+                                      {q.question}
+                                    </div>
+                                  ))}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           )}
 
