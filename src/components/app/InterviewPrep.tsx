@@ -6,7 +6,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { 
   ArrowLeft, ChevronDown, ChevronRight, MessageCircle, Lightbulb, AlertTriangle, 
   HelpCircle, Building, Target, TrendingUp, Users, Briefcase, RefreshCw, 
-  Download, Play, FileEdit, FileType, Sparkles, Eye, History, Save, Trash2, Layers
+  Download, Play, FileEdit, FileType, Sparkles, Eye, History, Save, Trash2, Layers,
+  Shield, Brain, Zap, Mail
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -78,6 +79,7 @@ interface StrategicAnalysis {
   threats?: string[];
   criticalThreat?: string;
   competitors?: string[];
+  marketResearchPositioning?: string;
   competitivePosition?: string;
 }
 
@@ -87,6 +89,40 @@ interface InterviewStructure {
   predictedFormat?: string;
 }
 
+interface TechConcept {
+  concept: string;
+  description: string;
+}
+
+interface SecurityConcern {
+  useCase: string;
+  risk: string;
+  scenario: string;
+  pmTakeaway: string;
+}
+
+interface AIUseCase {
+  useCase: string;
+  howAIWins: string;
+  valueForCompany: string;
+}
+
+interface ThreatModel {
+  scope: string;
+  threatScenario: string;
+  attackVector: string;
+  strideFocus: string;
+  keyQuestions: string[];
+  mitigationControls: string[];
+}
+
+interface FollowUpTemplates {
+  afterRecruiter?: string;
+  afterHiringManager?: string;
+  afterVP?: string;
+  afterTechnical?: string;
+}
+
 export interface InterviewPrepData {
   questions: InterviewQuestion[];
   keyStrengths: string[];
@@ -94,6 +130,11 @@ export interface InterviewPrepData {
   questionsToAsk: string[] | QuestionsToAsk;
   applicationContext?: string;
   companyIntelligence?: CompanyIntelligence;
+  interviewPractices?: string;
+  keyTechnologyConcepts?: TechConcept[];
+  securityConcerns?: SecurityConcern[];
+  aiUseCases?: AIUseCase[];
+  threatModeling?: ThreatModel[];
   keyDomainConcepts?: string[];
   strategicAnalysis?: StrategicAnalysis;
   cultureAndBenefits?: {
@@ -103,6 +144,9 @@ export interface InterviewPrepData {
   interviewStructure?: InterviewStructure;
   uniqueValueProposition?: string;
   whyThisCompany?: string;
+  whyLeavingCurrent?: string;
+  followUpTemplates?: FollowUpTemplates;
+  resumeValidationChecklist?: string;
 }
 
 export interface SavedPrepSet {
@@ -147,13 +191,17 @@ const difficultyConfig = {
 };
 
 const regenerationSections = [
-  { key: "questions", label: "Interview Questions", description: "Regenerate predicted questions & STAR answers" },
+  { key: "questions", label: "Interview Questions", description: "Regenerate predicted questions & STAR+SMART answers" },
+  { key: "companyIntelligence", label: "Company Intelligence", description: "Regenerate company research & interview practices" },
+  { key: "strategicAnalysis", label: "SWOT Analysis", description: "Regenerate strategic analysis & competitive landscape" },
+  { key: "keyTechnologyConcepts", label: "Technology & Domain", description: "Regenerate tech concepts, security concerns, AI use cases, threat modeling" },
+  { key: "cultureAndBenefits", label: "Culture & Benefits", description: "Regenerate culture insights & benefits research" },
+  { key: "keyPositioning", label: "Key Positioning", description: "Regenerate value proposition, why this company, why leaving" },
+  { key: "questionsToAsk", label: "Questions to Ask", description: "Regenerate questions for interviewers" },
+  { key: "followUpTemplates", label: "Follow-Up Templates", description: "Regenerate email templates for after interviews" },
+  { key: "interviewStructure", label: "Interview Structure", description: "Regenerate core requirements & predicted format" },
   { key: "keyStrengths", label: "Key Strengths", description: "Regenerate strengths to highlight" },
   { key: "potentialConcerns", label: "Concerns to Address", description: "Regenerate potential concerns" },
-  { key: "questionsToAsk", label: "Questions to Ask", description: "Regenerate questions for interviewers" },
-  { key: "companyIntelligence", label: "Company Intelligence", description: "Regenerate company research" },
-  { key: "strategicAnalysis", label: "SWOT Analysis", description: "Regenerate strategic analysis" },
-  { key: "uniqueValueProposition", label: "Value Proposition", description: "Regenerate your unique value prop" },
 ];
 
 const regenerationTips = [
@@ -341,12 +389,10 @@ const InterviewPrep = ({
     const previousData = previousDataRef.current;
     const timeSinceLastSave = Date.now() - lastAutoSaveRef.current;
     
-    // Calculate question count difference as a proxy for significant change
     const previousQuestionCount = previousData.questions?.length || 0;
     const currentQuestionCount = data.questions?.length || 0;
     const questionCountDiff = Math.abs(currentQuestionCount - previousQuestionCount);
     
-    // Check if key fields changed significantly
     const significantChange = 
       questionCountDiff > 2 ||
       previousData.uniqueValueProposition !== data.uniqueValueProposition ||
@@ -386,9 +432,7 @@ const InterviewPrep = ({
 
       const { pdf, filename } = response.data;
       
-      if (!pdf) {
-        throw new Error("No PDF data received");
-      }
+      if (!pdf) throw new Error("No PDF data received");
       
       const byteCharacters = atob(pdf);
       const byteNumbers = new Array(byteCharacters.length);
@@ -419,14 +463,12 @@ const InterviewPrep = ({
     try {
       const paragraphs: Paragraph[] = [];
       
-      // Title
       paragraphs.push(new Paragraph({
         children: [new TextRun({ text: `Interview Prep: ${jobData.title} at ${jobData.company}`, bold: true, size: 36 })],
         alignment: AlignmentType.CENTER,
         spacing: { after: 400 },
       }));
       
-      // Overview section
       if (data.applicationContext) {
         paragraphs.push(new Paragraph({
           children: [new TextRun({ text: "Application Context", bold: true, size: 28 })],
@@ -451,7 +493,6 @@ const InterviewPrep = ({
         }));
       }
       
-      // Key Strengths
       if (data.keyStrengths?.length > 0) {
         paragraphs.push(new Paragraph({
           children: [new TextRun({ text: "Key Strengths to Highlight", bold: true, size: 28 })],
@@ -467,7 +508,6 @@ const InterviewPrep = ({
         });
       }
       
-      // Interview Questions
       if (data.questions?.length > 0) {
         paragraphs.push(new Paragraph({
           children: [new TextRun({ text: "Interview Questions", bold: true, size: 32 })],
@@ -500,7 +540,7 @@ const InterviewPrep = ({
               spacing: { after: 100 },
             }));
             paragraphs.push(new Paragraph({
-              children: [new TextRun({ text: "RESULT: ", bold: true, size: 24 }), new TextRun({ text: q.starAnswer.result, size: 24 })],
+              children: [new TextRun({ text: "RESULT (SMART): ", bold: true, size: 24 }), new TextRun({ text: q.starAnswer.result, size: 24 })],
               spacing: { after: 150 },
             }));
           }
@@ -535,7 +575,6 @@ const InterviewPrep = ({
   const handleOpenRegenerateDialog = (sectionKey: string, preselectedTip?: string) => {
     setSelectedSection(sectionKey);
     setFeedbackText("");
-    // Pre-select the tip if provided (from quick improvements)
     setSelectedTips(preselectedTip ? [preselectedTip] : []);
     setShowRegenerateDialog(true);
   };
@@ -547,7 +586,6 @@ const InterviewPrep = ({
     }
     
     if (onRegenerateSection && selectedSection) {
-      // Build the injected prompt for telemetry
       const tipLabels = selectedTips.map(tipId => {
         const tip = regenerationTips.find(t => t.id === tipId);
         return tip ? `${tip.label}: ${tip.description}` : tipId;
@@ -559,7 +597,6 @@ const InterviewPrep = ({
         tipLabels.length > 0 ? `Improvement Tips: ${tipLabels.join("; ")}` : "",
       ].filter(Boolean).join("\n");
 
-      // Track prompt telemetry for monitoring
       await trackInterviewPrepPrompt(
         applicationId || null,
         "regenerate",
@@ -665,13 +702,8 @@ const InterviewPrep = ({
           </div>
           
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Navigate to Cover Letter */}
             {onGoToCoverLetter && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onGoToCoverLetter}
-              >
+              <Button variant="outline" size="sm" onClick={onGoToCoverLetter}>
                 <FileEdit className="w-4 h-4" />
                 View Cover Letter
               </Button>
@@ -729,7 +761,7 @@ const InterviewPrep = ({
                     <ChevronDown className="w-4 h-4 ml-1" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuContent align="end" className="w-72">
                   <DropdownMenuLabel>Select section to regenerate</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {regenerationSections.map((section) => (
@@ -746,7 +778,6 @@ const InterviewPrep = ({
               </DropdownMenu>
             )}
             
-            {/* Version History Button */}
             {applicationId && (
               <Button
                 variant="outline"
@@ -760,7 +791,6 @@ const InterviewPrep = ({
           </div>
         </div>
         
-        {/* Quality Rating Widget */}
         {telemetryId && !hasRated && (
           <div className="mt-4">
             <AIQualityRating 
@@ -957,25 +987,13 @@ const InterviewPrep = ({
                           <div className="flex items-center justify-between mb-1">
                             <div className="font-medium text-sm text-foreground">{set.interviewerType}</div>
                             <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-xs"
-                                onClick={() => {
-                                  if (viewingSetId === set.id) {
-                                    setViewingSetId(null);
-                                  } else {
-                                    setViewingSetId(set.id);
-                                  }
-                                }}
+                              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs"
+                                onClick={() => setViewingSetId(viewingSetId === set.id ? null : set.id)}
                               >
                                 <Eye className="w-3 h-3 mr-1" />
                                 {viewingSetId === set.id ? "Hide" : "View"}
                               </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-xs"
+                              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs"
                                 onClick={() => {
                                   if (onDataChange) {
                                     onDataChange({ ...data, questions: set.questions });
@@ -987,10 +1005,7 @@ const InterviewPrep = ({
                                 <RefreshCw className="w-3 h-3 mr-1" />
                                 Load
                               </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                              <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-destructive hover:text-destructive"
                                 onClick={() => {
                                   setSavedPrepSets(prev => prev.filter(s => s.id !== set.id));
                                   if (viewingSetId === set.id) setViewingSetId(null);
@@ -1001,12 +1016,9 @@ const InterviewPrep = ({
                               </Button>
                             </div>
                           </div>
-                          {set.guidance && (
-                            <div className="text-xs text-muted-foreground">Topic: {set.guidance}</div>
-                          )}
+                          {set.guidance && <div className="text-xs text-muted-foreground">Topic: {set.guidance}</div>}
                           <div className="text-xs text-muted-foreground">{set.questions.length} questions</div>
                           
-                          {/* Expanded view of saved set questions */}
                           <AnimatePresence>
                             {viewingSetId === set.id && (
                               <motion.div
@@ -1037,11 +1049,7 @@ const InterviewPrep = ({
 
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-4">
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
-              >
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
                 <h2 className="text-lg font-semibold text-foreground mb-4">
                   Predicted Questions ({data.questions?.length || 0})
                 </h2>
@@ -1055,10 +1063,7 @@ const InterviewPrep = ({
 
           <div className="space-y-6">
             {/* Key Strengths */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
               className="bg-card border border-border rounded-xl p-5"
             >
               <div className="flex items-center gap-2 text-foreground font-semibold mb-3">
@@ -1076,10 +1081,7 @@ const InterviewPrep = ({
             </motion.div>
 
             {/* Potential Concerns */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
               className="bg-card border border-border rounded-xl p-5"
             >
               <div className="flex items-center gap-2 text-foreground font-semibold mb-3">
@@ -1097,10 +1099,7 @@ const InterviewPrep = ({
             </motion.div>
 
             {/* Questions to Ask */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
               className="bg-card border border-border rounded-xl p-5"
             >
               <div className="flex items-center gap-2 text-foreground font-semibold mb-3">
@@ -1111,10 +1110,7 @@ const InterviewPrep = ({
             </motion.div>
 
             {/* Quick Improvements */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}
               className="bg-card border border-border rounded-xl p-5"
             >
               <div className="flex items-center gap-2 text-foreground font-semibold mb-3">
@@ -1144,9 +1140,7 @@ const InterviewPrep = ({
         <div className="space-y-6">
           {/* Company Intelligence */}
           {data.companyIntelligence && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
               className="bg-card border border-border rounded-xl p-6"
             >
               <div className="flex items-center gap-2 text-foreground font-semibold mb-4">
@@ -1179,15 +1173,18 @@ const InterviewPrep = ({
                   </div>
                 )}
               </div>
+              {data.interviewPractices && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <div className="text-xs font-semibold text-accent uppercase tracking-wider mb-1">Interview Practices</div>
+                  <p className="text-sm text-muted-foreground">{data.interviewPractices}</p>
+                </div>
+              )}
             </motion.div>
           )}
 
           {/* SWOT Analysis */}
           {data.strategicAnalysis && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
               className="bg-card border border-border rounded-xl p-6"
             >
               <div className="flex items-center gap-2 text-foreground font-semibold mb-4">
@@ -1198,9 +1195,7 @@ const InterviewPrep = ({
                 <div className="bg-success/5 border border-success/20 rounded-lg p-4">
                   <div className="text-xs font-semibold text-success uppercase tracking-wider mb-2">Strengths</div>
                   <ul className="space-y-1 text-sm text-muted-foreground">
-                    {data.strategicAnalysis.strengths?.map((s, i) => (
-                      <li key={i}>• {s}</li>
-                    ))}
+                    {data.strategicAnalysis.strengths?.map((s, i) => <li key={i}>• {s}</li>)}
                   </ul>
                   {data.strategicAnalysis.criticalStrength && (
                     <p className="mt-2 text-sm font-medium text-success">Key: {data.strategicAnalysis.criticalStrength}</p>
@@ -1209,9 +1204,7 @@ const InterviewPrep = ({
                 <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-4">
                   <div className="text-xs font-semibold text-destructive uppercase tracking-wider mb-2">Weaknesses</div>
                   <ul className="space-y-1 text-sm text-muted-foreground">
-                    {data.strategicAnalysis.weaknesses?.map((w, i) => (
-                      <li key={i}>• {w}</li>
-                    ))}
+                    {data.strategicAnalysis.weaknesses?.map((w, i) => <li key={i}>• {w}</li>)}
                   </ul>
                   {data.strategicAnalysis.criticalWeakness && (
                     <p className="mt-2 text-sm font-medium text-destructive">Key: {data.strategicAnalysis.criticalWeakness}</p>
@@ -1220,9 +1213,7 @@ const InterviewPrep = ({
                 <div className="bg-accent/5 border border-accent/20 rounded-lg p-4">
                   <div className="text-xs font-semibold text-accent uppercase tracking-wider mb-2">Opportunities</div>
                   <ul className="space-y-1 text-sm text-muted-foreground">
-                    {data.strategicAnalysis.opportunities?.map((o, i) => (
-                      <li key={i}>• {o}</li>
-                    ))}
+                    {data.strategicAnalysis.opportunities?.map((o, i) => <li key={i}>• {o}</li>)}
                   </ul>
                   {data.strategicAnalysis.criticalOpportunity && (
                     <p className="mt-2 text-sm font-medium text-accent">Key: {data.strategicAnalysis.criticalOpportunity}</p>
@@ -1231,9 +1222,7 @@ const InterviewPrep = ({
                 <div className="bg-warning/5 border border-warning/20 rounded-lg p-4">
                   <div className="text-xs font-semibold text-warning uppercase tracking-wider mb-2">Threats</div>
                   <ul className="space-y-1 text-sm text-muted-foreground">
-                    {data.strategicAnalysis.threats?.map((t, i) => (
-                      <li key={i}>• {t}</li>
-                    ))}
+                    {data.strategicAnalysis.threats?.map((t, i) => <li key={i}>• {t}</li>)}
                   </ul>
                   {data.strategicAnalysis.criticalThreat && (
                     <p className="mt-2 text-sm font-medium text-warning">Key: {data.strategicAnalysis.criticalThreat}</p>
@@ -1249,6 +1238,11 @@ const InterviewPrep = ({
                       <span className="font-medium">Competitors:</span> {data.strategicAnalysis.competitors.join(", ")}
                     </p>
                   )}
+                  {data.strategicAnalysis.marketResearchPositioning && (
+                    <p className="text-sm text-muted-foreground mb-2">
+                      <span className="font-medium">Market Research:</span> {data.strategicAnalysis.marketResearchPositioning}
+                    </p>
+                  )}
                   {data.strategicAnalysis.competitivePosition && (
                     <p className="text-sm text-muted-foreground">
                       <span className="font-medium">Position:</span> {data.strategicAnalysis.competitivePosition}
@@ -1259,12 +1253,114 @@ const InterviewPrep = ({
             </motion.div>
           )}
 
+          {/* Key Technology & Domain Concepts */}
+          {data.keyTechnologyConcepts && data.keyTechnologyConcepts.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+              className="bg-card border border-border rounded-xl p-6"
+            >
+              <div className="flex items-center gap-2 text-foreground font-semibold mb-4">
+                <Brain className="w-5 h-5 text-accent" />
+                Key Technology & Domain Concepts
+              </div>
+              <div className="space-y-4">
+                {data.keyTechnologyConcepts.map((tc, i) => (
+                  <div key={i} className="border-l-2 border-accent/30 pl-4">
+                    <div className="font-medium text-sm text-foreground mb-1">{tc.concept}</div>
+                    <p className="text-sm text-muted-foreground">{tc.description}</p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Security Concerns */}
+          {data.securityConcerns && data.securityConcerns.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+              className="bg-card border border-border rounded-xl p-6"
+            >
+              <div className="flex items-center gap-2 text-foreground font-semibold mb-4">
+                <Shield className="w-5 h-5 text-destructive" />
+                Top Security Concerns of Using AI
+              </div>
+              <div className="space-y-4">
+                {data.securityConcerns.map((sc, i) => (
+                  <div key={i} className="bg-destructive/5 border border-destructive/10 rounded-lg p-4">
+                    <div className="font-medium text-sm text-foreground mb-2">{sc.useCase}</div>
+                    <div className="grid md:grid-cols-2 gap-2 text-sm">
+                      <div><span className="font-medium text-muted-foreground">Risk:</span> <span className="text-muted-foreground">{sc.risk}</span></div>
+                      <div><span className="font-medium text-muted-foreground">Scenario:</span> <span className="text-muted-foreground">{sc.scenario}</span></div>
+                    </div>
+                    <div className="mt-2 text-sm"><span className="font-medium text-accent">PM Takeaway:</span> <span className="text-muted-foreground">{sc.pmTakeaway}</span></div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* AI Use Cases */}
+          {data.aiUseCases && data.aiUseCases.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
+              className="bg-card border border-border rounded-xl p-6"
+            >
+              <div className="flex items-center gap-2 text-foreground font-semibold mb-4">
+                <Zap className="w-5 h-5 text-accent" />
+                Top AI Use Cases
+              </div>
+              <div className="space-y-4">
+                {data.aiUseCases.map((uc, i) => (
+                  <div key={i} className="bg-accent/5 border border-accent/10 rounded-lg p-4">
+                    <div className="font-medium text-sm text-foreground mb-2">{uc.useCase}</div>
+                    <div className="text-sm text-muted-foreground mb-1"><span className="font-medium">How AI Wins:</span> {uc.howAIWins}</div>
+                    <div className="text-sm text-muted-foreground"><span className="font-medium">Value:</span> {uc.valueForCompany}</div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Threat Modeling */}
+          {data.threatModeling && data.threatModeling.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+              className="bg-card border border-border rounded-xl p-6"
+            >
+              <div className="flex items-center gap-2 text-foreground font-semibold mb-4">
+                <AlertTriangle className="w-5 h-5 text-warning" />
+                Threat Modeling Exercises
+              </div>
+              <div className="space-y-4">
+                {data.threatModeling.map((tm, i) => (
+                  <div key={i} className="bg-warning/5 border border-warning/10 rounded-lg p-4">
+                    <div className="font-medium text-sm text-foreground mb-2">{tm.scope}</div>
+                    <div className="grid md:grid-cols-2 gap-2 text-sm text-muted-foreground">
+                      <div><span className="font-medium">Threat:</span> {tm.threatScenario}</div>
+                      <div><span className="font-medium">Attack Vector:</span> {tm.attackVector}</div>
+                      <div><span className="font-medium">STRIDE Focus:</span> {tm.strideFocus}</div>
+                    </div>
+                    {tm.keyQuestions?.length > 0 && (
+                      <div className="mt-2">
+                        <div className="text-xs font-semibold text-muted-foreground uppercase mb-1">Key Questions</div>
+                        <ul className="text-sm text-muted-foreground space-y-0.5">
+                          {tm.keyQuestions.map((q, qi) => <li key={qi}>• {q}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {tm.mitigationControls?.length > 0 && (
+                      <div className="mt-2">
+                        <div className="text-xs font-semibold text-muted-foreground uppercase mb-1">Mitigation Controls</div>
+                        <ul className="text-sm text-muted-foreground space-y-0.5">
+                          {tm.mitigationControls.map((c, ci) => <li key={ci}>• {c}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
           {/* Culture & Benefits */}
           {data.cultureAndBenefits && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
               className="bg-card border border-border rounded-xl p-6"
             >
               <div className="flex items-center gap-2 text-foreground font-semibold mb-4">
@@ -1276,9 +1372,7 @@ const InterviewPrep = ({
                   <div>
                     <div className="text-xs font-semibold text-accent uppercase tracking-wider mb-2">Culture Insights</div>
                     <ul className="space-y-1 text-sm text-muted-foreground">
-                      {data.cultureAndBenefits.cultureInsights.map((insight, i) => (
-                        <li key={i}>• {insight}</li>
-                      ))}
+                      {data.cultureAndBenefits.cultureInsights.map((insight, i) => <li key={i}>• {insight}</li>)}
                     </ul>
                   </div>
                 )}
@@ -1286,9 +1380,7 @@ const InterviewPrep = ({
                   <div>
                     <div className="text-xs font-semibold text-accent uppercase tracking-wider mb-2">Standout Benefits</div>
                     <ul className="space-y-1 text-sm text-muted-foreground">
-                      {data.cultureAndBenefits.standoutBenefits.map((benefit, i) => (
-                        <li key={i}>• {benefit}</li>
-                      ))}
+                      {data.cultureAndBenefits.standoutBenefits.map((benefit, i) => <li key={i}>• {benefit}</li>)}
                     </ul>
                   </div>
                 )}
@@ -1296,12 +1388,9 @@ const InterviewPrep = ({
             </motion.div>
           )}
 
-          {/* Key Domain Concepts */}
-          {data.keyDomainConcepts && data.keyDomainConcepts.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
+          {/* Legacy: Key Domain Concepts (for backward compatibility) */}
+          {!data.keyTechnologyConcepts?.length && data.keyDomainConcepts && data.keyDomainConcepts.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
               className="bg-card border border-border rounded-xl p-6"
             >
               <div className="flex items-center gap-2 text-foreground font-semibold mb-4">
@@ -1310,9 +1399,7 @@ const InterviewPrep = ({
               </div>
               <div className="flex flex-wrap gap-2">
                 {data.keyDomainConcepts.map((concept, i) => (
-                  <span key={i} className="px-3 py-1 bg-accent/10 text-accent text-sm rounded-full">
-                    {concept}
-                  </span>
+                  <span key={i} className="px-3 py-1 bg-accent/10 text-accent text-sm rounded-full">{concept}</span>
                 ))}
               </div>
             </motion.div>
@@ -1325,9 +1412,7 @@ const InterviewPrep = ({
         <div className="space-y-6">
           {/* Unique Value Proposition */}
           {data.uniqueValueProposition && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
               className="bg-accent/5 border border-accent/20 rounded-xl p-6"
             >
               <div className="flex items-center gap-2 text-foreground font-semibold mb-3">
@@ -1340,10 +1425,7 @@ const InterviewPrep = ({
 
           {/* Why This Company */}
           {data.whyThisCompany && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
               className="bg-card border border-border rounded-xl p-6"
             >
               <div className="flex items-center gap-2 text-foreground font-semibold mb-3">
@@ -1354,12 +1436,22 @@ const InterviewPrep = ({
             </motion.div>
           )}
 
+          {/* Why Leaving Current */}
+          {data.whyLeavingCurrent && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+              className="bg-card border border-border rounded-xl p-6"
+            >
+              <div className="flex items-center gap-2 text-foreground font-semibold mb-3">
+                <ArrowLeft className="w-5 h-5 text-accent" />
+                Why Leaving Current Role
+              </div>
+              <p className="text-muted-foreground">{data.whyLeavingCurrent}</p>
+            </motion.div>
+          )}
+
           {/* Interview Structure */}
           {data.interviewStructure && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
               className="bg-card border border-border rounded-xl p-6"
             >
               <div className="flex items-center gap-2 text-foreground font-semibold mb-4">
@@ -1377,9 +1469,7 @@ const InterviewPrep = ({
                   <div>
                     <div className="text-xs font-semibold text-accent uppercase tracking-wider mb-2">Core Requirements</div>
                     <ul className="space-y-1 text-sm text-muted-foreground">
-                      {data.interviewStructure.coreRequirements.map((req, i) => (
-                        <li key={i}>• {req}</li>
-                      ))}
+                      {data.interviewStructure.coreRequirements.map((req, i) => <li key={i}>• {req}</li>)}
                     </ul>
                   </div>
                 )}
@@ -1388,9 +1478,7 @@ const InterviewPrep = ({
                     <div className="text-xs font-semibold text-accent uppercase tracking-wider mb-2">Key Competencies Sought</div>
                     <div className="flex flex-wrap gap-2">
                       {data.interviewStructure.keyCompetencies.map((comp, i) => (
-                        <span key={i} className="px-3 py-1 bg-secondary text-sm rounded-full">
-                          {comp}
-                        </span>
+                        <span key={i} className="px-3 py-1 bg-secondary text-sm rounded-full">{comp}</span>
                       ))}
                     </div>
                   </div>
@@ -1399,12 +1487,60 @@ const InterviewPrep = ({
             </motion.div>
           )}
 
+          {/* Follow-Up Email Templates */}
+          {data.followUpTemplates && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
+              className="bg-card border border-border rounded-xl p-6"
+            >
+              <div className="flex items-center gap-2 text-foreground font-semibold mb-4">
+                <Mail className="w-5 h-5 text-accent" />
+                Follow-Up Email Templates
+              </div>
+              <div className="space-y-4">
+                {data.followUpTemplates.afterRecruiter && (
+                  <div>
+                    <div className="text-xs font-semibold text-accent uppercase tracking-wider mb-1">After Recruiter Screen</div>
+                    <p className="text-sm text-muted-foreground whitespace-pre-line">{data.followUpTemplates.afterRecruiter}</p>
+                  </div>
+                )}
+                {data.followUpTemplates.afterHiringManager && (
+                  <div>
+                    <div className="text-xs font-semibold text-accent uppercase tracking-wider mb-1">After Hiring Manager Interview</div>
+                    <p className="text-sm text-muted-foreground whitespace-pre-line">{data.followUpTemplates.afterHiringManager}</p>
+                  </div>
+                )}
+                {data.followUpTemplates.afterVP && (
+                  <div>
+                    <div className="text-xs font-semibold text-accent uppercase tracking-wider mb-1">After VP Interview</div>
+                    <p className="text-sm text-muted-foreground whitespace-pre-line">{data.followUpTemplates.afterVP}</p>
+                  </div>
+                )}
+                {data.followUpTemplates.afterTechnical && (
+                  <div>
+                    <div className="text-xs font-semibold text-accent uppercase tracking-wider mb-1">After Technical Lead Interview</div>
+                    <p className="text-sm text-muted-foreground whitespace-pre-line">{data.followUpTemplates.afterTechnical}</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Resume Validation */}
+          {data.resumeValidationChecklist && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
+              className="bg-success/5 border border-success/20 rounded-xl p-4"
+            >
+              <div className="flex items-center gap-2 text-sm font-medium text-success">
+                <Lightbulb className="w-4 h-4" />
+                Resume Validation
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">{data.resumeValidationChecklist}</p>
+            </motion.div>
+          )}
+
           {/* Application Context */}
           {data.applicationContext && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}
               className="bg-card border border-border rounded-xl p-6"
             >
               <div className="flex items-center gap-2 text-foreground font-semibold mb-3">
