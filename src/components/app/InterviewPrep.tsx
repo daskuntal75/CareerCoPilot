@@ -105,6 +105,14 @@ export interface InterviewPrepData {
   whyThisCompany?: string;
 }
 
+export interface SavedPrepSet {
+  id: string;
+  interviewerType: string;
+  guidance: string;
+  questions: InterviewQuestion[];
+  createdAt: string;
+}
+
 interface InterviewPrepProps {
   data: InterviewPrepData;
   jobData: JobData;
@@ -116,6 +124,8 @@ interface InterviewPrepProps {
   applicationId?: string | null;
   onDataChange?: (data: InterviewPrepData) => void;
   telemetryId?: string | null;
+  savedPrepSets?: SavedPrepSet[];
+  onSavedPrepSetsChange?: (sets: SavedPrepSet[]) => void;
 }
 
 const categoryConfig: Record<string, { label: string; color: string }> = {
@@ -276,6 +286,8 @@ const InterviewPrep = ({
   applicationId,
   onDataChange,
   telemetryId,
+  savedPrepSets: externalSavedSets,
+  onSavedPrepSetsChange,
 }: InterviewPrepProps) => {
   const [activeTab, setActiveTab] = useState<"questions" | "research" | "strategy">("questions");
   const [showPracticeMode, setShowPracticeMode] = useState(false);
@@ -289,13 +301,11 @@ const InterviewPrep = ({
   const [hasRated, setHasRated] = useState(false);
   const [targetedInterviewerType, setTargetedInterviewerType] = useState("");
   const [targetedGuidance, setTargetedGuidance] = useState("");
-  const [savedPrepSets, setSavedPrepSets] = useState<Array<{
-    id: string;
-    interviewerType: string;
-    guidance: string;
-    questions: InterviewQuestion[];
-    createdAt: string;
-  }>>([]);
+  const savedPrepSets = externalSavedSets || [];
+  const setSavedPrepSets = (updater: SavedPrepSet[] | ((prev: SavedPrepSet[]) => SavedPrepSet[])) => {
+    const newSets = typeof updater === 'function' ? updater(savedPrepSets) : updater;
+    onSavedPrepSetsChange?.(newSets);
+  };
   const [viewingSetId, setViewingSetId] = useState<string | null>(null);
   const [showSavedSets, setShowSavedSets] = useState(false);
 

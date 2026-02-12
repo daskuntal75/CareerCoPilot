@@ -5,7 +5,7 @@ import Footer from "@/components/layout/Footer";
 import JobDescriptionInput from "@/components/app/JobDescriptionInput";
 import AnalysisResults from "@/components/app/AnalysisResults";
 import CoverLetterEditor from "@/components/app/CoverLetterEditor";
-import InterviewPrep, { InterviewPrepData } from "@/components/app/InterviewPrep";
+import InterviewPrep, { InterviewPrepData, SavedPrepSet } from "@/components/app/InterviewPrep";
 import AppStepper from "@/components/app/AppStepper";
 import GenerationProgress, { GenerationStage } from "@/components/app/GenerationProgress";
 import FeedbackCollectionModal from "@/components/feedback/FeedbackCollectionModal";
@@ -147,6 +147,7 @@ const AppPage = () => {
   const [generationType, setGenerationType] = useState<"cover-letter" | "interview-prep">("cover-letter");
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [savedPrepSets, setSavedPrepSets] = useState<SavedPrepSet[]>([]);
 
   // Load existing application if ID provided and track page view
   useEffect(() => {
@@ -192,9 +193,14 @@ const AppPage = () => {
 
       if (data.interview_prep) {
         // Normalize legacy format to expected format
-        const normalizedPrep = normalizeInterviewPrepData(data.interview_prep);
+        const rawPrep = data.interview_prep as any;
+        const normalizedPrep = normalizeInterviewPrepData(rawPrep);
         if (normalizedPrep) {
           setInterviewPrep(normalizedPrep);
+        }
+        // Load saved prep sets if they exist
+        if (rawPrep.savedPrepSets && Array.isArray(rawPrep.savedPrepSets)) {
+          setSavedPrepSets(rawPrep.savedPrepSets);
         }
       }
 
@@ -808,7 +814,7 @@ const AppPage = () => {
         const updatedPrep = { ...interviewPrep, ...regeneratedSection };
         setInterviewPrep(updatedPrep);
         if (user) {
-          await saveApplication({ interview_prep: updatedPrep });
+          await saveApplication({ interview_prep: { ...updatedPrep, savedPrepSets } });
         }
         toast.success(`${sectionToRegenerate} regenerated successfully`);
         trackInterviewPrepEvent("section_regenerated", { section: sectionToRegenerate });
@@ -846,7 +852,7 @@ const AppPage = () => {
         });
         
         if (user) {
-          await saveApplication({ interview_prep: normalizedData });
+          await saveApplication({ interview_prep: { ...normalizedData, savedPrepSets } });
         }
       }
     } catch (error) {
@@ -1081,7 +1087,7 @@ const AppPage = () => {
                       const updatedPrep = { ...interviewPrep!, questions: normalizedData.questions };
                       setInterviewPrep(updatedPrep);
                       if (user && applicationId) {
-                        await saveApplication({ interview_prep: updatedPrep });
+                        await saveApplication({ interview_prep: { ...updatedPrep, savedPrepSets } });
                       }
                       toast.success(`Targeted questions for ${interviewerType} generated!`);
                     } catch (error) {
@@ -1097,7 +1103,14 @@ const AppPage = () => {
                   onDataChange={(newData) => {
                     setInterviewPrep(newData);
                     if (user && applicationId) {
-                      saveApplication({ interview_prep: newData });
+                      saveApplication({ interview_prep: { ...newData, savedPrepSets } });
+                    }
+                  }}
+                  savedPrepSets={savedPrepSets}
+                  onSavedPrepSetsChange={(newSets) => {
+                    setSavedPrepSets(newSets);
+                    if (user && applicationId && interviewPrep) {
+                      saveApplication({ interview_prep: { ...interviewPrep, savedPrepSets: newSets } });
                     }
                   }}
                 />
