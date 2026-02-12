@@ -572,6 +572,75 @@ const InterviewPrep = ({
     }
   };
 
+  const handleExportAllSetsPDF = async () => {
+    if (savedPrepSets.length === 0) { toast.error("No saved prep sets to export"); return; }
+    setIsExporting(true);
+    try {
+      const combinedContent = savedPrepSets.map((set) => {
+        let content = `# ${set.interviewerType} Interview Prep\n`;
+        if (set.guidance) content += `Topic: ${set.guidance}\n`;
+        content += `Saved: ${new Date(set.createdAt).toLocaleDateString()}\n\n`;
+        set.questions.forEach((q, qi) => {
+          content += `## Q${qi + 1}: ${q.question}\n`;
+          content += `Category: ${q.category || 'General'} • Difficulty: ${q.difficulty || 'Medium'}\n\n`;
+          if (q.starAnswer) {
+            content += `SITUATION: ${q.starAnswer.situation}\n`;
+            content += `TASK: ${q.starAnswer.task}\n`;
+            content += `ACTION: ${q.starAnswer.action}\n`;
+            content += `RESULT: ${q.starAnswer.result}\n\n`;
+          }
+          if (q.tips?.length > 0) { q.tips.forEach(t => { content += `• ${t}\n`; }); }
+          content += `\n---\n\n`;
+        });
+        return content;
+      }).join("\n\n");
+      const response = await supabase.functions.invoke("export-pdf", {
+        body: { type: "cover-letter", content: combinedContent, title: `All Saved Prep Sets`, jobTitle: jobData.title, company: jobData.company },
+      });
+      if (response.error) throw new Error(response.error.message);
+      const { pdf, filename } = response.data;
+      if (!pdf) throw new Error("No PDF data received");
+      const byteCharacters = atob(pdf);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) { byteNumbers[i] = byteCharacters.charCodeAt(i); }
+      const blob = new Blob([new Uint8Array(byteNumbers)], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = filename || `AllPrepSets_${jobData.company.replace(/\s+/g, "_")}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+      toast.success("All prep sets exported as PDF!");
+    } catch (error) { console.error("Export all sets PDF error:", error); toast.error("Failed to export prep sets as PDF"); }
+    finally { setIsExporting(false); }
+  };
+
+  const handleExportAllSetsDOCX = async () => {
+    if (savedPrepSets.length === 0) { toast.error("No saved prep sets to export"); return; }
+    setIsExporting(true);
+    try {
+      const paragraphs: Paragraph[] = [];
+      paragraphs.push(new Paragraph({ children: [new TextRun({ text: `All Targeted Prep Sets: ${jobData.title} at ${jobData.company}`, bold: true, size: 36 })], alignment: AlignmentType.CENTER, spacing: { after: 400 } }));
+      for (const set of savedPrepSets) {
+        paragraphs.push(new Paragraph({ children: [new TextRun({ text: `${set.interviewerType} Round`, bold: true, size: 32 })], heading: HeadingLevel.HEADING_1, spacing: { before: 400, after: 150 } }));
+        if (set.guidance) paragraphs.push(new Paragraph({ children: [new TextRun({ text: `Topic: ${set.guidance}`, italics: true, size: 24 })], spacing: { after: 100 } }));
+        paragraphs.push(new Paragraph({ children: [new TextRun({ text: `Saved: ${new Date(set.createdAt).toLocaleDateString()} • ${set.questions.length} questions`, size: 22, italics: true })], spacing: { after: 200 } }));
+        set.questions.forEach((q, qi) => {
+          paragraphs.push(new Paragraph({ children: [new TextRun({ text: `Q${qi + 1}: ${q.question}`, bold: true, size: 26 })], spacing: { before: 250, after: 100 } }));
+          paragraphs.push(new Paragraph({ children: [new TextRun({ text: `Category: ${q.category} | Difficulty: ${q.difficulty}`, italics: true, size: 22 })], spacing: { after: 100 } }));
+          if (q.starAnswer) {
+            paragraphs.push(new Paragraph({ children: [new TextRun({ text: "SITUATION: ", bold: true, size: 24 }), new TextRun({ text: q.starAnswer.situation, size: 24 })], spacing: { after: 100 } }));
+            paragraphs.push(new Paragraph({ children: [new TextRun({ text: "TASK: ", bold: true, size: 24 }), new TextRun({ text: q.starAnswer.task, size: 24 })], spacing: { after: 100 } }));
+            paragraphs.push(new Paragraph({ children: [new TextRun({ text: "ACTION: ", bold: true, size: 24 }), new TextRun({ text: q.starAnswer.action, size: 24 })], spacing: { after: 100 } }));
+            paragraphs.push(new Paragraph({ children: [new TextRun({ text: "RESULT (SMART): ", bold: true, size: 24 }), new TextRun({ text: q.starAnswer.result, size: 24 })], spacing: { after: 150 } }));
+          }
+        });
+      }
+      const doc = new Document({ sections: [{ properties: { page: { margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } }, children: paragraphs }] });
+      const blob = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `AllPrepSets_${jobData.company.replace(/\s+/g, "_")}.docx`; a.click(); URL.revokeObjectURL(url);
+      toast.success("All prep sets exported as DOCX!");
+    } catch (error) { console.error("Export all sets DOCX error:", error); toast.error("Failed to export prep sets as DOCX"); }
+    finally { setIsExporting(false); }
+  };
+
   const handleOpenRegenerateDialog = (sectionKey: string, preselectedTip?: string) => {
     setSelectedSection(sectionKey);
     setFeedbackText("");
@@ -962,16 +1031,34 @@ const InterviewPrep = ({
               animate={{ opacity: 1, y: 0 }}
               className="bg-card border border-border rounded-xl p-5"
             >
-              <button
-                onClick={() => setShowSavedSets(!showSavedSets)}
-                className="w-full flex items-center justify-between"
-              >
-                <div className="flex items-center gap-2 text-foreground font-semibold">
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => setShowSavedSets(!showSavedSets)}
+                  className="flex items-center gap-2 text-foreground font-semibold"
+                >
                   <Layers className="w-5 h-5 text-accent" />
                   Saved Prep Sets ({savedPrepSets.length})
-                </div>
-                <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${showSavedSets ? "rotate-180" : ""}`} />
-              </button>
+                  <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${showSavedSets ? "rotate-180" : ""}`} />
+                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={isExporting}>
+                      <Download className="w-3 h-3 mr-1" />
+                      Export All
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleExportAllSetsPDF}>
+                      <Download className="w-4 h-4 mr-2" />
+                      Download PDF
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportAllSetsDOCX}>
+                      <FileType className="w-4 h-4 mr-2" />
+                      Download DOCX
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
               
               <AnimatePresence>
                 {showSavedSets && (
