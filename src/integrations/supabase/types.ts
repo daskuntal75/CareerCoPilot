@@ -1037,6 +1037,8 @@ export type Database = {
           reset_at: string
         }[]
       }
+      decrypt_sensitive: { Args: { encrypted_text: string }; Returns: string }
+      encrypt_sensitive: { Args: { plaintext: string }; Returns: string }
       get_admin_application_stats: {
         Args: { days_back?: number }
         Returns: {
@@ -1104,6 +1106,48 @@ export type Database = {
           total_applications: number
           user_id: string
           user_type: string
+        }[]
+      }
+      get_application_decrypted: {
+        Args: { app_id: string }
+        Returns: {
+          applied_at: string
+          company: string
+          cover_letter: string
+          created_at: string
+          fit_level: string
+          fit_score: number
+          id: string
+          interview_prep: Json
+          job_description: string
+          job_title: string
+          requirements_analysis: Json
+          resume_content: string
+          resume_file_path: string
+          status: string
+          updated_at: string
+          user_id: string
+        }[]
+      }
+      get_user_applications_decrypted: {
+        Args: never
+        Returns: {
+          applied_at: string
+          company: string
+          cover_letter: string
+          created_at: string
+          fit_level: string
+          fit_score: number
+          id: string
+          interview_prep: Json
+          job_description: string
+          job_title: string
+          requirements_analysis: Json
+          resume_content: string
+          resume_file_path: string
+          status: string
+          updated_at: string
+          user_id: string
         }[]
       }
       has_role: {
