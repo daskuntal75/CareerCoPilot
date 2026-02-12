@@ -3,11 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sanitizeInput, sandboxUntrustedInput, hashString } from "../_shared/security-utils.ts";
 import { createAuditLog, logSecurityThreat } from "../_shared/audit-utils.ts";
 import { checkRateLimit, logUsage, createRateLimitResponse } from "../_shared/rate-limit-utils.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders, handleCorsPrelight } from "../_shared/cors-utils.ts";
 
 // Input length limits for security
 const MAX_JOB_DESCRIPTION_LENGTH = 15000;
@@ -135,9 +131,10 @@ const makeAIRequestWithRetry = async (
 };
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const preflightResponse = handleCorsPrelight(req);
+  if (preflightResponse) return preflightResponse;
+  const origin = req.headers.get("origin");
+  const corsHeaders = getCorsHeaders(origin);
 
   try {
     const { resumeContent, jobDescription, jobTitle, company, applicationId, userId } = await req.json();
