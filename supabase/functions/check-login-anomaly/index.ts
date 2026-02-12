@@ -2,11 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { getLocationFromIP } from "../_shared/geolocation.ts";
 import { detectAnomalies, generateRiskSummary, type LoginAttempt, type AnomalyResult } from "../_shared/anomaly-detection.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders, handleCorsPrelight } from "../_shared/cors-utils.ts";
 
 interface CheckAnomalyRequest {
   userId: string;
@@ -17,9 +13,10 @@ interface CheckAnomalyRequest {
 }
 
 const handler = async (req: Request): Promise<Response> => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const preflightResponse = handleCorsPrelight(req);
+  if (preflightResponse) return preflightResponse;
+  const origin = req.headers.get("origin");
+  const corsHeaders = getCorsHeaders(origin);
 
   try {
     const supabaseClient = createClient(

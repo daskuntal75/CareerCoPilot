@@ -1,9 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders, handleCorsPrelight } from "../_shared/cors-utils.ts";
 
 // Theme colors (RGB values)
 const THEME = {
@@ -503,9 +499,10 @@ function formatInterviewPrepPages(data: any, jobTitle: string, company: string):
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const preflightResponse = handleCorsPrelight(req);
+  if (preflightResponse) return preflightResponse;
+  const origin = req.headers.get("origin");
+  const corsHeaders = getCorsHeaders(origin);
 
   try {
     const { content, title, company, jobTitle, interviewPrepData, type } = await req.json();

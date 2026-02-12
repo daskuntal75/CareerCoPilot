@@ -1,11 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@2.0.0";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders, handleCorsPrelight } from "../_shared/cors-utils.ts";
 
 // Threshold configuration
 const SATISFACTION_THRESHOLD = 3.5; // Average rating below this triggers alert
@@ -24,9 +20,10 @@ interface PromptVersionStats {
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const preflightResponse = handleCorsPrelight(req);
+  if (preflightResponse) return preflightResponse;
+  const origin = req.headers.get("origin");
+  const corsHeaders = getCorsHeaders(origin);
 
   try {
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
