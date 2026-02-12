@@ -9,7 +9,7 @@ interface AppStepperProps {
 
 const steps: { id: AppStep; label: string; icon: React.ElementType }[] = [
   { id: "job", label: "Job Description", icon: FileText },
-  { id: "editor", label: "Analysis & Cover Letter", icon: Edit },
+  { id: "editor", label: "Fit Analysis", icon: Edit },
   { id: "interview", label: "Interview Prep", icon: MessageSquare },
 ];
 
