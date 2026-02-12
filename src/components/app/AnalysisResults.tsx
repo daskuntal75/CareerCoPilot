@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ChevronDown, ChevronRight, Sparkles, Check, Minus, X, AlertCircle, MessageCircle } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, Sparkles, Check, Minus, X, AlertCircle, MessageCircle, FileText, Download, Eye, Copy, FileType } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { AnalysisData, JobData, RequirementMatch } from "@/pages/App";
@@ -10,6 +10,8 @@ import { useUsageTracking } from "@/hooks/useUsageTracking";
 import { useAuth } from "@/contexts/AuthContext";
 import { HourlyQuotaIndicator } from "./HourlyQuotaIndicator";
 import { useHourlyQuota } from "@/hooks/useHourlyQuota";
+import JobSearchEmailsContainer from "./JobSearchEmailsContainer";
+import { toast } from "sonner";
 
 interface AnalysisResultsProps {
   data: AnalysisData;
@@ -18,6 +20,11 @@ interface AnalysisResultsProps {
   onGenerateInterviewPrep?: () => void;
   onBack: () => void;
   applicationId: string | null;
+  coverLetter?: string;
+  onViewEditCoverLetter?: () => void;
+  onDownloadPDF?: () => void;
+  onDownloadDOCX?: () => void;
+  isExporting?: boolean;
 }
 
 const fitLevelLabels = {
@@ -82,8 +89,8 @@ const RequirementRow = ({ item, index }: { item: RequirementMatch; index: number
   );
 };
 
-const AnalysisResults = ({ data, jobData, onGenerate, onGenerateInterviewPrep, onBack, applicationId }: AnalysisResultsProps) => {
-  const { subscription } = useAuth();
+const AnalysisResults = ({ data, jobData, onGenerate, onGenerateInterviewPrep, onBack, applicationId, coverLetter, onViewEditCoverLetter, onDownloadPDF, onDownloadDOCX, isExporting }: AnalysisResultsProps) => {
+  const { user, subscription } = useAuth();
   const { canUseFeature, getRemainingUsage, limits } = useUsageTracking();
   const { canGenerate: canGenerateHourly, isExhausted: isHourlyExhausted } = useHourlyQuota();
   
@@ -96,11 +103,23 @@ const AnalysisResults = ({ data, jobData, onGenerate, onGenerateInterviewPrep, o
   const canGenerate = canGenerateMonthly && canGenerateHourly;
   const remaining = getRemainingUsage("cover_letter");
   const isFreeTier = subscription.tier === "free";
+  const hasCoverLetter = !!coverLetter && coverLetter.trim().length > 0;
 
   // Calculate circumference for the circular progress
   const radius = 45;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (data.fitScore / 100) * circumference;
+
+  const handleCopyCoverLetter = async () => {
+    if (!coverLetter) return;
+    await navigator.clipboard.writeText(coverLetter);
+    toast.success("Cover letter copied to clipboard");
+  };
+
+  // Get a preview snippet of the cover letter
+  const coverLetterPreview = coverLetter 
+    ? coverLetter.slice(0, 200).trim() + (coverLetter.length > 200 ? "..." : "")
+    : "";
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -201,47 +220,101 @@ const AnalysisResults = ({ data, jobData, onGenerate, onGenerateInterviewPrep, o
               </div>
             </div>
 
-            {/* Generate CTA */}
+            {/* Cover Letter Actions or Generate CTA */}
             <div className="mt-6 space-y-3">
-              {/* Hourly Quota Indicator */}
               <HourlyQuotaIndicator showUpgradeLink={false} />
-              
-              {isFreeTier && remaining !== null && (
-                <div className={cn(
-                  "flex items-center gap-2 text-sm p-2 rounded-lg",
-                  canGenerateMonthly 
-                    ? "bg-accent/10 text-accent" 
-                    : "bg-destructive/10 text-destructive"
-                )}>
-                  <AlertCircle className="w-4 h-4" />
-                  <span>
-                    {canGenerateMonthly 
-                      ? `${remaining} of ${limits.cover_letter} free cover letters remaining this month`
-                      : "Monthly limit reached"}
-                  </span>
-                </div>
-              )}
-              
-              {canGenerate ? (
-                <Button variant="hero" className="w-full" onClick={onGenerate}>
-                  <Sparkles className="w-4 h-4" />
-                  Generate Cover Letter
-                </Button>
-              ) : isHourlyExhausted ? (
-                <Button variant="hero" className="w-full" disabled>
-                  <Sparkles className="w-4 h-4" />
-                  Hourly Limit Reached
-                </Button>
+
+              {hasCoverLetter ? (
+                <>
+                  {/* Cover Letter Ready - Prominent Actions */}
+                  <div className="bg-success/10 border border-success/20 rounded-lg p-3 text-left">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText className="w-4 h-4 text-success" />
+                      <span className="text-sm font-semibold text-success">Cover Letter Ready</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground line-clamp-3">
+                      {coverLetterPreview}
+                    </p>
+                  </div>
+
+                  <Button variant="hero" className="w-full" onClick={onViewEditCoverLetter}>
+                    <Eye className="w-4 h-4" />
+                    View & Edit Cover Letter
+                  </Button>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={onDownloadPDF}
+                      disabled={isExporting}
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      PDF
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={onDownloadDOCX}
+                      disabled={isExporting}
+                    >
+                      <FileType className="w-3.5 h-3.5" />
+                      DOCX
+                    </Button>
+                  </div>
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full"
+                    onClick={handleCopyCoverLetter}
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                    Copy to Clipboard
+                  </Button>
+                </>
               ) : (
-                <Button variant="hero" className="w-full" asChild>
-                  <Link to="/pricing">
-                    <Sparkles className="w-4 h-4" />
-                    Upgrade for Unlimited
-                  </Link>
-                </Button>
+                <>
+                  {isFreeTier && remaining !== null && (
+                    <div className={cn(
+                      "flex items-center gap-2 text-sm p-2 rounded-lg",
+                      canGenerateMonthly 
+                        ? "bg-accent/10 text-accent" 
+                        : "bg-destructive/10 text-destructive"
+                    )}>
+                      <AlertCircle className="w-4 h-4" />
+                      <span>
+                        {canGenerateMonthly 
+                          ? `${remaining} of ${limits.cover_letter} free cover letters remaining this month`
+                          : "Monthly limit reached"}
+                      </span>
+                    </div>
+                  )}
+                  
+                  {canGenerate ? (
+                    <Button variant="hero" className="w-full" onClick={onGenerate}>
+                      <Sparkles className="w-4 h-4" />
+                      Generate Cover Letter
+                    </Button>
+                  ) : isHourlyExhausted ? (
+                    <Button variant="hero" className="w-full" disabled>
+                      <Sparkles className="w-4 h-4" />
+                      Hourly Limit Reached
+                    </Button>
+                  ) : (
+                    <Button variant="hero" className="w-full" asChild>
+                      <Link to="/pricing">
+                        <Sparkles className="w-4 h-4" />
+                        Upgrade for Unlimited
+                      </Link>
+                    </Button>
+                  )}
+                </>
               )}
               
-              {/* Interview Prep Button - Independent from Cover Letter */}
+              {/* Interview Prep Button */}
               {onGenerateInterviewPrep && canGenerate && (
                 <Button 
                   variant="outline" 
@@ -277,6 +350,17 @@ const AnalysisResults = ({ data, jobData, onGenerate, onGenerateInterviewPrep, o
               ))}
             </div>
           </div>
+
+          {/* Job Search Emails - shown when cover letter exists */}
+          {hasCoverLetter && (
+            <JobSearchEmailsContainer
+              jobTitle={jobData.title}
+              company={jobData.company}
+              coverLetterContent={coverLetter!}
+              applicationId={applicationId}
+              userId={user?.id}
+            />
+          )}
         </motion.div>
       </div>
 

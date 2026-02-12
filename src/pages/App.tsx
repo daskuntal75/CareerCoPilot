@@ -14,7 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { AlertCircle, FileText, ArrowLeft, Sparkles } from "lucide-react";
+import { AlertCircle, FileText, ArrowLeft, Sparkles, FileType } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HourlyQuotaIndicator } from "@/components/app/HourlyQuotaIndicator";
 import { useAnalytics } from "@/hooks/useAnalytics";
@@ -148,6 +148,8 @@ const AppPage = () => {
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [savedPrepSets, setSavedPrepSets] = useState<SavedPrepSet[]>([]);
+  const [showCoverLetterEditor, setShowCoverLetterEditor] = useState(false);
+  const [isExportingFromAnalysis, setIsExportingFromAnalysis] = useState(false);
 
   // Load existing application if ID provided and track page view
   useEffect(() => {
@@ -203,11 +205,10 @@ const AppPage = () => {
         }
       }
 
-      // Set appropriate step based on data
-      if (data.interview_prep) {
-        setCurrentStep("interview");
-      } else if (data.cover_letter || data.requirements_analysis) {
+      // Set appropriate step based on data - always show analysis first
+      if (data.interview_prep || data.cover_letter || data.requirements_analysis) {
         setCurrentStep("editor");
+        // Don't auto-open cover letter editor - show analysis view first
       }
     } catch (error) {
       console.error("Error loading application:", error);
@@ -879,6 +880,52 @@ const AppPage = () => {
 
   const goToStep = (step: AppStep) => {
     setCurrentStep(step);
+    // Reset cover letter editor view when changing steps
+    if (step !== "editor") setShowCoverLetterEditor(false);
+  };
+
+  const handleDownloadPDFFromAnalysis = async () => {
+    if (!coverLetter || coverLetter.trim().length === 0) return;
+    setIsExportingFromAnalysis(true);
+    try {
+      const response = await supabase.functions.invoke("export-pdf", {
+        body: { content: coverLetter, title: jobData?.title, company: jobData?.company, jobTitle: jobData?.title, type: "cover-letter" },
+      });
+      if (response.error) throw new Error(response.error.message);
+      const { pdf, filename } = response.data;
+      if (!pdf) throw new Error("No PDF data received");
+      const byteCharacters = atob(pdf);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
+      const blob = new Blob([new Uint8Array(byteNumbers)], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("PDF downloaded!");
+    } catch (error) {
+      console.error("PDF export error:", error);
+      toast.error("Failed to export PDF");
+    } finally {
+      setIsExportingFromAnalysis(false);
+    }
+  };
+
+  const handleDownloadDOCXFromAnalysis = async () => {
+    if (!coverLetter || coverLetter.trim().length === 0) return;
+    setIsExportingFromAnalysis(true);
+    try {
+      const { downloadAsDocx } = await import("@/utils/docx-export");
+      await downloadAsDocx({ content: coverLetter, title: jobData?.title || "", company: jobData?.company || "", type: "cover-letter" });
+      toast.success("DOCX downloaded!");
+    } catch (error) {
+      console.error("DOCX export error:", error);
+      toast.error("Failed to export DOCX");
+    } finally {
+      setIsExportingFromAnalysis(false);
+    }
   };
 
   // Show loading while checking profile
@@ -990,50 +1037,12 @@ const AppPage = () => {
               
               {currentStep === "editor" && jobData && (
                 <>
-                  {/* Show generate prompt when no cover letter exists */}
-                  {!coverLetter ? (
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="max-w-2xl mx-auto text-center py-12"
-                    >
-                      <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-6">
-                        <FileText className="w-8 h-8 text-accent" />
-                      </div>
-                      <h2 className="text-2xl font-bold text-foreground mb-3">
-                        Generate Your Cover Letter
-                      </h2>
-                      <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                        Create a tailored cover letter for {jobData.title} at {jobData.company} based on your resume and the job requirements.
-                      </p>
-                      <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                        <Button
-                          variant="outline"
-                          onClick={() => setCurrentStep("job")}
-                        >
-                          <ArrowLeft className="w-4 h-4 mr-2" />
-                          Back to Analysis
-                        </Button>
-                        <Button
-                          variant="hero"
-                          onClick={handleGenerateCoverLetter}
-                          disabled={isLoading}
-                        >
-                          {isLoading ? (
-                            <div className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin mr-2" />
-                          ) : (
-                            <Sparkles className="w-4 h-4 mr-2" />
-                          )}
-                          Generate Cover Letter
-                        </Button>
-                      </div>
-                    </motion.div>
-                  ) : (
+                  {showCoverLetterEditor && coverLetter ? (
                     <CoverLetterEditor 
                       content={coverLetter}
                       jobData={jobData}
                       onContentChange={handleCoverLetterChange}
-                      onBack={() => setCurrentStep("job")}
+                      onBack={() => setShowCoverLetterEditor(false)}
                       onGenerateInterviewPrep={() => handleGenerateInterviewPrep()}
                       onRegenerateCoverLetter={(section, feedback, tips) => {
                         toast.info(`Regenerating ${section} with your feedback...`);
@@ -1045,6 +1054,43 @@ const AppPage = () => {
                       applicationId={applicationId}
                       analysisData={analysisData}
                     />
+                  ) : analysisData ? (
+                    <AnalysisResults
+                      data={analysisData}
+                      jobData={jobData}
+                      onGenerate={handleGenerateCoverLetter}
+                      onGenerateInterviewPrep={interviewPrep 
+                        ? () => setCurrentStep("interview") 
+                        : () => handleGenerateInterviewPrep()
+                      }
+                      onBack={() => setCurrentStep("job")}
+                      applicationId={applicationId}
+                      coverLetter={coverLetter}
+                      onViewEditCoverLetter={() => setShowCoverLetterEditor(true)}
+                      onDownloadPDF={handleDownloadPDFFromAnalysis}
+                      onDownloadDOCX={handleDownloadDOCXFromAnalysis}
+                      isExporting={isExportingFromAnalysis}
+                    />
+                  ) : (
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="max-w-2xl mx-auto text-center py-12"
+                    >
+                      <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-6">
+                        <FileText className="w-8 h-8 text-accent" />
+                      </div>
+                      <h2 className="text-2xl font-bold text-foreground mb-3">
+                        Analyze & Generate
+                      </h2>
+                      <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                        Go back to enter a job description to analyze your fit and generate a cover letter.
+                      </p>
+                      <Button variant="outline" onClick={() => setCurrentStep("job")}>
+                        <ArrowLeft className="w-4 h-4 mr-2" />
+                        Back to Job Description
+                      </Button>
+                    </motion.div>
                   )}
                 </>
               )}
