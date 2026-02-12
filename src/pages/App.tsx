@@ -159,10 +159,9 @@ const AppPage = () => {
 
   const loadApplication = async (appId: string) => {
     try {
+      // Use decrypted RPC to read encrypted cover_letter/resume_content
       const { data, error } = await supabase
-        .from("applications")
-        .select("*")
-        .eq("id", appId)
+        .rpc("get_application_decrypted", { app_id: appId })
         .maybeSingle();
 
       if (error) throw error;

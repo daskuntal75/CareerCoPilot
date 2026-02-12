@@ -66,10 +66,9 @@ const Dashboard = () => {
 
   const fetchApplications = async () => {
     try {
+      // Use decrypted RPC to read encrypted cover_letter/resume_content
       const { data, error } = await supabase
-        .from("applications")
-        .select("*")
-        .order("updated_at", { ascending: false });
+        .rpc("get_user_applications_decrypted");
 
       if (error) throw error;
       setApplications(data || []);
