@@ -1060,7 +1060,7 @@ const AppPage = () => {
                       jobData={jobData}
                       onGenerate={handleGenerateCoverLetter}
                       onGenerateInterviewPrep={interviewPrep 
-                        ? () => setCurrentStep("interview") 
+                        ? undefined 
                         : () => handleGenerateInterviewPrep()
                       }
                       onBack={() => setCurrentStep("job")}
@@ -1070,6 +1070,11 @@ const AppPage = () => {
                       onDownloadPDF={handleDownloadPDFFromAnalysis}
                       onDownloadDOCX={handleDownloadDOCXFromAnalysis}
                       isExporting={isExportingFromAnalysis}
+                      onRegenerateAll={() => {
+                        if (jobData) handleJobSubmit(jobData);
+                      }}
+                      hasInterviewPrep={!!interviewPrep}
+                      onViewInterviewPrep={() => setCurrentStep("interview")}
                     />
                   ) : (
                     <motion.div

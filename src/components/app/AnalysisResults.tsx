@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ChevronDown, ChevronRight, Sparkles, Check, Minus, X, AlertCircle, MessageCircle, FileText, Download, Eye, Copy, FileType } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, Sparkles, Check, Minus, X, AlertCircle, MessageCircle, FileText, Download, Eye, Copy, FileType, RefreshCw, CheckCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { AnalysisData, JobData, RequirementMatch } from "@/pages/App";
@@ -25,6 +25,9 @@ interface AnalysisResultsProps {
   onDownloadPDF?: () => void;
   onDownloadDOCX?: () => void;
   isExporting?: boolean;
+  onRegenerateAll?: () => void;
+  hasInterviewPrep?: boolean;
+  onViewInterviewPrep?: () => void;
 }
 
 const fitLevelLabels = {
@@ -89,7 +92,11 @@ const RequirementRow = ({ item, index }: { item: RequirementMatch; index: number
   );
 };
 
-const AnalysisResults = ({ data, jobData, onGenerate, onGenerateInterviewPrep, onBack, applicationId, coverLetter, onViewEditCoverLetter, onDownloadPDF, onDownloadDOCX, isExporting }: AnalysisResultsProps) => {
+const AnalysisResults = ({ 
+  data, jobData, onGenerate, onGenerateInterviewPrep, onBack, applicationId, 
+  coverLetter, onViewEditCoverLetter, onDownloadPDF, onDownloadDOCX, isExporting,
+  onRegenerateAll, hasInterviewPrep, onViewInterviewPrep
+}: AnalysisResultsProps) => {
   const { user, subscription } = useAuth();
   const { canUseFeature, getRemainingUsage, limits } = useUsageTracking();
   const { canGenerate: canGenerateHourly, isExhausted: isHourlyExhausted } = useHourlyQuota();
@@ -136,7 +143,7 @@ const AnalysisResults = ({ data, jobData, onGenerate, onGenerateInterviewPrep, o
           Back to job description
         </button>
         
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-3xl font-bold text-foreground mb-2">
               Analysis Results
@@ -145,6 +152,19 @@ const AnalysisResults = ({ data, jobData, onGenerate, onGenerateInterviewPrep, o
               {jobData.title} at {jobData.company}
             </p>
           </div>
+          
+          {/* Regenerate All Button */}
+          {hasCoverLetter && onRegenerateAll && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onRegenerateAll}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Regenerate All
+            </Button>
+          )}
         </div>
       </motion.div>
 
@@ -156,72 +176,74 @@ const AnalysisResults = ({ data, jobData, onGenerate, onGenerateInterviewPrep, o
           transition={{ delay: 0.1 }}
           className="lg:col-span-1"
         >
-          <div className="bg-card rounded-xl border border-border p-6 text-center">
-            <h2 className="text-lg font-semibold text-foreground mb-4">Job Fit Score</h2>
-            
-            {/* Circular Progress */}
-            <div className="relative w-32 h-32 mx-auto mb-4">
-              <svg className="w-32 h-32 -rotate-90">
-                <circle
-                  cx="64"
-                  cy="64"
-                  r={radius}
-                  stroke="currentColor"
-                  strokeWidth="8"
-                  fill="none"
-                  className="text-secondary"
-                />
-                <motion.circle
-                  cx="64"
-                  cy="64"
-                  r={radius}
-                  stroke="currentColor"
-                  strokeWidth="8"
-                  fill="none"
-                  strokeDasharray={circumference}
-                  initial={{ strokeDashoffset: circumference }}
-                  animate={{ strokeDashoffset }}
-                  transition={{ duration: 1, ease: "easeOut" }}
-                  className="text-success"
-                  strokeLinecap="round"
-                />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <motion.span
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.5 }}
-                  className="text-4xl font-bold text-foreground"
-                >
-                  {data.fitScore}%
-                </motion.span>
+          <div className="bg-card rounded-xl border border-border p-6 text-center space-y-6">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground mb-4">Job Fit Score</h2>
+              
+              {/* Circular Progress */}
+              <div className="relative w-32 h-32 mx-auto mb-4">
+                <svg className="w-32 h-32 -rotate-90">
+                  <circle
+                    cx="64"
+                    cy="64"
+                    r={radius}
+                    stroke="currentColor"
+                    strokeWidth="8"
+                    fill="none"
+                    className="text-secondary"
+                  />
+                  <motion.circle
+                    cx="64"
+                    cy="64"
+                    r={radius}
+                    stroke="currentColor"
+                    strokeWidth="8"
+                    fill="none"
+                    strokeDasharray={circumference}
+                    initial={{ strokeDashoffset: circumference }}
+                    animate={{ strokeDashoffset }}
+                    transition={{ duration: 1, ease: "easeOut" }}
+                    className="text-success"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <motion.span
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.5 }}
+                    className="text-4xl font-bold text-foreground"
+                  >
+                    {data.fitScore}%
+                  </motion.span>
+                </div>
               </div>
-            </div>
 
-            <span className={cn("inline-block px-3 py-1.5 rounded-full text-sm font-medium", fitLabel.color)}>
-              {fitLabel.label}
-            </span>
+              <span className={cn("inline-block px-3 py-1.5 rounded-full text-sm font-medium", fitLabel.color)}>
+                {fitLabel.label}
+              </span>
 
-            {/* Match Summary */}
-            <div className="mt-6 pt-6 border-t border-border">
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <div>
-                  <div className="text-2xl font-bold text-success">{yesCount}</div>
-                  <div className="text-xs text-muted-foreground">Matched</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-warning">{partialCount}</div>
-                  <div className="text-xs text-muted-foreground">Partial</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-destructive">{noCount}</div>
-                  <div className="text-xs text-muted-foreground">Gaps</div>
+              {/* Match Summary */}
+              <div className="mt-6 pt-6 border-t border-border">
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <div className="text-2xl font-bold text-success">{yesCount}</div>
+                    <div className="text-xs text-muted-foreground">Matched</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-warning">{partialCount}</div>
+                    <div className="text-xs text-muted-foreground">Partial</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-destructive">{noCount}</div>
+                    <div className="text-xs text-muted-foreground">Gaps</div>
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Cover Letter Actions or Generate CTA */}
-            <div className="mt-6 space-y-3">
+            <div className="space-y-3 pt-6 border-t border-border">
               <HourlyQuotaIndicator showUpgradeLink={false} />
 
               {hasCoverLetter ? (
@@ -313,9 +335,35 @@ const AnalysisResults = ({ data, jobData, onGenerate, onGenerateInterviewPrep, o
                   )}
                 </>
               )}
+            </div>
               
-              {/* Interview Prep Button */}
-              {onGenerateInterviewPrep && canGenerate && (
+            {/* Interview Prep Section */}
+            <div className="space-y-3 pt-6 border-t border-border">
+              <h3 className="text-sm font-semibold text-foreground text-left">Interview Preparation</h3>
+              
+              {hasInterviewPrep ? (
+                <div className="space-y-2">
+                  <div className="bg-success/10 border border-success/20 rounded-lg p-3 text-left">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-success" />
+                      <span className="text-sm font-semibold text-success">Interview Guide Ready</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Your personalized interview prep has been generated
+                    </p>
+                  </div>
+                  {onViewInterviewPrep && (
+                    <Button 
+                      variant="outline" 
+                      className="w-full" 
+                      onClick={onViewInterviewPrep}
+                    >
+                      <Eye className="w-4 h-4" />
+                      View Interview Guide
+                    </Button>
+                  )}
+                </div>
+              ) : onGenerateInterviewPrep && canGenerate ? (
                 <Button 
                   variant="outline" 
                   className="w-full" 
@@ -324,7 +372,7 @@ const AnalysisResults = ({ data, jobData, onGenerate, onGenerateInterviewPrep, o
                   <MessageCircle className="w-4 h-4" />
                   Prepare for Interview
                 </Button>
-              )}
+              ) : null}
             </div>
           </div>
         </motion.div>
