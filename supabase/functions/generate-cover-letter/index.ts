@@ -237,8 +237,38 @@ serve(async (req) => {
     if (!response.ok) {
       const text = await response.text();
       console.error("AI error:", response.status, text);
-      if (response.status === 429) return new Response(JSON.stringify({ error: "Rate limits exceeded" }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      if (response.status === 402) return new Response(JSON.stringify({ error: "AI credits depleted" }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      
+      // Check for credit/billing errors from external providers (Anthropic returns 400 for billing issues)
+      const isCreditsError = response.status === 402 || 
+        (response.status === 400 && text.includes("credit balance is too low"));
+      
+      if (response.status === 429) return new Response(JSON.stringify({ error: "Rate limits exceeded. Please try again later." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (isCreditsError) return new Response(JSON.stringify({ error: "AI provider credits depleted. Please check your AI provider billing or switch to a different model in admin settings." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      
+      // For other external model errors, fall back to Lovable AI Gateway
+      if (modelConfig.isExternal) {
+        console.log("External model failed, falling back to Lovable AI Gateway");
+        const LOVABLE_KEY = Deno.env.get("LOVABLE_API_KEY");
+        if (LOVABLE_KEY) {
+          const fallbackModel = isRegen ? "google/gemini-2.5-flash-lite" : "google/gemini-3-flash-preview";
+          const fallbackResult = await callAI({
+            model: fallbackModel, systemPrompt: SYSTEM_PROMPT, userPrompt,
+            maxTokens: isRegen ? 2000 : 4000, stream,
+            isExternal: false, endpoint: undefined, apiKeyVar: undefined,
+          });
+          if (fallbackResult.response.ok) {
+            if (stream) {
+              return new Response(fallbackResult.response.body, { headers: { ...corsHeaders, "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } });
+            }
+            const fbData = await fallbackResult.response.json();
+            const fbLetter = fbData.choices?.[0]?.message?.content;
+            if (fbLetter) {
+              return new Response(JSON.stringify({ coverLetter: fbLetter, regeneratedSection: sectionToRegenerate || null }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+            }
+          }
+        }
+      }
+      
       throw new Error(`AI error: ${response.status}`);
     }
 
