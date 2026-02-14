@@ -25,14 +25,14 @@ interface GenerationProgressProps {
 const stageConfig = {
   "cover-letter": {
     analyzing: { 
-      label: "Analyzing requirements", 
-      description: "Matching your experience with job criteria",
+      label: "Analyzing job fit score", 
+      description: "Evaluating your qualifications against job requirements",
       icon: Brain,
-      tips: ["Identifying key requirements", "Mapping your skills", "Finding best matches"]
+      tips: ["Scoring requirement matches", "Mapping your skills to job criteria", "Calculating fit percentage"]
     },
     drafting: { 
-      label: "Drafting cover letter", 
-      description: "Creating personalized content",
+      label: "Generating cover letter", 
+      description: "Creating a tailored cover letter from your analysis",
       icon: Sparkles,
       tips: ["Writing compelling opening", "Highlighting achievements", "Adding STAR examples"]
     },
@@ -44,7 +44,7 @@ const stageConfig = {
     },
     complete: { 
       label: "Complete", 
-      description: "Your cover letter is ready",
+      description: "Your fit analysis & cover letter are ready",
       icon: Check,
       tips: []
     },
@@ -359,7 +359,7 @@ const GenerationProgress = ({
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground">
-              {type === "cover-letter" ? "Generating Cover Letter" : "Preparing Interview Guide"}
+              {type === "cover-letter" ? "Analyzing Fit & Generating Cover Letter" : "Preparing Interview Guide"}
             </span>
             <span className="font-mono text-foreground">
               {Math.round(animatedProgress)}%
@@ -381,7 +381,7 @@ const GenerationProgress = ({
           <p className="text-[10px] text-muted-foreground text-center">
             {retryInfo?.isRetrying 
               ? `Retry ${retryInfo.attempt}/${retryInfo.maxAttempts}` 
-              : "Powered by advanced AI for fast, accurate results"}
+              : "Powered by advanced AI • Results are non-deterministic and may vary between runs"}
           </p>
         </div>
 

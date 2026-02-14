@@ -61,7 +61,7 @@ Return ONLY valid JSON, no markdown.`,
 }
 Return ONLY valid JSON, no markdown.`,
 
-  keyTechnologyConcepts: `Identify key technology and domain concepts relevant to this specific role and company. Return JSON:
+  keyTechnologyConcepts: `Identify key technology and domain concepts relevant to this specific role and company. Include AT LEAST 3 threat modeling exercises, each covering a different STRIDE category. Return JSON:
 {
   "keyTechnologyConcepts": [
     { "concept": "Concept name", "description": "Single paragraph defining it and how it applies to this company and role" }
@@ -73,6 +73,8 @@ Return ONLY valid JSON, no markdown.`,
     { "useCase": "", "howAIWins": "", "valueForCompany": "" }
   ],
   "threatModeling": [
+    { "scope": "", "threatScenario": "", "attackVector": "", "strideFocus": "", "keyQuestions": [], "mitigationControls": [] },
+    { "scope": "", "threatScenario": "", "attackVector": "", "strideFocus": "", "keyQuestions": [], "mitigationControls": [] },
     { "scope": "", "threatScenario": "", "attackVector": "", "strideFocus": "", "keyQuestions": [], "mitigationControls": [] }
   ]
 }
@@ -196,6 +198,8 @@ Return a JSON object with this structure:
     { "useCase": "", "howAIWins": "", "valueForCompany": "" }
   ],
   "threatModeling": [
+    { "scope": "", "threatScenario": "", "attackVector": "", "strideFocus": "", "keyQuestions": [], "mitigationControls": [] },
+    { "scope": "", "threatScenario": "", "attackVector": "", "strideFocus": "", "keyQuestions": [], "mitigationControls": [] },
     { "scope": "", "threatScenario": "", "attackVector": "", "strideFocus": "", "keyQuestions": [], "mitigationControls": [] }
   ],
   "strategicAnalysis": {
@@ -240,7 +244,7 @@ Return a JSON object with this structure:
 - Generate 15-25 interview questions distributed across: recruiter(3-5), hiring_manager(3-5), peer(3-5), technical(3-5), vp(3-5), panel(2-3)
 - For EACH question, use STAR + SMART format with answers grounded ONLY in resume content
 - Generate EXACTLY 3 questions for EACH interviewer type in questionsToAsk
-- Include 3 security concerns, 3 AI use cases, and 3 threat modeling exercises relevant to the company/role
+- Include 3 security concerns, 3 AI use cases, and AT LEAST 3 threat modeling exercises relevant to the company/role (each covering a different STRIDE category)
 - Create follow-up email templates for each interview round
 
 # TONE & STYLE
