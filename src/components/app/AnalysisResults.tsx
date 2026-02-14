@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ChevronDown, ChevronRight, Sparkles, Check, Minus, X, AlertCircle, MessageCircle, FileText, Download, Eye, Copy, FileType, RefreshCw, CheckCircle } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, Sparkles, Check, Minus, X, AlertCircle, MessageCircle, FileText, Download, Eye, Copy, FileType, RefreshCw, CheckCircle, Info } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { AnalysisData, JobData, RequirementMatch } from "@/pages/App";
@@ -12,6 +12,7 @@ import { HourlyQuotaIndicator } from "./HourlyQuotaIndicator";
 import { useHourlyQuota } from "@/hooks/useHourlyQuota";
 import JobSearchEmailsContainer from "./JobSearchEmailsContainer";
 import { toast } from "sonner";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface AnalysisResultsProps {
   data: AnalysisData;
@@ -399,6 +400,73 @@ const AnalysisResults = ({
             </div>
           </div>
 
+          {/* Gap Analysis - Partial & No Match Elaboration */}
+          {(partialCount > 0 || noCount > 0) && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="mt-6 bg-card rounded-xl border border-border p-6"
+            >
+              <h2 className="text-lg font-semibold text-foreground mb-4">
+                Gap Analysis & Positioning
+              </h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                How to address areas where your experience doesn't fully match
+              </p>
+
+              {partialCount > 0 && (
+                <div className="mb-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-5 h-5 rounded-full bg-warning flex items-center justify-center">
+                      <Minus className="w-3 h-3 text-white" />
+                    </div>
+                    <h3 className="text-sm font-semibold text-foreground">Partial Matches — Similar Experience</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {data.requirements.filter(r => r.status === "partial").map((item, i) => (
+                      <div key={i} className="bg-warning/5 border border-warning/10 rounded-lg p-3 text-sm">
+                        <div className="font-medium text-foreground mb-1">{item.requirement}</div>
+                        <div className="text-muted-foreground">
+                          <span className="font-medium text-warning">Your related experience: </span>
+                          {item.evidence}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1 italic">
+                          Position this as transferable expertise — highlight the overlapping skills and outcomes.
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {noCount > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-5 h-5 rounded-full bg-destructive flex items-center justify-center">
+                      <X className="w-3 h-3 text-white" />
+                    </div>
+                    <h3 className="text-sm font-semibold text-foreground">Gaps — Growth Opportunity</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {data.requirements.filter(r => r.status === "no").map((item, i) => (
+                      <div key={i} className="bg-destructive/5 border border-destructive/10 rounded-lg p-3 text-sm">
+                        <div className="font-medium text-foreground mb-1">{item.requirement}</div>
+                        <div className="text-muted-foreground">
+                          <span className="font-medium text-destructive">Gap: </span>
+                          {item.evidence || "No direct match found in resume"}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1 italic">
+                          Frame as a growth area — emphasize your track record of quickly learning new skills and adapting to new domains.
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          )}
+
           {/* Job Search Emails - shown when cover letter exists */}
           {hasCoverLetter && (
             <JobSearchEmailsContainer
@@ -411,6 +479,22 @@ const AnalysisResults = ({
           )}
         </motion.div>
       </div>
+
+      {/* AI Disclaimer */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.5 }}
+        className="mt-6"
+      >
+        <Alert className="bg-muted/30 border-border">
+          <Info className="h-4 w-4 text-muted-foreground" />
+          <AlertDescription className="text-xs text-muted-foreground">
+            These results are generated by AI and are non-deterministic — each run may produce different results. 
+            Always review and verify AI-generated content before use.
+          </AlertDescription>
+        </Alert>
+      </motion.div>
 
       {/* RAG Debug Panel */}
       <RAGDebugPanel applicationId={applicationId} />

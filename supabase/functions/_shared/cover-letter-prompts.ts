@@ -55,6 +55,10 @@ Count requirements genuinely met, divide by 10, multiply by 100.
 
 **Body** (2-3 paragraphs): Focus on top 3 requirements using STAR format (Situation, Task, Action, Result) with specific metrics. Keep narratives flowing naturally.
 
+**Addressing Partial Matches**: For requirements that are only partially met, cite specific examples of similar (not identical) experience from the resume and explain how those transferable skills apply. Do NOT fabricate experience.
+
+**Addressing Gaps**: For requirements with no direct match, acknowledge them honestly and frame them as growth opportunities. Reference the candidate's demonstrated ability to learn quickly, citing concrete examples of past rapid skill acquisition from the resume.
+
 **Fit Statement**: Reference your calculated fit percentage.
 
 **Closing**: Polite, professional, impactful call-to-action.
