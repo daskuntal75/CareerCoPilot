@@ -15,7 +15,7 @@ const Footer = () => {
               <span className="font-bold text-lg text-foreground">TailoredApply</span>
             </Link>
             <p className="text-sm text-muted-foreground max-w-sm">
-              AI-powered job application assistant for senior tech professionals. 
+              AI-powered job application assistant for job seekers at every career stage. 
               Generate tailored, truthful materials that get callbacks.
             </p>
           </div>

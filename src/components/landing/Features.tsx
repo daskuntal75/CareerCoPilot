@@ -33,8 +33,8 @@ const features = [
   },
   {
     icon: Sparkles,
-    title: "Senior-Role Aware",
-    description: "Optimized for Director, VP, and Principal narratives—not entry-level templates.",
+    title: "Every Level, Every Role",
+    description: "Adapts to your career stage—whether you're landing your first role or your next leadership position.",
   },
   {
     icon: Download,
@@ -77,11 +77,11 @@ const Features = () => {
           transition={{ duration: 0.5 }}
           className="text-center mb-16"
         >
-          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-            Built for Senior Professionals
+         <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+            Built for Every Job Seeker
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Features designed for Directors, VPs, and Principal-level candidates who need precision, not fluff.
+            Powerful features for anyone who wants precision-crafted applications—from first job to C-suite.
           </p>
         </motion.div>
 
