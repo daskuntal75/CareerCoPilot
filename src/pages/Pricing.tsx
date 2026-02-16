@@ -130,7 +130,7 @@ const Pricing = () => {
       annualPrice: 599,
       annualSavings: "Save 37%",
       period: isAnnual ? "year" : "month",
-      description: "< $2K exec coaching; replaces 1-2 coaching sessions",
+      description: "Less than a single coaching session—unlocks unlimited prep",
       features: [
         "Everything in Pro",
         "Full interview prep",
@@ -166,7 +166,7 @@ const Pricing = () => {
       ],
       notIncluded: [],
       cta: "Contact Sales",
-      ctaAction: () => window.open("mailto:enterprise@careercopilot.ai?subject=Enterprise Inquiry", "_blank"),
+      ctaAction: () => window.open("mailto:enterprise@tailoredapply.com?subject=Enterprise Inquiry", "_blank"),
       highlighted: false,
       priceId: null,
     },

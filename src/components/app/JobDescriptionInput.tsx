@@ -110,7 +110,7 @@ const JobDescriptionInput = ({ onSubmit, initialData }: JobDescriptionInputProps
             <Label htmlFor="title">Job Title *</Label>
             <Input
               id="title"
-              placeholder="e.g., Director of Product"
+              placeholder="e.g., Product Manager"
               value={title}
               onChange={(e) => {
                 setTitle(e.target.value);
