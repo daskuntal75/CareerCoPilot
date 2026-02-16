@@ -12,6 +12,7 @@ import { STRIPE_PLANS } from "@/lib/stripe-config";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import SEOHead from "@/components/seo/SEOHead";
 
 const Pricing = () => {
   const [isAnnual, setIsAnnual] = useState(false);
@@ -174,6 +175,11 @@ const Pricing = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <SEOHead
+        title="Pricing – AI Cover Letter Generator Plans"
+        description="Free, Pro, Premium & Enterprise plans for AI-powered cover letters, job fit scoring, and interview prep. Start free with 3 cover letters per month. 14-day money-back guarantee."
+        path="/pricing"
+      />
       <Header />
       <main className="flex-1 pt-24 pb-12">
         <div className="container mx-auto px-4 lg:px-8">

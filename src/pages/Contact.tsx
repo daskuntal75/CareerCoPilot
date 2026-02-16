@@ -17,6 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { toast } from "sonner";
+import SEOHead from "@/components/seo/SEOHead";
 
 type InquiryType = "legal" | "enterprise" | "accessibility" | "general";
 
@@ -110,6 +111,11 @@ const Contact = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <SEOHead
+        title="Contact Us – TailoredApply Support & Enterprise Sales"
+        description="Get in touch with TailoredApply for enterprise pricing, legal inquiries, accessibility support, or general questions. We respond within 2-3 business days."
+        path="/contact"
+      />
       <Header />
       
       <main className="flex-1 pt-24 pb-12">

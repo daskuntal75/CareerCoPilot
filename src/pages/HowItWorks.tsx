@@ -4,6 +4,7 @@ import Footer from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { FileText, Search, Sparkles, MessageSquare, ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
+import SEOHead from "@/components/seo/SEOHead";
 
 const steps = [
   {
@@ -31,6 +32,11 @@ const steps = [
 const HowItWorks = () => {
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <SEOHead
+        title="How It Works – AI Cover Letter Generator in 4 Steps"
+        description="Upload your resume, paste a job description, and get a tailored cover letter with fit score and interview prep in under 5 minutes. See how TailoredApply's AI matching works."
+        path="/how-it-works"
+      />
       <Header />
       <main className="flex-1 pt-24 pb-12">
         <div className="container mx-auto px-4 lg:px-8">
