@@ -15,23 +15,23 @@ interface SecurityBadgeProps {
 const securityFeatures = [
   {
     icon: Lock,
-    title: "End-to-End Encryption",
-    description: "AES-256 encryption for all data at rest and in transit",
+    title: "Data Encryption",
+    description: "Your data is encrypted at every stage of processing",
   },
   {
     icon: Eye,
-    title: "Zero-Retention AI",
-    description: "AI models never store or train on your personal data",
+    title: "AI That Forgets",
+    description: "AI processes your data in real time but never retains it",
   },
   {
     icon: Shield,
-    title: "PII Redaction",
-    description: "Sensitive info automatically redacted before processing",
+    title: "Privacy by Design",
+    description: "Personal information is automatically protected",
   },
   {
     icon: Server,
-    title: "GDPR/CCPA Compliant",
-    description: "Full data portability and right to erasure support",
+    title: "You Own Your Data",
+    description: "Export or delete all your data at any time",
   },
 ];
 

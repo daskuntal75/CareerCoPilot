@@ -46,23 +46,23 @@ const features = [
 const securityFeatures = [
   {
     icon: Lock,
-    title: "End-to-End Encryption",
-    description: "AES-256 encryption protects your data at rest and in transit.",
+    title: "Data Encryption",
+    description: "Your resume and career data are encrypted at every stage—at rest and in transit.",
   },
   {
     icon: Eye,
-    title: "Zero-Retention AI",
-    description: "AI models never store or train on your personal career data.",
+    title: "AI That Forgets",
+    description: "AI processes your data in real time but never stores or learns from it.",
   },
   {
     icon: Shield,
-    title: "PII Redaction",
-    description: "Sensitive information automatically redacted before vector storage.",
+    title: "Privacy by Design",
+    description: "Personal information is automatically protected before any processing occurs.",
   },
   {
     icon: Server,
-    title: "GDPR/CCPA Compliant",
-    description: "Full data portability and right to erasure with one-click deletion.",
+    title: "You Own Your Data",
+    description: "Export or permanently delete all your data at any time with one click.",
   },
 ];
 
@@ -122,10 +122,10 @@ const Features = () => {
             <span className="text-sm font-medium">Enterprise-Grade Security</span>
           </div>
           <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-            Your Career Data, Protected
+            Your Privacy, Our Priority
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            We take your privacy seriously. Your resume and career history are never stored by AI models and are protected with bank-level encryption.
+            We built TailoredApply with privacy at its core. Your career data is protected with industry-leading security practices so you can focus on landing your next role.
           </p>
         </motion.div>
 

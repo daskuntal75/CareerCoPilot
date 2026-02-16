@@ -125,7 +125,7 @@ const Hero = () => {
           >
             <div className="flex items-center gap-2">
               <Shield className="w-4 h-4 text-success" />
-              <span>Integrity-first approach</span>
+              <span>Your data stays private</span>
             </div>
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-warning" />
@@ -133,7 +133,7 @@ const Hero = () => {
             </div>
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-accent" />
-              <span>Professional-quality results</span>
+              <span>Enterprise-grade security</span>
             </div>
           </motion.div>
         </div>
@@ -155,7 +155,7 @@ const Hero = () => {
               </div>
               <div className="flex-1 mx-4">
                 <div className="h-7 bg-secondary rounded-md flex items-center px-3">
-                  <span className="text-xs text-muted-foreground">careercopilot.ai/analyze</span>
+                  <span className="text-xs text-muted-foreground">tailoredapply.com/analyze</span>
                 </div>
               </div>
             </div>
