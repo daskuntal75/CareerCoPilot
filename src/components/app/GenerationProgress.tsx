@@ -78,9 +78,9 @@ const stageConfig = {
 };
 
 const securityFeatures = [
-  { icon: Shield, text: "Zero-retention AI" },
-  { icon: Lock, text: "Encrypted" },
-  { icon: Eye, text: "PII protected" },
+  { icon: Shield, text: "Data encrypted" },
+  { icon: Lock, text: "AI never retains your data" },
+  { icon: Eye, text: "Privacy protected" },
 ];
 
 const stages: GenerationStage[] = ["analyzing", "drafting", "refining", "complete"];

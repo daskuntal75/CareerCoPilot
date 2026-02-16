@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Sparkles, AlertCircle, Shield, Lock, Eye } from "lucide-react";
+import { Sparkles, AlertCircle, Shield } from "lucide-react";
 import { motion } from "framer-motion";
 import type { JobData } from "@/pages/App";
 
@@ -78,18 +78,10 @@ const JobDescriptionInput = ({ onSubmit, initialData }: JobDescriptionInputProps
         className="bg-card rounded-xl border border-border p-6 space-y-6"
       >
         {/* Security Banner */}
-        <div className="flex items-center justify-center gap-4 p-3 rounded-lg bg-success/5 border border-success/20">
-          <div className="flex items-center gap-1.5 text-xs text-success">
-            <Shield className="w-3.5 h-3.5" />
-            <span>Prompt injection protection</span>
-          </div>
-          <div className="flex items-center gap-1.5 text-xs text-success">
-            <Lock className="w-3.5 h-3.5" />
-            <span>End-to-end encrypted</span>
-          </div>
-          <div className="flex items-center gap-1.5 text-xs text-success">
-            <Eye className="w-3.5 h-3.5" />
-            <span>Zero AI retention</span>
+        <div className="flex items-center justify-center gap-3 p-2.5 rounded-lg bg-success/5 border border-success/10">
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Shield className="w-3 h-3 text-success" />
+            <span>Your data is encrypted and never stored by AI</span>
           </div>
         </div>
         {/* Company and Title */}
