@@ -116,7 +116,7 @@ const handler = async (req: Request): Promise<Response> => {
           </div>
 
           <p style="color: #94a3b8; font-size: 12px; text-align: center; margin-top: 30px;">
-            Demo feedback from CareerCopilot - ${new Date().toLocaleString()}
+            Demo feedback from TailoredApply - ${new Date().toLocaleString()}
           </p>
         </div>
       `;
@@ -130,7 +130,7 @@ const handler = async (req: Request): Promise<Response> => {
       htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h1 style="color: #6366f1; border-bottom: 2px solid #6366f1; padding-bottom: 10px;">
-            New Feedback from CareerCopilot
+            New Feedback from TailoredApply
           </h1>
           
           <div style="background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0;">
@@ -202,14 +202,14 @@ const handler = async (req: Request): Promise<Response> => {
           </div>
 
           <p style="color: #94a3b8; font-size: 12px; text-align: center; margin-top: 30px;">
-            This feedback was sent from CareerCopilot
+            This feedback was sent from TailoredApply
           </p>
         </div>
       `;
     }
 
     const emailResponse = await resend.emails.send({
-      from: "CareerCopilot <onboarding@resend.dev>",
+      from: "TailoredApply <onboarding@resend.dev>",
       to: [ADMIN_EMAIL],
       reply_to: email && email !== "Not provided" ? email : undefined,
       subject,

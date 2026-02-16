@@ -126,7 +126,7 @@ const FeedbackCollectionModal = ({
 
           {/* Would recommend */}
           <div className="space-y-3">
-            <Label>Would you recommend CareerCopilot to a friend?</Label>
+            <Label>Would you recommend TailoredApply to a friend?</Label>
             <RadioGroup value={wouldRecommend} onValueChange={setWouldRecommend} className="flex gap-4">
               <div className="flex items-center gap-2">
                 <RadioGroupItem value="yes" id="recommend-yes" />

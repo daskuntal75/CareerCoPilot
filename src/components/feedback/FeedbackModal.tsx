@@ -23,7 +23,7 @@ interface FeedbackModalProps {
 }
 
 // Track navigation history in session storage
-const NAV_HISTORY_KEY = "careercopilot_nav_history";
+const NAV_HISTORY_KEY = "tailoredapply_nav_history";
 
 export function getNavigationHistory(): string[] {
   try {
@@ -149,7 +149,7 @@ const FeedbackModal = ({ open, onOpenChange }: FeedbackModalProps) => {
             Send Feedback
           </DialogTitle>
           <DialogDescription>
-            Help us improve CareerCopilot! Your feedback goes directly to our team.
+            Help us improve TailoredApply! Your feedback goes directly to our team.
           </DialogDescription>
         </DialogHeader>
 
