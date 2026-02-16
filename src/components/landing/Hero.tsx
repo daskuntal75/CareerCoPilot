@@ -167,7 +167,7 @@ const Hero = () => {
                 <div className="bg-card rounded-xl p-6 shadow-md border border-border">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-semibold text-foreground">Job Fit Analysis</h3>
-                    <span className="text-xs text-muted-foreground">Director of Product</span>
+                    <span className="text-xs text-muted-foreground">Product Manager</span>
                   </div>
                   
                   {/* Fit Score */}
