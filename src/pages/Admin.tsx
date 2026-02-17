@@ -110,25 +110,24 @@ const Admin = () => {
 
   const checkAdminAccess = async () => {
     try {
-      // Check user_roles table for admin role (secure method)
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user?.id)
-        .eq("role", "admin")
-        .maybeSingle();
+      // Server-side admin verification with MFA check via edge function
+      const { data, error } = await supabase.functions.invoke("verify-admin-access");
 
       if (error) throw error;
 
-      if (data) {
+      if (data?.verified) {
         setIsAdmin(true);
         fetchAllData();
+      } else if (data?.reason === "mfa_required" || data?.reason === "mfa_setup_required") {
+        // Redirect to admin login for MFA
+        navigate("/admin/login");
       } else {
         setIsAdmin(false);
         setLoading(false);
       }
     } catch (error) {
       console.error("Error checking admin access:", error);
+      setIsAdmin(false);
       setLoading(false);
     }
   };
