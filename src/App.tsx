@@ -36,6 +36,8 @@ const SubscriptionSuccess = lazy(() => import("./pages/SubscriptionSuccess"));
 const Admin = lazy(() => import("./pages/Admin"));
 const AdminLogin = lazy(() => import("./pages/AdminLogin"));
 const AdminSetup = lazy(() => import("./pages/AdminSetup"));
+const Resources = lazy(() => import("./pages/Resources"));
+const ResourceArticle = lazy(() => import("./pages/ResourceArticle"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -97,6 +99,8 @@ const AppContent = () => (
         <Route path="/admin" element={<Admin />} />
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin/setup" element={<AdminSetup />} />
+        <Route path="/resources" element={<Resources />} />
+        <Route path="/resources/:slug" element={<ResourceArticle />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>

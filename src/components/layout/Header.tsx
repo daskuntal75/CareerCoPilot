@@ -45,6 +45,9 @@ const Header = () => {
             <Link to="/">
               <Button variant="ghost" size="sm">Home</Button>
             </Link>
+            <Link to="/resources">
+              <Button variant="ghost" size="sm">Resources</Button>
+            </Link>
             {user && (
               <>
                 <Link to="/dashboard">
